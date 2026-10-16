@@ -350,7 +350,7 @@ function inspectSvg(svg, vbW = DEFAULT_VB.w, vbH = DEFAULT_VB.h) {
   const FACTOR = 0.62;
   const scale = Math.min(DEFAULT_VB.w / vbW, DEFAULT_VB.h / vbH);
   const ctx = [{ tx: 0, ty: 0, fs: 16, anchor: 'start' }];
-  const res = { overflowPx: 0, texts: 0, minFontOnSlide: Infinity, warnings: [], severe: false };
+  const res = { overflowPx: 0, texts: 0, minFontOnSlide: Infinity, warnings: [], severe: false, placeholders: 0 };
   let cur = null;
   let pos = 0;
   let m;
@@ -358,8 +358,8 @@ function inspectSvg(svg, vbW = DEFAULT_VB.w, vbH = DEFAULT_VB.h) {
 
   const feed = (t) => {
     if (!cur) return;
-    const n = decodeEntities(t).replace(/\s+/g, ' ').trim().length;
-    if (n) cur.lines[cur.lines.length - 1].chars += n;
+    const str = decodeEntities(t).replace(/\s+/g, ' ').trim();
+    if (str) { cur.lines[cur.lines.length - 1].chars += str.length; cur.text = (cur.text || '') + str; }
   };
   const finish = (c) => {
     for (const ln of c.lines) {
@@ -374,6 +374,8 @@ function inspectSvg(svg, vbW = DEFAULT_VB.w, vbH = DEFAULT_VB.h) {
     }
     res.texts++;
     res.minFontOnSlide = Math.min(res.minFontOnSlide, c.fs * scale);
+    // «—», «...», «?» — мазмұны жоқ түйін (модель бір тармаққа мәтін таппай қалған): бос түйінді сызба слайдқа шықпайды
+    if (/^[\s—–\-.…_?·•]+$/.test(c.text || '')) res.placeholders++;
   };
 
   while ((m = TAG_RE.exec(svg)) !== null) {
@@ -415,6 +417,7 @@ function inspectSvg(svg, vbW = DEFAULT_VB.w, vbH = DEFAULT_VB.h) {
   if (res.overflowPx > severeLimit) res.severe = true;
   if (res.texts && res.minFontOnSlide < 18) res.warnings.push(`small text (~${Math.round(res.minFontOnSlide)}px on slide)`);
   if (!res.texts) res.warnings.push('no text labels');
+  if (res.placeholders) { res.warnings.push(`${res.placeholders} empty placeholder label(s)`); res.severe = true; }
   if (!Number.isFinite(res.minFontOnSlide)) res.minFontOnSlide = 0;
   return res;
 }
@@ -599,7 +602,7 @@ async function runProvider(p, slide, palette, cfg, fetchImpl) {
     if (!clean) { r.reason = 'no valid SVG in response'; return r; }
     const q = inspectSvg(clean.svg, clean.vbW, clean.vbH);
     r.warnings = q.warnings;
-    if (q.severe) { r.reason = `text overflow ~${Math.round(q.overflowPx)}px`; return r; }
+    if (q.severe) { r.reason = q.placeholders ? `${q.placeholders} empty label(s)` : `text overflow ~${Math.round(q.overflowPx)}px`; return r; }
     r.ok = true;
     r.svg = clean.svg;
     r.dataUri = toDataUri(clean.svg);

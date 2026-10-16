@@ -10,6 +10,9 @@ const { ratingKeyboard, commentPromptText, commentKeyboard, parseCommentCallback
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 
+// Тұрақтылық: Markdown талданбаса хабар форматсыз қайта жіберіледі; ботты бұғаттаған клиент белгіленеді
+require('./core/crashGuard').hardenBot(bot, { onBlocked: (chatId) => setBlocked(chatId, true).catch(() => {}) });
+
 // Telegram-нің parse_mode:'Markdown' режимінде "_ * ` [" символдары
 // арнайы синтаксис (italic/bold/code/link) деп қабылданады. Пайдаланушы
 // жазған тақырыпта (мыс: "Python vs C++_негіздер") немесе Groq
@@ -958,6 +961,7 @@ async function startBot(opts = {}) {
 
 // Standalone mode (npm run bot-only)
 if (require.main === module) {
+  require('./core/crashGuard').install();
   startBot().catch(err => {
     console.error('[Bot] Init error:', err);
     process.exit(1);

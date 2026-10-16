@@ -1,5 +1,6 @@
 'use strict';
 
+require('./core/crashGuard').install(); // ұсталмаған қате ботты құлатпайды
 require('dotenv').config();
 
 const express = require('express');
@@ -17,7 +18,7 @@ const {
   initDB, getUser, registerUser, useCredit, refundCredit, claimFreeDeck, releaseFreeDeck, countFreeDecksSince, freeFunnel,
   checkRateLimits, markGenerationAttempt, markGenerationSuccess,
   createJob, updateJob, getJob, getUserJobs, addHistory, getHistory,
-  cleanupOldJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
+  cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
   scheduleRatePrompt, takeDueRatePrompts, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
   getDesignMemory, pushDesignMemory,
@@ -529,7 +530,7 @@ app.post('/api/generate', authMiddleware, async (req, res) => {
     if (isTester) { await setTesterPending(chatId, job.id).catch((e) => console.warn('[Tester] pending', e.message)); testerHold = null; }
 
     // Fire-and-forget generation
-    runGeneration(job.id).catch(err => {
+    runGeneration(job.id, { free: isFree }).catch(err => {
       console.error('[Job] unhandled', job.id, err);
     });
 
@@ -830,20 +831,50 @@ function scheduleLearn(job, outcome, info) {
 
 // ─── Generation runner ────────────────────────────────────────────────────
 let activeGenerations = 0;
-const waitQueue = [];
+const waitQueue = []; // [{ resolve, free }]
 
-async function runGeneration(jobId) {
-  // Simple concurrency gate
+/** Кезек: бір уақытта MAX_CONCURRENT генерация; бос орын шыққанда ақылы (не тестер) тапсырыс тегіннен бұрын өтеді */
+async function runGeneration(jobId, opts = {}) {
   if (activeGenerations >= MAX_CONCURRENT) {
-    await new Promise(resolve => waitQueue.push(resolve));
+    await new Promise(resolve => waitQueue.push({ resolve, free: !!opts.free }));
   }
   activeGenerations++;
   try {
     await executeJob(jobId);
   } finally {
     activeGenerations = Math.max(0, activeGenerations - 1);
-    const next = waitQueue.shift();
-    if (next) next();
+    const paid = waitQueue.findIndex((w) => !w.free);
+    const next = waitQueue.splice(paid >= 0 ? paid : 0, 1)[0];
+    if (next) next.resolve();
+  }
+}
+
+/**
+ * Деплой не қайта қосылу кезінде үзілген тапсырыстар (кезекте/жасалып жатқан, соңғы 3 сағат): бір рет қайта
+ * басталады. Қайта басталған жұмыс тағы үзілсе (error='resumed' белгісі) — қайталанбайды: кредит қайтарылып,
+ * клиентке хабар барады (бір жұмыс серверді қайта-қайта құлатып, шексіз айналмасын).
+ */
+const BOOT_AT = Date.now();
+const RESUME_DELAY_MS = Number(process.env.RESUME_DELAY_MS) || 120_000;
+async function resumeInterruptedJobs() {
+  const jobs = await listUnfinishedJobs(3 * 3600 * 1000).catch((e) => { console.warn('[Resume] list:', e.message); return []; });
+  for (const job of jobs) {
+    // Railway жаңа нұсқаны қосқанда ескісі біраз уақыт жұмыс істей береді: сол уақытта жаңарған жұмыс — тірі,
+    // оған тимейміз (екі рет жасалмасын, екі рет қайтарылмасын). Тек осы процесс қосылғаннан бері жаңармағаны — үзілген.
+    if (!(Number(job.updatedAt) < BOOT_AT)) continue;
+    if (job.error === 'resumed') {
+      console.warn(`[Resume] ${job.id} екінші рет үзілді — кредит қайтарылады`);
+      await updateJob(job.id, { status: 'failed', phase: 'failed', detail: 'Сервер қайта қосылды', progress: 0, error: 'interrupted' }).catch(() => {});
+      await refundFor(job).catch((e) => console.warn('[Resume] refund', e.message));
+      logGen(job.id, { status: 'failed', error: 'interrupted', finished_at: Date.now() }).catch(() => {});
+      if (global.__deadlineBot) {
+        global.__deadlineBot.sendMessage(job.chatId, '❌ Сервер жаңартылып жатқанда тапсырысыңыз үзілді, кредитіңіз қайтарылды. Қайта жасатып көріңіз.').catch(() => {});
+      }
+      continue;
+    }
+    console.log(`[Resume] ${job.id} қайта басталды (${job.status})`);
+    await updateJob(job.id, { status: 'queued', phase: 'queued', detail: 'Қайта басталды', progress: 0, error: 'resumed' }).catch(() => {});
+    runGeneration(job.id, { free: !!(job.payload && job.payload.free) }).catch((err) => console.error('[Resume] unhandled', job.id, err));
   }
 }
 
@@ -907,10 +938,11 @@ async function executeReferatJob(job) {
   } catch (err) {
     console.error(`[Job] ${jobId} referat failed:`, err.message);
     logGen(jobId, { status: 'failed', error: String(err.message || 'unknown'), finished_at: Date.now() }).catch(() => {});
-    await refundFor(job);
+    // алдымен «failed» белгісі, сосын қайтару: арасында сервер өлсе — қайта қосылғанда жұмыс қайта басталмайды, екі рет қайтарылмайды
     await updateJob(jobId, {
       status: 'failed', phase: 'failed', detail: 'Қате орын алды', progress: 0, error: err.message || 'unknown',
     });
+    await refundFor(job);
     try {
       if (global.__deadlineBot) {
         await global.__deadlineBot.sendMessage(chatId, '❌ Реферат жасалмады, кредитіңіз қайтарылды.\nҚайта көріңіз.');
@@ -933,6 +965,8 @@ async function executeJob(jobId) {
     let referencePptx = null;
     if (job.payload?.refId) {
       try { referencePptx = fs.readFileSync(path.join(REF_DIR, job.payload.refId + '.pptx')); } catch {}
+      // шаблон файлы жоғалса (мыс. деплойдан кейін) — шаблонсыз «жалпы» колода жасап ақы алмаймыз: қате → кредит қайтады
+      if (!referencePptx) throw new Error('template file missing');
     }
     // Студенттің дизайн жады: соңғы жүйелер/палитралар/суреттер қайталанбайды (оқу сәтсіз → бос жад, генерация жалғасады)
     const memory = await getDesignMemory(chatId).catch(() => null);
@@ -1107,7 +1141,7 @@ async function executeJob(jobId) {
     console.log(`[Job] ${jobId} FAILED: ${String(err.stack || err.message).slice(0, 1500)}`);
     scheduleLearn(job, 'failed', { error: String(err.message || 'unknown').slice(0, 80) });
     logGen(jobId, { status: 'failed', error: err.isQualityGate ? 'quality_gate' : String(err.message || 'unknown'), finished_at: Date.now() }).catch(() => {});
-    await refundFor(job);
+    // алдымен «failed» белгісі, сосын қайтару (арасында сервер өлсе — екі рет қайтарылмайды, қайта басталмайды)
     await updateJob(jobId, {
       status: 'failed',
       phase: 'failed',
@@ -1115,6 +1149,7 @@ async function executeJob(jobId) {
       progress: 0,
       error: err.isQualityGate ? 'quality_gate' : (err.message || 'unknown'),
     });
+    await refundFor(job);
     try {
       if (global.__deadlineBot) {
         await global.__deadlineBot.sendMessage(
@@ -1184,6 +1219,9 @@ async function main() {
   } catch (err) {
     console.warn('[Server] Bot start skipped/failed:', err.message);
   }
+
+  // үзілген тапсырыстар — ескі нұсқа толық тоқтаған соң (RESUME_DELAY_MS), бот іске қосылған (хабар жете алатын) күйде
+  setTimeout(() => { resumeInterruptedJobs().catch((e) => console.warn('[Resume]', e.message)); }, RESUME_DELAY_MS).unref();
 
   const server = http.createServer(app);
   // Railway қайта іске қосқанда SIGTERM жібереді — базаға қосылымдарды дұрыс жабамыз

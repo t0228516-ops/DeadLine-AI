@@ -212,8 +212,8 @@ def({
     else bg += P.ghost(gx + 40, gy + 40, H.num(ctx, 1), 260, P.mix(p.accent, p.accentInk, 0.28), { weight: 700 });
     let fg = wrap(MX, MT + 10, titleW, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: titleW, maxLines: 5, scale: [72, 64, 56, 50, 44], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: titleW }));
     fg += tb('concept', gx + 40, MB + 40, bigW - 80,
-      (v0 ? '<div style="' + fs(20) + ';font-weight:700;letter-spacing:.14em;opacity:.75">' + esc(H.num(ctx, 1)) + '</div>' : '') +
-      '<div style="margin-top:12px;' + disp + ';' + fs(50) + ';line-height:1.05">' + esc(items[0].label) + '</div>' +
+      // кіші «1»/«I» нөмір жоқ: 20px-те жалғыз таяқша боп, қате белгідей көрінетін
+      '<div style="' + disp + ';' + fs(50) + ';line-height:1.05">' + esc(items[0].label) + '</div>' +
       (items[0].detail ? '<div style="margin-top:14px;' + fs(26) + ';line-height:1.4;opacity:.9">' + esc(items[0].detail) + '</div>' : ''), 'color:' + p.accentInk);
     rest.forEach((m, k) => {
       const c = k % cols; const r = Math.floor(k / cols);

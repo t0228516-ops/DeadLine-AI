@@ -808,6 +808,16 @@ async function getUserJobs(chatId, limit = 20) {
   return r.rows.map(rowToJob);
 }
 
+/** Аяқталмаған (кезекте/жасалып жатқан) соңғы жұмыстар — сервер қайта қосылғанда жалғастыру үшін */
+async function listUnfinishedJobs(maxAgeMs = 3 * 3600 * 1000) {
+  const r = await q(
+    `SELECT ${JOB_SELECT()} FROM jobs WHERE status IN ('queued', 'running') AND created_at >= ${tw('jobs', 'created_at', '$1')}
+     ORDER BY created_at ASC LIMIT 50`,
+    [Date.now() - maxAgeMs]
+  );
+  return r.rows.map(rowToJob);
+}
+
 // ─── History ─────────────────────────────────────────────────────────────
 /** history.id мәтін болса — жұмыс id-і сонда; әйтпесе (мыс. SERIAL) — job_id бағанында */
 const historyIdIsText = () => isText('history', 'id');
@@ -1124,4 +1134,5 @@ module.exports = {
   addFeedback,
   getFeedbackForJob,
   cleanupOldJobs,
+  listUnfinishedJobs,
 };

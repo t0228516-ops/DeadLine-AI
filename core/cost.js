@@ -32,6 +32,12 @@ function recordApiUsage(usage, meta = {}) {
   activeTracker.addUsage(usage, meta.label || meta.phase || 'api', meta);
 }
 
+/** Ақылы веб-іздеу (DeepSeek Search, $0.75 / 1000 сәтті сұрау) — токенсіз, сұрау санымен есептеледі */
+const SEARCH_USD = Number(process.env.COST_SEARCH_USD) || 0.00075;
+function recordSearch() {
+  if (activeTracker && activeTracker.addSearch) activeTracker.addSearch();
+}
+
 function createCostTracker(genId) {
   const state = {
     genId: genId || 'unknown',
@@ -40,6 +46,7 @@ function createCostTracker(genId) {
     outputTokens: 0,
     totalTokens: 0,
     apiCalls: 0,
+    searches: 0,
     callsWithUsage: 0,
     callsWithoutUsage: 0,
     slides: 0,
@@ -97,6 +104,7 @@ function createCostTracker(genId) {
         model,
       });
     },
+    addSearch() { state.searches += 1; },
     setSlides(n) { state.slides = n; },
     setQuality(iterations, repairs) {
       state.qualityIterations = iterations || 0;
@@ -112,7 +120,7 @@ function createCostTracker(genId) {
     snapshot() {
       const durationMs = Date.now() - state.startedAt;
       // Cost is estimated from actual tokens only — never invented token counts
-      const costUsd = (state.inputTokens * PRICE_IN + state.outputTokens * PRICE_OUT) / 1e6;
+      const costUsd = (state.inputTokens * PRICE_IN + state.outputTokens * PRICE_OUT) / 1e6 + state.searches * SEARCH_USD;
       const costTg = costUsd * USD_KZT;
       return {
         genId: state.genId,
@@ -122,6 +130,7 @@ function createCostTracker(genId) {
         outputTokens: state.outputTokens,
         totalTokens: state.totalTokens,
         apiCalls: state.apiCalls,
+        searches: state.searches,
         callsWithUsage: state.callsWithUsage,
         callsWithoutUsage: state.callsWithoutUsage,
         tokenSource: state.callsWithUsage > 0 ? 'provider' : (state.apiCalls ? 'none' : 'none'),
@@ -156,5 +165,4 @@ module.exports = {
   recordApiUsage,
   USD_KZT,
   PRICE_IN,
-  PRICE_OUT,
-};
+  PRICE_OUT, recordSearch };
