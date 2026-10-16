@@ -13,6 +13,7 @@ const os = require('os');
 const path = require('path');
 const { recordApiUsage } = require('../../core/cost');
 const { buildDocx } = require('./docx');
+const R = require('../presentation/research');
 const { paginate, splitSentences, PAGE_LINES } = require('./layout');
 
 const LANG_NAME = { kk: 'Kazakh', ru: 'Russian', en: 'English' };
@@ -201,10 +202,12 @@ function sampleRules(prof) {
   return L.join('\n');
 }
 
-async function genOutline(llm, topic, lang, plan, brief) {
+async function genOutline(llm, topic, lang, plan, brief, research) {
   const system = `You plan a university referat. Output language: ${LANG_NAME[lang]} ONLY. Return JSON only.`;
   const user = `Topic: ${topic}
-${brief ? 'Student brief / requirements: ' + brief + '\n' : ''}${plan.sampleRules ? plan.sampleRules + '\n' : ''}Create the structure of a referat with exactly ${plan.chapters} main chapters${plan.subs ? `, each with exactly ${plan.subs} sub-sections` : ' (no sub-sections)'}.
+${brief ? 'Student brief / requirements: ' + brief + '\n' : ''}${plan.sampleRules ? plan.sampleRules + '\n' : ''}${research && research.sheet ? `BACKGROUND FACTS — found by web search BEFORE planning (reliable sources). Use them to understand the topic correctly (which people, period, works, events belong to it) — not as the structure itself: the chapters must still cover the core aspects a teacher expects, in a logical order. Do not plan chapters about people or works that are not part of this topic. Where the facts and your memory disagree, trust the facts.
+${research.sheet}
+` : ''}Create the structure of a referat with exactly ${plan.chapters} main chapters${plan.subs ? `, each with exactly ${plan.subs} sub-sections` : ' (no sub-sections)'}.
 Also list exactly ${plan.refsCount} references (spisok literatury).
 REFERENCE RULES (very important): include ONLY real, well-known, verifiable sources that you are certain exist: classic or standard textbooks, major monographs, official laws/documents, well-known international organization reports or official websites. NEVER invent authors, titles, DOIs, page numbers or URLs. If you are not certain of exact details, cite the work at the level you are sure about (author, title, city, year) and skip anything uncertain. Format ${plan.refExample ? 'exactly like this sample entry: ' + plan.refExample : 'in GOST style (Author. Title. – City: Publisher, Year.)'}, WITHOUT a leading number.
 JSON schema:
@@ -250,13 +253,49 @@ ${outlineText(ctx.ol)}
 Write ONLY this part: "${unit.title}" (${unit.role}).
 Focus: ${unit.focus || '—'}
 Length: about ${unit.chars} characters in total = ${nPar} paragraphs of about ${pc} characters each. Stay within this part; do not repeat other parts.
-${unit.extra || ''}
+${unit.extra || ''}${factsFor(ctx, unit)}
 Numbered source list for citations:
 ${srcList && !(ctx.prof && ctx.prof.citations === 'none') ? srcList : '(none — do not cite)'}
 
 JSON: {"paragraphs":["...", "..."]}`;
   const o = await llm(system, user, 'write', 6000);
   return parseParagraphs(o, ctx.ol.refs.length);
+}
+
+/**
+ * Бөлімге берілетін деректер: тақырыптың жалпы фактілері + осы бөлімнің өз фактілері.
+ * Дереккөзі әдебиеттер тізімінде болса — [n] нөмірімен (мәтінде дәл сол нөмірмен сілтеме жасалады).
+ */
+function factsFor(ctx, unit) {
+  const r = ctx.research;
+  if (!r) return '';
+  const own = (unit.key != null && r.perSlide[unit.key]) ? r.perSlide[unit.key].items : [];
+  const items = [...own, ...r.items.slice(0, own.length ? 3 : 5)];
+  if (!items.length) return '';
+  const line = (it) => { const n = ctx.refIndex.get(it.url); return `- ${it.summary}${n ? ` [${n}]` : ''}`; };
+  return `
+FACTS FROM SOURCES — collected by web search BEFORE writing. Base this part on them:
+${items.map(line).join('\n')}
+FACT RULES: names, dates, places, titles of works and numbers come from these facts or the brief; if the facts give no date or number, do not write one; do not add people or works that are not in the facts; where the facts and your memory disagree, the facts win; where the facts disagree with each other (e.g. two birth years), use the encyclopedia (Wikipedia) or the majority, and if still unclear give no exact date. Write in your own words (never copy a source sentence). A fact marked [n] may be cited as [n].
+`;
+}
+
+/** Табылған беделді дереккөздер → ГОСТ «электрондық ресурс» жолы */
+const E_RES = { kk: 'Электрондық ресурс', ru: 'Электронный ресурс', en: 'Electronic resource' };
+function webRefs(research, lang, max) {
+  if (!research || max <= 0) return [];
+  const all = [...research.items, ...Object.values(research.perSlide || {}).flatMap((p) => p.items)];
+  const seen = new Set(); const out = [];
+  for (const it of [...all.filter((x) => x.authority >= 3), ...all.filter((x) => !(x.authority >= 3))]) {
+    if (!R.citable(it)) continue; // үзік атау не уақытша сілтеме — тізімге кірмейді
+    const url = R.cleanUrl(it.url);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const site = it.site && !it.title.includes(it.site) ? ` // ${it.site}` : '';
+    out.push({ url: it.url, text: `${it.title.replace(/[.\s]+$/, '')}${site} [${E_RES[lang] || E_RES.kk}]. – URL: ${url}` });
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 async function pool(items, limit, fn) {
@@ -415,12 +454,20 @@ async function generateReferat(opts = {}) {
   if (prof) applyProfile(plan, prof, pages);
   console.log(`[Referat] topic="${topic.slice(0, 80)}" pages=${pages} lang=${lang} sample=${!!prof} plan=${JSON.stringify({ ...plan, sampleRules: undefined })}`);
 
+  // Мәтін жазылмас БҰРЫН тақырып бойынша дерек жиналады (тесттерде — өздерінің llm-і берілгенде — іздеу жоқ)
+  const useResearch = opts.research != null ? !!opts.research : !opts.llm;
+  let research = null;
+  if (useResearch) {
+    await onProgress('outline', 'Тақырып бойынша ақпарат жиналуда...');
+    try { research = await R.gatherTopic(topic); } catch (e) { console.warn('[Referat] research failed:', e.message); }
+  }
+
   await onProgress('outline', 'Құрылым жасалуда...');
   let ol;
   for (let a = 0; a < 2 && !ol; a++) {
-    try { ol = await genOutline(llm, topic, lang, plan, opts.brief); } catch (e) { console.warn('[Referat] outline retry:', e.message); if (a) throw e; }
+    try { ol = await genOutline(llm, topic, lang, plan, opts.brief, research); } catch (e) { console.warn('[Referat] outline retry:', e.message); if (a) throw e; }
   }
-  const ctx = { topic, lang, ol, prof };
+  const ctx = { topic, lang, ol, prof, research, refIndex: new Map() };
 
   // бөлімдер
   const H = { ...HEAD[lang] };
@@ -436,17 +483,25 @@ async function generateReferat(opts = {}) {
   sections.push({ id: 'concl', kind: 'concl', headType: 'h1', heading: H.concl, title: H.concl, focus: ol.conclFocus, paras: [] });
 
   sections.refsHead = H.refs;
-  await onProgress('write', 'Мәтін жазылуда...');
-  const units = sections.filter(s => s.kind !== 'chap').map(s => ({
-    s,
+  const units = sections.filter(s => s.kind !== 'chap').map((s, k) => ({
+    s, key: k,
     chars: s.kind === 'intro' ? plan.introChars : s.kind === 'concl' ? plan.conclChars : plan.unitChars,
     role: s.kind === 'intro' ? 'introduction: relevance, aim, tasks, object, structure of the work' : s.kind === 'concl' ? 'conclusion: concise synthesis of findings, no new facts, no citations needed' : 'main part',
   }));
+  if (research) {
+    // әр бөлімге нақты іздеу (кіріспе мен қорытындыға жалпы деректер жетеді)
+    await R.gatherSlides(research, units.map((u) => u.s.title), { skip: (i) => units[i].s.kind !== 'body' });
+    // әдебиеттер: алдымен табылған нақты дереккөздер (тізімнің жартысына дейін), қалғаны — модельдің классикалық еңбектері
+    const web = webRefs(research, lang, Math.ceil(plan.refsCount / 2));
+    ol.refs = [...web.map((w) => w.text), ...ol.refs].slice(0, Math.max(plan.refsCount, web.length));
+    web.forEach((w, i) => ctx.refIndex.set(w.url, i + 1));
+  }
+  await onProgress('write', 'Мәтін жазылуда...');
   let done = 0;
   await pool(units, 3, async (u) => {
     let paras = [];
     for (let a = 0; a < 2 && paras.length === 0; a++) {
-      paras = await writeUnit(llm, ctx, { title: u.s.title, role: u.role, focus: u.s.focus, chars: u.chars });
+      paras = await writeUnit(llm, ctx, { title: u.s.title, role: u.role, focus: u.s.focus, chars: u.chars, key: u.key });
     }
     if (!paras.length) throw new Error('empty section: ' + u.s.title);
     u.s.paras = paras;

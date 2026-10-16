@@ -658,7 +658,7 @@ ${research.sheet}
 ${per ? 'Facts for the slides of this batch:\n' + per + '\n' : ''}FACT RULES:
 - Names, dates, places, titles of works and numbers must come from these FACTS or from the client brief. If the facts give no date or number for something, do not write one.
 - Do not add people, works or events that are not in these facts or in the brief, even if they seem related.
-- Where the facts and your memory disagree, the facts win.
+- Where the facts and your memory disagree, the facts win. Where the facts disagree with each other (e.g. two different birth years), use the one given by an encyclopedia (Wikipedia) or by most sources; if it is still unclear, do not give an exact date.
 - Write in your own words, in the output language; never copy a source sentence word for word; never write "[1]", "source" or a URL on a content slide.
 ${refs.length ? `- The references slide lists ONLY these real sources (one bullet each, as written): ${refs.map((r) => '"' + r + '"').join('; ')}\n` : ''}`;
 }

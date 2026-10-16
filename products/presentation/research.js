@@ -163,6 +163,21 @@ async function gatherSlides(research, slideTopics, opts = {}) {
   return research;
 }
 
+/**
+ * Әдебиеттер тізіміне жарай ма: атауы — шын атау (PDF-тен үзілген сөйлем емес), сілтемесі — тұрақты
+ * (уақытша кілті бар ?time=…&key=… сілтеме кейін ашылмайды).
+ */
+function citable(it) {
+  if (!it || !it.url || !it.title) return false;
+  if (/[?&](key|token|time|sig|signature|expires|X-Amz-[\w-]+)=/i.test(it.url)) return false;
+  const t = String(it.title).trim();
+  const words = t.split(/\s+/).length;
+  if (t.length < 6 || t.length > 110 || words > 14) return false;
+  if (/(?:^|\s)\p{L}\.?$/u.test(t) || /[,;:–-]$/.test(t)) return false; // «…ақындарына М», үзік
+  return true;
+}
+const cleanUrl = (u) => String(u).replace(/#.*$/, '');
+
 /** Әдебиеттер слайдына: нақты табылған дереккөздер (ойдан емес) */
 function sourceList(research, max = 6) {
   if (!research) return [];
@@ -171,7 +186,8 @@ function sourceList(research, max = 6) {
   const all = [...all0.filter((it) => it.authority >= 3), ...all0.filter((it) => !(it.authority >= 3))];
   const seen = new Set(); const out = [];
   for (const it of all) {
-    const k = it.url.replace(/[#?].*$/, '');
+    if (!citable(it)) continue;
+    const k = cleanUrl(it.url);
     if (seen.has(k)) continue; seen.add(k);
     out.push(`${it.title}${it.site ? ' — ' + it.site : ''}. ${k}`);
     if (out.length >= max) break;
@@ -179,4 +195,4 @@ function sourceList(research, max = 6) {
   return out;
 }
 
-module.exports = { gatherTopic, gatherSlides, sourceList, searchWeb, topicQuery, pick, sheetText, enabled, _count: () => searchCount };
+module.exports = { gatherTopic, gatherSlides, sourceList, citable, cleanUrl, searchWeb, topicQuery, pick, sheetText, enabled, _count: () => searchCount };

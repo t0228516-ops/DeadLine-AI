@@ -43,3 +43,10 @@ test('search errors never throw: 429 is retried once, then empty', async () => {
   assert.strictEqual((await R.searchWeb('Абай', { fetch: ok })).length, 1);
   if (keep === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = keep;
 });
+
+test('reference list takes only real titles with stable links', () => {
+  assert.ok(R.citable({ url: 'https://zenodo.org/records/14556619', title: 'БАСПА СӨЗДЕ ЗАРЗАМАН ПОЭЗИЯСЫНЫҢ ӨКІЛДЕРІ' }));
+  assert.ok(!R.citable({ url: 'https://nabrk.kz/a.pdf?time=1766&key=f95', title: 'Зар заман' }), 'temporary link');
+  assert.ok(!R.citable({ url: 'https://x.kz/a.pdf', title: 'Шығармалары қайшылыққа толы, күрделі тұлға саналған зар-заман ақындарына М' }), 'cut sentence');
+  assert.ok(!R.citable({ url: 'https://x.kz/a', title: 'Идеологиялық қатаң қысымшылыққа қарамастан аталған дәуірдің айтулы өкілдері Дулат, Шортанбай, Мұрат, Әбубәкір, Асан шығармаларын' }), 'too long');
+});
