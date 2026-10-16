@@ -20,11 +20,11 @@ const PROBLEMS = ['overlap', 'empty', 'decor', 'contrast', 'crop', 'clutter'];
 const PROMPT = (n, topic) => `You are the art director of a student presentation about "${String(topic || '').slice(0, 120)}". You SEE ${n} rendered slides, in order, numbered 1..${n} as they appear below.
 Judge each slide as a finished, professionally designed slide (like a good Canva/Keynote template). Flag ONLY real, visible problems:
 - "overlap": text overlaps other text, a picture or a decoration, or text is cut off at an edge;
-- "empty": a large blank area makes the slide look unfinished (roughly a third of the slide or more with nothing in it);
+- "empty": a large blank area makes the slide look unfinished (roughly a third of the slide or more with nothing in it), or a big coloured panel, card or circle has nothing inside it;
 - "decor": a decorative illustration/icon has nothing to do with the slide's text, or looks out of place;
 - "contrast": some text is hard to read against its background;
 - "crop": a photo is cropped badly (cut-off head/face, mostly empty sky/wall, the subject missing);
-- "clutter": elements are crowded, misaligned or look chaotic.
+- "clutter": elements are crowded, misaligned or look chaotic, or a stray tiny mark/character sits alone with no meaning.
 Do not invent problems; most good slides have none. Return JSON only:
 {"slides":[{"n":1,"problems":[],"note":""}],"score":0}
 "problems" uses only these words: ${PROBLEMS.join(', ')}. "note" ≤ 12 words. "score" = overall visual quality 0–100.`;

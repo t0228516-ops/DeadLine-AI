@@ -29,7 +29,8 @@ function t(role, x, y, w, inner, style = '') {
 function tb(role, x, bottom, w, inner, style = '') {
   return '<div class="cx-t" data-role="' + role + '" style="position:absolute;left:' + Math.round(x) + 'px;bottom:' + Math.round(bottom) + 'px;width:' + Math.round(w) + 'px;' + style + '">' + inner + '</div>';
 }
-const fs = (n) => 'font-size:calc(' + n + 'px*var(--fs,1))';
+// --wfit: QA бір ұзын сөз блоктан асып кетсе, тек сол блокты кішірейтеді (бүкіл слайдты емес)
+const fs = (n) => 'font-size:calc(' + n + 'px*var(--fs,1)*var(--wfit,1))';
 const disp = 'font-family:var(--f-display);font-weight:var(--dw,400);letter-spacing:-.01em';
 const wrap = (x, y, w, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px;width:' + Math.round(w) + 'px">' + inner + '</div>';
 const wrapB = (x, bottom, w, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;bottom:' + Math.round(bottom) + 'px;width:' + Math.round(w) + 'px">' + inner + '</div>';
@@ -72,10 +73,11 @@ function shapeOf(a, type) {
   const items = a.bullets.map(splitLabelDetail).filter((m) => m.label);
   const dated = items.filter((m) => /^\d{3,4}(\s*[–-]\s*\d{2,4})?$/.test(m.label) || /^\d{3,4}\b/.test(m.label));
   if (items.length >= 3 && items.length <= 4 && dated.length === items.length) {
+    // уақыт сызығы әрқашан хронология бойынша (модель кейде 1920, 1937, 1930 деп шатастырады)
     return { kind: 'timeline', items: items.map((m) => {
       const ym = m.label.match(/^(\d{3,4}(?:\s*[–-]\s*\d{2,4})?)\s*(.*)$/);
       return { date: ym ? ym[1] : m.label, label: ym && ym[2] ? ym[2].replace(/^[—–:-]\s*/, '') : '', detail: m.detail };
-    }) };
+    }).map((m, i) => ({ m, i, y: parseInt(m.date, 10) })).sort((p, q) => (p.y - q.y) || (p.i - q.i)).map((x) => x.m) };
   }
   if (!items.length) {
     const text = String(a.body || a.subtitle || '').trim();
@@ -206,9 +208,11 @@ def({
     let bg = '<div class="plate"></div>' + P.panel(gx, gy, bigW, gh, p.accent, 'border-radius:32px');
     const v0 = P.visualFor(items[0].label + ' ' + (items[0].detail || ''), ctx.sys, p, env.used, a.index * 5, { color: p.accentInk, stroke: 0.8 });
     if (v0) bg += P.visualImg(v0, gx + bigW - 330, gy + 30, 300, 300, { opacity: 0.9, filter: 'grayscale(1) contrast(1.4)' });
+    // визуал жоқ → ірі панель бос қалмасын: жоғарғы бөлігінде үлкен «елес» нөмір (кіші нөмір жолы сонда керек емес)
+    else bg += P.ghost(gx + 40, gy + 40, H.num(ctx, 1), 260, P.mix(p.accent, p.accentInk, 0.28), { weight: 700 });
     let fg = wrap(MX, MT + 10, titleW, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: titleW, maxLines: 5, scale: [72, 64, 56, 50, 44], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: titleW }));
     fg += tb('concept', gx + 40, MB + 40, bigW - 80,
-      '<div style="' + fs(20) + ';font-weight:700;letter-spacing:.14em;opacity:.75">' + esc(H.num(ctx, 1)) + '</div>' +
+      (v0 ? '<div style="' + fs(20) + ';font-weight:700;letter-spacing:.14em;opacity:.75">' + esc(H.num(ctx, 1)) + '</div>' : '') +
       '<div style="margin-top:12px;' + disp + ';' + fs(50) + ';line-height:1.05">' + esc(items[0].label) + '</div>' +
       (items[0].detail ? '<div style="margin-top:14px;' + fs(26) + ';line-height:1.4;opacity:.9">' + esc(items[0].detail) + '</div>' : ''), 'color:' + p.accentInk);
     rest.forEach((m, k) => {
@@ -251,7 +255,7 @@ function ticketsRender(ctx, sh, env, dates) {
     const big = dates ? m.date : m.label;
     const small = dates ? m.label : '';
     fg += t('concept', x + 36, y + 38, w - 72,
-      '<div style="' + disp + ';' + fs(dates ? 96 : (n === 3 ? 58 : 50)) + ';line-height:1.02;color:' + ink + '">' + esc(big) + '</div>' +
+      '<div style="' + disp + ';' + fs(dates ? (String(big).length <= 5 ? 96 : 64) : (n === 3 ? 58 : 50)) + ';line-height:1.02;color:' + ink + (dates ? ';white-space:nowrap' : '') + '">' + esc(big) + '</div>' +
       (small ? '<div style="margin-top:16px;' + fs(20) + ';font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:' + ink + ';opacity:.8">' + esc(small) + '</div>' : '') +
       (m.detail ? '<div style="margin-top:16px;' + fs(n === 3 ? 30 : 26) + ';line-height:1.42;color:' + ink + ';opacity:.9;max-width:' + Math.round(w - 72 - (vis[i] ? 150 : 0)) + 'px">' + esc(m.detail) + '</div>' : ''));
   });

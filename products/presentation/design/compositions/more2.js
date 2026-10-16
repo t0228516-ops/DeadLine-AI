@@ -25,7 +25,10 @@ module.exports = function register(def, K) {
       if (!v) throw new Error('no visual');
       const { metaHtml } = H.coverParts(ctx);
       const bg = '<div class="plate plate-cover"></div>' + P.grain(P.mix(p.bg, p.text, 0.07)) +
-        P.visualImg(v, 1040, -120, 1100, 1100, { opacity: v.kind === 'icon' ? 0.85 : 0.9 }) +
+        // гравюра — үлкен әрі шетке шыға береді; сызықтық белгіше алып көлемде дөрекі → жұмсақ дөңгелек ішінде, толық көрінеді
+        (v.kind === 'icon'
+          ? P.div(P.pos(1180, 190, 640, 640) + ';border-radius:50%;background:' + P.mix(p.bg, p.accent, 0.12)) + P.visualImg(v, 1320, 330, 360, 360)
+          : P.visualImg(v, 1040, -120, 1100, 1100, { opacity: 0.9 })) +
         P.panel(W - 22, 0, 22, HH, p.accent) + P.panel(MX, 150, 70, 3, p.accent);
       const fg = wrap(MX, 200, 960, H.kicker(ctx, H.sectionLabel(ctx)) +
         H.titleH1(ctx, a.title, { role: 'display', width: 960, maxLines: 4, scale: [112, 98, 86, 74, 64], hl: true }) +

@@ -59,13 +59,14 @@ module.exports = function register(def, K) {
       const cx = 1250; const cy = 590; const rx = 360; const ry = 250; const bw = 330;
       const ang = n === 3 ? [-150, -30, 90] : [-135, -45, 45, 135];
       const v = P.visualFor(a.title + ' ' + (a.subtitle || ''), ctx.sys, p, env.used, a.index + 21, { color: p.accentInk, stroke: 0.9 });
+      if (!v) throw new Error('no visual'); // ортасы бос шеңбер «аяқталмаған» көрінеді → келесі композиция
       let lines = '';
       const pts = ang.map((d) => { const r = (d * Math.PI) / 180; return { x: cx + Math.cos(r) * rx, y: cy + Math.sin(r) * ry, up: Math.sin(r) < 0 }; });
       pts.forEach((q) => { lines += '<line x1="' + cx + '" y1="' + cy + '" x2="' + q.x.toFixed(0) + '" y2="' + q.y.toFixed(0) + '"/>'; });
       let bg = '<div class="plate"></div>' + P.grain(P.mix(p.bg, p.text, 0.06)) +
         P.div('inset:0', '<svg viewBox="0 0 1920 1080" width="100%" height="100%"><ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="none" stroke="' + P.mix(p.bg, p.text, 0.2) + '" stroke-width="2" stroke-dasharray="3 10" stroke-linecap="round"/><g stroke="' + P.mix(p.bg, p.accent, 0.5) + '" stroke-width="2">' + lines + '</g></svg>') +
         P.div(P.pos(cx - 150, cy - 150, 300, 300) + ';border-radius:50%;background:' + p.accent + ';box-shadow:0 0 0 18px ' + P.mix(p.bg, p.accent, 0.18)) +
-        (v ? P.visualImg(v, cx - 95, cy - 95, 190, 190, { dark: true }) : P.div(P.pos(cx - 150, cy - 150, 300, 300) + ';border-radius:50%;border:2px solid ' + P.mix(p.accent, p.accentInk, 0.4) + ';transform:scale(.78)'));
+        P.visualImg(v, cx - 95, cy - 95, 190, 190, { dark: true });
       pts.forEach((q) => { bg += P.diamond(q.x, q.y, 22, p.accent, p.bg); });
       let fg = '<div style="position:absolute;left:' + MX + 'px;top:' + MT + 'px;bottom:' + MB + 'px;width:520px;display:flex;flex-direction:column;justify-content:center">' +
         H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: 520, maxLines: 5, scale: [72, 64, 56, 50, 44], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: 500 }) + '</div>';
@@ -174,7 +175,7 @@ module.exports = function register(def, K) {
     fits: (a, sh) => sh.items.every((m) => (m.label + (m.detail || '')).length <= 120),
     render(ctx, sh, env) {
       const a = ctx.a; const p = ctx.palette; const n = sh.items.length;
-      const span = W - 2 * MX - 120; const step = span / n; const ry = 640;
+      const span = W - 2 * MX + 40; const step = span / n; const ry = 640; // соңғы баған оң жақ шетке дейін жетеді (оң жақ бос қалмайды)
       const v = P.visualFor(a.title, ctx.sys, p, env.used, a.index + 31, { stroke: 0.8 });
       let bg = '<div class="plate"></div>' + P.grain(P.mix(p.bg, p.text, 0.06)) + P.panel(0, ry - 2, W, 4, P.mix(p.bg, p.text, 0.2)) +
         P.panel(MX, ry - 2, (n - 0.5) * step, 4, p.accent) +
@@ -183,7 +184,7 @@ module.exports = function register(def, K) {
       sh.items.forEach((m, i) => {
         const x = MX + i * step;
         bg += P.div(P.pos(x - 2, ry - 18, 36, 36) + ';border-radius:50%;background:' + (i === n - 1 ? p.accent : p.bg) + ';border:4px solid ' + p.accent);
-        fg += t('date', x, ry - 170, step - 30, esc(m.date), disp + ';' + fs(n <= 3 ? 120 : 100) + ';line-height:1;color:' + (i === n - 1 ? p.accent : 'var(--text)'));
+        fg += t('date', x, ry - 170, step - 40, esc(m.date), disp + ';' + fs(n <= 3 ? 120 : 100) + ';line-height:1;color:' + (i === n - 1 ? p.accent : 'var(--text)'));
         fg += t('concept', x, ry + 50, step - 40,
           (m.label ? '<div style="' + fs(22) + ';font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:' + p.accent + '">' + esc(m.label) + '</div>' : '') +
           (m.detail ? '<div style="margin-top:14px;' + fs(n <= 3 ? 34 : 30) + ';line-height:1.42;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));

@@ -73,6 +73,8 @@ function validateInfographic(raw) {
     highlight: Number.isInteger(raw.highlight) ? raw.highlight : null,
   };
   dropDecorativeValues(d);
+  if (fakeCompare(d)) return null;
+  if (kind === 'roadmap') chronological(d);
   try { return spec.validate(d) ? d : null; } catch (e) { return null; }
 }
 
@@ -89,6 +91,18 @@ function dropDecorativeValues(d) {
   const roundPct = vals.every((it) => isPct(it, d) && it.value != null && it.value % 5 === 0);
   if (!roundPct) return;
   d.items.forEach((it) => { it.display = ''; it.value = null; });
+}
+
+/** «100% білімді vs 0% надан» — риторика, дерек емес: көзсіз 0%/100% салыстыру сызылмайды (мәтінге түседі) */
+function fakeCompare(d) {
+  if (d.kind !== 'compare' || d.source) return false;
+  return d.items.some((it) => isPct(it, d) && (it.value === 0 || it.value === 100));
+}
+/** Жол картасы: бәрінде жыл болса — хронология бойынша (тұрақты сұрыптау) */
+function chronological(d) {
+  const year = (it) => { const m = String(it.display || it.label || '').match(/^\s*(\d{3,4})\b/); return m ? +m[1] : null; };
+  if (!d.items.every((it) => year(it) != null)) return;
+  d.items = d.items.map((it, i) => ({ it, i, y: year(it) })).sort((p, q) => (p.y - q.y) || (p.i - q.i)).map((x) => x.it);
 }
 
 // ── geometry helpers ───────────────────────────────────────────────────────
@@ -439,11 +453,16 @@ def('roadmap', {
     d.items.forEach((it, i) => {
       const x = slot * i + slot / 2; const up = i % 2 === 0; const on = i === n - 1;
       const cx = clamp(x - cardW / 2, 0, W - cardW);
+      const al = cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right';
+      const lab = it.display && String(it.label).trim() !== String(it.display).trim() ? it.label : '';
       out += '<div class="ig-stem" style="' + box(x - 1, up ? ly - 70 : ly + 18, 2, 52) + '"></div>' +
         '<div class="ig-mile' + (on ? ' on' : '') + '" style="' + box(x - 17, ly - 17, 34, 34) + '"></div>' +
         txt('ig-date' + (up ? '' : ''), esc(it.display || it.label), box(cx, up ? ly - 70 - 150 : ly + 78, cardW, 46, 'font-size:34px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')), 'numeral') +
-        txt('ig-lab strong', esc(it.display ? it.label : ''), box(cx, up ? ly - 70 - 104 : ly + 124, cardW, 40, 'font-size:26px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right'))) +
-        (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 62 : ly + 166, cardW, up ? 58 : H - (ly + 166), 22, 17, 'text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')) : '');
+        (lab
+          ? txt('ig-lab strong', esc(lab), box(cx, up ? ly - 70 - 104 : ly + 124, cardW, 40, 'font-size:26px;text-align:' + al)) +
+            (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 62 : ly + 166, cardW, up ? 58 : H - (ly + 166), 22, 17, 'text-align:' + al) : '')
+          // жеке белгі жоқ (тек жыл) → сипаттама белгінің орнына шығады, ірі әрі оқылатын
+          : (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 108 : ly + 124, cardW, up ? 104 : H - (ly + 124), 28, 20, 'text-align:' + al + ';color:var(--text)') : ''));
     });
     return out;
   },
@@ -455,16 +474,24 @@ def('iconGrid', {
   render(d, W, H, p) {
     const n = d.items.length; const perRow = n <= 4 ? n : 3; const rows = Math.ceil(n / perRow);
     const g = 28; const cw = (W - g * (perRow - 1)) / perRow;
-    const ch = Math.min((H - g * (rows - 1)) / rows, rows === 1 ? 380 : 250);
+    // бір қатар: карточкалар биік әрі мәтін ірі — асты бос қалмасын, дауыстап оқуға жетсін
+    const cap = Math.min((H - g * (rows - 1)) / rows, rows === 1 ? 480 : 250);
+    // карточка мазмұнын «құшақтайды» (жиексіз жүйелерде биік бос карточка — бос алаң болып көрінеді), қатар ортаға.
+    // Белгі жолдарының саны бүкіл қатарға ортақ (тураланып тұрсын), есеп әдейі сақ (0.6em/әріп).
+    const t0 = rows === 1 && cap >= 440;
+    const icS0 = t0 ? 116 : (rows === 1 ? 92 : 72); const labF0 = t0 ? 36 : (rows === 1 ? 30 : 27); const detF0 = t0 ? 29 : (rows === 1 ? 26 : 24);
+    const labLines = Math.min(2, Math.max(1, ...d.items.map((it) => Math.ceil(String(it.label).length * 0.6 * labF0 / (cw - 72)))));
+    const labH0 = Math.round(labLines * labF0 * 1.22 + 4);
+    const detLines = Math.max(0, ...d.items.map((it) => (it.detail ? Math.min(5, Math.ceil(String(it.detail).length * 0.56 * detF0 / (cw - 72))) : 0)));
+    const ch = Math.min(cap, Math.max(rows === 1 ? 300 : 200, 100 + icS0 + labH0 + (detLines ? detLines * detF0 * 1.42 + 12 : 0)));
     const oy = (H - (ch * rows + g * (rows - 1))) / 2;
     return d.items.map((it, i) => {
       const x = (i % perRow) * (cw + g); const y = oy + Math.floor(i / perRow) * (ch + g); const on = i === 0;
-      const big = rows === 1;
-      const icS = big ? 92 : 72;
+      const icS = icS0; const labF = labF0; const labH = labH0;
       return '<div class="ig-card" style="' + box(x, y, cw, ch) + '"></div>' +
         '<div class="ig-badge' + (on ? ' on' : '') + '" style="' + box(x + 36, y + 36, icS, icS) + '">' + iconOrNum(it, i, Math.round(icS * 0.5)) + '</div>' +
-        txt('ig-lab strong', esc(it.label), box(x + 36, y + 56 + icS, cw - 72, big ? 90 : 46, 'font-size:' + (big ? 30 : 27) + 'px')) +
-        (it.detail ? detTxt('ig-det', it.detail, x + 36, y + (big ? 150 : 110) + icS, cw - 72, ch - (big ? 180 : 130) - icS, big ? 26 : 24, 18) : '');
+        txt('ig-lab strong', esc(it.label), box(x + 36, y + 56 + icS, cw - 72, labH, 'font-size:' + labF + 'px')) +
+        (it.detail ? detTxt('ig-det', it.detail, x + 36, y + 70 + icS + labH, cw - 72, ch - 100 - icS - labH, detF0, 18) : '');
     }).join('');
   },
 });
