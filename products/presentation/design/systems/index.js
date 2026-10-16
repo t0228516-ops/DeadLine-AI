@@ -93,6 +93,9 @@ function pickDesign(o = {}) {
   let moods = sys.moods.filter((m) => T.MOODS[m]);
   if (wantsDark && !wantsLight) moods = (moods.filter((m) => !T.isLightMood(m)).length ? moods.filter((m) => !T.isLightMood(m)) : Object.keys(T.MOODS).filter((m) => !T.isLightMood(m) && !/^ref_/.test(m)));
   else if (wantsLight && !wantsDark) moods = (moods.filter(T.isLightMood).length ? moods.filter(T.isLightMood) : Object.keys(T.MOODS).filter((m) => T.isLightMood(m) && !/^ref_/.test(m)));
+  // Клиент қараңғы фон сұрамаса — тек ашық палитра (қараңғы колода «бұлыңғыр» көрінеді, сыныпта проектормен оқылмайды).
+  // Әртүрлілік: 6 ашық палитра × 10 жүйе. Тек қараңғы жүйе (blueprint) өз палитрасында қалады. DESIGN_DARK=1 — бұрынғыдай.
+  else if (process.env.DESIGN_DARK !== '1' && moods.some(T.isLightMood)) moods = moods.filter(T.isLightMood);
   const freshM = moods.filter((m) => !avoidM.includes(m));
   if (freshM.length) moods = freshM;
   const mood = moods[T.strHash(seed + '|mood') % moods.length] || 'ivory';
