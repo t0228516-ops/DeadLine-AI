@@ -48,3 +48,11 @@ test('a programming error that merely mentions "aborted" is not treated as a net
   assert.ok(!G.isRecoverable(new TypeError("Cannot read properties of undefined (reading 'aborted')")));
   assert.ok(!G.isRecoverable(new Error('network config missing')));
 });
+
+test('a diagram with an empty "—" node is rejected (slide falls back to text)', () => {
+  const { inspectSvg } = require('../products/presentation/visual');
+  const ok = '<svg viewBox="0 0 1100 740"><text x="100" y="100" font-size="28">Тарих</text><text x="400" y="100" font-size="28">Этнография</text></svg>';
+  const bad = '<svg viewBox="0 0 1100 740"><text x="100" y="100" font-size="28">Тарих</text><text x="400" y="100" font-size="28">—</text></svg>';
+  assert.strictEqual(inspectSvg(ok).severe, false);
+  assert.strictEqual(inspectSvg(bad).severe, true);
+});
