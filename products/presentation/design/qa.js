@@ -39,7 +39,7 @@ function measure(slide){
     
     if(!bleed&&role!=='photo')area+=r.w*r.h;
   });
-  [].forEach.call(slide.querySelectorAll('.title,.qtext,.row-l,.concept-l,.st-l,.hn-l'),function(e){if(e.offsetWidth>0&&e.scrollWidth>e.clientWidth+2)issues.push({type:'word-overflow',hard:true,detail:e.className+' '+(e.textContent||'').slice(0,24)});});
+  [].forEach.call(slide.querySelectorAll('.title,.qtext,.row-l,.concept-l,.st-l,.hn-l,[style*="--wfit"]'),function(e){if(e.offsetWidth>0&&e.scrollWidth>e.clientWidth+2)issues.push({type:'word-overflow',hard:true,detail:e.className+' '+(e.textContent||'').slice(0,24)});});
   [].forEach.call(slide.querySelectorAll('.stat-v,.mega,.tl-date,.numeral-xl,.st-n'),function(e){var box=e.parentElement;if(e.scrollWidth>e.clientWidth+3||(box&&e.offsetWidth>box.clientWidth+3))issues.push({type:'h-overflow',hard:true,detail:e.className});});
   for(var i=0;i<els.length;i++)for(var j=i+1;j<els.length;j++){
     if(contains(els[i],els[j]))continue;
@@ -66,10 +66,17 @@ function fill(slide){
   });
   return bot>top?(bot-top)/(H-MT-MB):1;
 }
+/** Құрастырылған слайд: сыймаған сөзі бар блок (--wfit) өз орнында 0.6-ға дейін кішірейеді */
+function fitWords(slide){
+  [].forEach.call(slide.querySelectorAll('[style*="--wfit"]'),function(e){
+    if(!e.offsetWidth)return;var f=1;
+    while(e.scrollWidth>e.clientWidth+1&&f>0.62){f=Math.round((f-0.04)*100)/100;e.style.setProperty('--wfit',String(f));}
+  });
+}
 function revise(slide){
   var steps=[1,.95,.9],drops=0,fs=1,res,idx=0,report={fs:1,dropped:0,iterations:0};
   function set(v){fs=v;slide.style.setProperty('--fs',String(v));}
-  set(1);res=measure(slide);
+  set(1);fitWords(slide);res=measure(slide);
   function hard(r){return r.issues.filter(function(i){return i.hard;});}
   report.initial=hard(res).map(function(i){return i.type+'('+i.detail+')';});
   // мазмұнды тастаудан бұрын — кішірейту (0.74-ке дейін ≈ 22–24px мәтін, әлі оқылады), сосын қосымша фото, сосын ғана пункт

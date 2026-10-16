@@ -59,13 +59,14 @@ module.exports = function register(def, K) {
       const cx = 1250; const cy = 590; const rx = 360; const ry = 250; const bw = 330;
       const ang = n === 3 ? [-150, -30, 90] : [-135, -45, 45, 135];
       const v = P.visualFor(a.title + ' ' + (a.subtitle || ''), ctx.sys, p, env.used, a.index + 21, { color: p.accentInk, stroke: 0.9 });
+      if (!v) throw new Error('no visual'); // ортасы бос шеңбер «аяқталмаған» көрінеді → келесі композиция
       let lines = '';
       const pts = ang.map((d) => { const r = (d * Math.PI) / 180; return { x: cx + Math.cos(r) * rx, y: cy + Math.sin(r) * ry, up: Math.sin(r) < 0 }; });
       pts.forEach((q) => { lines += '<line x1="' + cx + '" y1="' + cy + '" x2="' + q.x.toFixed(0) + '" y2="' + q.y.toFixed(0) + '"/>'; });
       let bg = '<div class="plate"></div>' + P.grain(P.mix(p.bg, p.text, 0.06)) +
         P.div('inset:0', '<svg viewBox="0 0 1920 1080" width="100%" height="100%"><ellipse cx="' + cx + '" cy="' + cy + '" rx="' + rx + '" ry="' + ry + '" fill="none" stroke="' + P.mix(p.bg, p.text, 0.2) + '" stroke-width="2" stroke-dasharray="3 10" stroke-linecap="round"/><g stroke="' + P.mix(p.bg, p.accent, 0.5) + '" stroke-width="2">' + lines + '</g></svg>') +
         P.div(P.pos(cx - 150, cy - 150, 300, 300) + ';border-radius:50%;background:' + p.accent + ';box-shadow:0 0 0 18px ' + P.mix(p.bg, p.accent, 0.18)) +
-        (v ? P.visualImg(v, cx - 95, cy - 95, 190, 190, { dark: true }) : P.div(P.pos(cx - 150, cy - 150, 300, 300) + ';border-radius:50%;border:2px solid ' + P.mix(p.accent, p.accentInk, 0.4) + ';transform:scale(.78)'));
+        P.visualImg(v, cx - 95, cy - 95, 190, 190, { dark: true });
       pts.forEach((q) => { bg += P.diamond(q.x, q.y, 22, p.accent, p.bg); });
       let fg = '<div style="position:absolute;left:' + MX + 'px;top:' + MT + 'px;bottom:' + MB + 'px;width:520px;display:flex;flex-direction:column;justify-content:center">' +
         H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: 520, maxLines: 5, scale: [72, 64, 56, 50, 44], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: 500 }) + '</div>';
