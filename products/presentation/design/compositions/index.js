@@ -73,10 +73,11 @@ function shapeOf(a, type) {
   const items = a.bullets.map(splitLabelDetail).filter((m) => m.label);
   const dated = items.filter((m) => /^\d{3,4}(\s*[–-]\s*\d{2,4})?$/.test(m.label) || /^\d{3,4}\b/.test(m.label));
   if (items.length >= 3 && items.length <= 4 && dated.length === items.length) {
+    // уақыт сызығы әрқашан хронология бойынша (модель кейде 1920, 1937, 1930 деп шатастырады)
     return { kind: 'timeline', items: items.map((m) => {
       const ym = m.label.match(/^(\d{3,4}(?:\s*[–-]\s*\d{2,4})?)\s*(.*)$/);
       return { date: ym ? ym[1] : m.label, label: ym && ym[2] ? ym[2].replace(/^[—–:-]\s*/, '') : '', detail: m.detail };
-    }) };
+    }).map((m, i) => ({ m, i, y: parseInt(m.date, 10) })).sort((p, q) => (p.y - q.y) || (p.i - q.i)).map((x) => x.m) };
   }
   if (!items.length) {
     const text = String(a.body || a.subtitle || '').trim();

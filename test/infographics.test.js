@@ -73,3 +73,22 @@ test('funnel/pyramid: invented round percentages without a source are dropped, r
   const donut = validateInfographic({ kind: 'donut', items: [{ label: 'A', value: '70%' }, { label: 'B', value: '30%' }] });
   assert.ok(donut && donut.items[0].display, 'charts untouched');
 });
+
+test('rhetorical 0%/100% compare without a source is not drawn; roadmap years go in order', () => {
+  const { validateInfographic } = require('../products/presentation/design/infographics');
+  const fake = validateInfographic({ kind: 'compare', items: [{ label: 'Білімді', value: '100%' }, { label: 'Надан', value: '0%' }] });
+  assert.strictEqual(fake, null, 'invented 100% vs 0% falls back to text');
+  const real = validateInfographic({ kind: 'compare', items: [{ label: 'Қала', value: '62%' }, { label: 'Ауыл', value: '38%' }] });
+  assert.ok(real, 'ordinary compare kept');
+  const road = validateInfographic({ kind: 'roadmap', items: [{ label: '1920', detail: 'a' }, { label: '1937', detail: 'b' }, { label: '1930', detail: 'c' }, { label: '1989', detail: 'd' }] });
+  assert.deepStrictEqual(road.items.map((it) => it.detail), ['a', 'c', 'b', 'd']);
+});
+
+test('composition timeline is chronological', () => {
+  const { shapeOf } = require('../products/presentation/design/compositions');
+  const A = require('../products/presentation/design/analyze');
+  const s = { title: 'Қуғын-сүргін', bullets: ['1920: a', '1937: b', '1930: c', '1989: d'] };
+  const a = A.analyzeSlide(s, 3, 8);
+  const sh = shapeOf(a, 'timeline');
+  assert.deepStrictEqual(sh.items.map((m) => m.date), ['1920', '1930', '1937', '1989']);
+});

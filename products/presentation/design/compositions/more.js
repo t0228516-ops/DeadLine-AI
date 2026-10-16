@@ -175,7 +175,7 @@ module.exports = function register(def, K) {
     fits: (a, sh) => sh.items.every((m) => (m.label + (m.detail || '')).length <= 120),
     render(ctx, sh, env) {
       const a = ctx.a; const p = ctx.palette; const n = sh.items.length;
-      const span = W - 2 * MX - 120; const step = span / n; const ry = 640;
+      const span = W - 2 * MX + 40; const step = span / n; const ry = 640; // соңғы баған оң жақ шетке дейін жетеді (оң жақ бос қалмайды)
       const v = P.visualFor(a.title, ctx.sys, p, env.used, a.index + 31, { stroke: 0.8 });
       let bg = '<div class="plate"></div>' + P.grain(P.mix(p.bg, p.text, 0.06)) + P.panel(0, ry - 2, W, 4, P.mix(p.bg, p.text, 0.2)) +
         P.panel(MX, ry - 2, (n - 0.5) * step, 4, p.accent) +
@@ -184,7 +184,7 @@ module.exports = function register(def, K) {
       sh.items.forEach((m, i) => {
         const x = MX + i * step;
         bg += P.div(P.pos(x - 2, ry - 18, 36, 36) + ';border-radius:50%;background:' + (i === n - 1 ? p.accent : p.bg) + ';border:4px solid ' + p.accent);
-        fg += t('date', x, ry - 170, step - 30, esc(m.date), disp + ';' + fs(n <= 3 ? 120 : 100) + ';line-height:1;color:' + (i === n - 1 ? p.accent : 'var(--text)'));
+        fg += t('date', x, ry - 170, step - 40, esc(m.date), disp + ';' + fs(n <= 3 ? 120 : 100) + ';line-height:1;color:' + (i === n - 1 ? p.accent : 'var(--text)'));
         fg += t('concept', x, ry + 50, step - 40,
           (m.label ? '<div style="' + fs(22) + ';font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:' + p.accent + '">' + esc(m.label) + '</div>' : '') +
           (m.detail ? '<div style="margin-top:14px;' + fs(n <= 3 ? 34 : 30) + ';line-height:1.42;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));

@@ -73,6 +73,8 @@ function validateInfographic(raw) {
     highlight: Number.isInteger(raw.highlight) ? raw.highlight : null,
   };
   dropDecorativeValues(d);
+  if (fakeCompare(d)) return null;
+  if (kind === 'roadmap') chronological(d);
   try { return spec.validate(d) ? d : null; } catch (e) { return null; }
 }
 
@@ -89,6 +91,18 @@ function dropDecorativeValues(d) {
   const roundPct = vals.every((it) => isPct(it, d) && it.value != null && it.value % 5 === 0);
   if (!roundPct) return;
   d.items.forEach((it) => { it.display = ''; it.value = null; });
+}
+
+/** «100% білімді vs 0% надан» — риторика, дерек емес: көзсіз 0%/100% салыстыру сызылмайды (мәтінге түседі) */
+function fakeCompare(d) {
+  if (d.kind !== 'compare' || d.source) return false;
+  return d.items.some((it) => isPct(it, d) && (it.value === 0 || it.value === 100));
+}
+/** Жол картасы: бәрінде жыл болса — хронология бойынша (тұрақты сұрыптау) */
+function chronological(d) {
+  const year = (it) => { const m = String(it.display || it.label || '').match(/^\s*(\d{3,4})\b/); return m ? +m[1] : null; };
+  if (!d.items.every((it) => year(it) != null)) return;
+  d.items = d.items.map((it, i) => ({ it, i, y: year(it) })).sort((p, q) => (p.y - q.y) || (p.i - q.i)).map((x) => x.it);
 }
 
 // ── geometry helpers ───────────────────────────────────────────────────────
@@ -439,11 +453,16 @@ def('roadmap', {
     d.items.forEach((it, i) => {
       const x = slot * i + slot / 2; const up = i % 2 === 0; const on = i === n - 1;
       const cx = clamp(x - cardW / 2, 0, W - cardW);
+      const al = cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right';
+      const lab = it.display && String(it.label).trim() !== String(it.display).trim() ? it.label : '';
       out += '<div class="ig-stem" style="' + box(x - 1, up ? ly - 70 : ly + 18, 2, 52) + '"></div>' +
         '<div class="ig-mile' + (on ? ' on' : '') + '" style="' + box(x - 17, ly - 17, 34, 34) + '"></div>' +
         txt('ig-date' + (up ? '' : ''), esc(it.display || it.label), box(cx, up ? ly - 70 - 150 : ly + 78, cardW, 46, 'font-size:34px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')), 'numeral') +
-        txt('ig-lab strong', esc(it.display ? it.label : ''), box(cx, up ? ly - 70 - 104 : ly + 124, cardW, 40, 'font-size:26px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right'))) +
-        (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 62 : ly + 166, cardW, up ? 58 : H - (ly + 166), 22, 17, 'text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')) : '');
+        (lab
+          ? txt('ig-lab strong', esc(lab), box(cx, up ? ly - 70 - 104 : ly + 124, cardW, 40, 'font-size:26px;text-align:' + al)) +
+            (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 62 : ly + 166, cardW, up ? 58 : H - (ly + 166), 22, 17, 'text-align:' + al) : '')
+          // жеке белгі жоқ (тек жыл) → сипаттама белгінің орнына шығады, ірі әрі оқылатын
+          : (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 108 : ly + 124, cardW, up ? 104 : H - (ly + 124), 28, 20, 'text-align:' + al + ';color:var(--text)') : ''));
     });
     return out;
   },
