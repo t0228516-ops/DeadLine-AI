@@ -1,6 +1,7 @@
 'use strict';
 
 const { recordApiUsage } = require('../../core/cost');
+const R = require('./research');
 
 // ─── DeepSeek клиенті (fetch арқылы, SDK орнатпай) ───────────────────────
 // Groq-тан DeepSeek V4-Pro-ға көшірілді — Groq-тың тегін деңгейінің 6000
@@ -548,7 +549,7 @@ const SLIDE_JSON_SHAPE = `{
 // batch-тарға дәйекті, бір-бірімен байланысты жоспар беру, әйтпесе әр
 // батч тақырыпты басынан бастап "ойлап табады" да, слайдтар арасында
 // логикалық сабақтастық болмайды.
-async function generateOutline(topic, slideCount, language, style) {
+async function generateOutline(topic, slideCount, language, style, research) {
   const languageRule = language
     ? `Write in ${language}.`
     : `Write in the same language as the topic/material.`;
@@ -588,7 +589,11 @@ ${topic}
 """
 
 PRIORITY: follow the client's structure, facts, language, and intent exactly. Do not replace their plan with a generic template.
-
+${research && research.sheet ? `
+BACKGROUND FACTS — found by web search for this topic BEFORE planning (reliable sources). Read them first to understand what the topic really covers: which people, period, works, events and ideas belong to it.
+${research.sheet}
+Use them to understand the topic correctly and to get people, periods and works right — not as the outline itself: the plan must still cover the CORE aspects a teacher expects for this topic, in a logical order. Do not build a slide around a side issue that appears in only one snippet (an opinion piece, a news story, a local event). Do not plan slides about people or works that are not part of this topic. Where the facts and your memory disagree, trust the facts.
+` : ''}
 STEP 1 — Determine the material type:
 - SHORT TOPIC (a few words/sentences, no internal structure) → you must invent a logical structure for it.
 - STRUCTURED MATERIAL (syllabus, course outline, lecture notes, numbered weeks/chapters/sections, or any text with its own internal breakdown) → you must PRESERVE that existing structure. Do NOT collapse it into a generic summary. Do NOT invent your own structure when the material already has one.
@@ -637,6 +642,27 @@ Each slideTopics entry must be specific enough to guide detailed content generat
   return parsed;
 }
 
+/**
+ * Батчқа берілетін деректер блогы: тақырыптың жалпы фактілері + осы батчтағы әр слайдтың өз фактілері.
+ * Ережелер: есім, дата, орын, шығарма атауы, сан — тек осы деректерден не клиент брифінен.
+ */
+function researchBlock(research, batchTopics, isReferencesSlide) {
+  if (!research || !research.sheet) return '';
+  const per = batchTopics
+    .map((b) => { const p = research.perSlide && research.perSlide[b.index - 1]; return p ? `Slide ${b.index}:\n${p.sheet}` : ''; })
+    .filter(Boolean).join('\n');
+  const refs = isReferencesSlide ? R.sourceList(research) : [];
+  return `FACTS FROM SOURCES — collected by web search BEFORE writing. Base every slide on them:
+General facts about the topic:
+${research.sheet}
+${per ? 'Facts for the slides of this batch:\n' + per + '\n' : ''}FACT RULES:
+- Names, dates, places, titles of works and numbers must come from these FACTS or from the client brief. If the facts give no date or number for something, do not write one.
+- Do not add people, works or events that are not in these facts or in the brief, even if they seem related.
+- Where the facts and your memory disagree, the facts win.
+- Write in your own words, in the output language; never copy a source sentence word for word; never write "[1]", "source" or a URL on a content slide.
+${refs.length ? `- The references slide lists ONLY these real sources (one bullet each, as written): ${refs.map((r) => '"' + r + '"').join('; ')}\n` : ''}`;
+}
+
 // ─── 1. Generate one batch of fully-detailed slides ────────────────────────
 // batchTopics: [{ index, topic }] — осы батчта генерацияланатын слайдтар.
 // allTopics: толық тізім — модельге жалпы контекст беру үшін (тек атаулар,
@@ -647,7 +673,7 @@ Each slideTopics entry must be specific enough to guide detailed content generat
 // қайта-қайта таңдап, бүкіл презентация бірыңғай болып шығатын (нақты
 // байқалған "бәрі фон+мәтін болып қалған" регресс). Бұл параметр әр
 // келесі батчқа "мыналар қолданылып қойды, басқасын қолдан" деп айтады.
-async function generateSlideBatch(presentationTitle, allTopics, batchTopics, style, language, usedImageTypes, slotRules, slotMode) {
+async function generateSlideBatch(presentationTitle, allTopics, batchTopics, style, language, usedImageTypes, slotRules, slotMode, research) {
   const languageRule = language
     ? `Write ALL text in ${language}. Title, subtitle, body, bullets — everything in ${language}.`
     : `Write content in the same language as the topic.`;
@@ -676,6 +702,9 @@ STRICT RULES for this slide:
 - No body essay; no stats; no table`
         : `The LAST slide in this batch (slide ${allTopics.length}) is the CLOSING slide: 2-4 conclusion bullets.`)
     : '';
+
+  // Мәтін жазылмас бұрын жиналған деректер (research.js): модель есім/дата/шығарманы жадынан емес, осыдан алады
+  const factsBlock = researchBlock(research, batchTopics, isReferencesSlide);
 
   // Алдыңғы батчтарда full_background тым жиі қолданылса — келесі батчқа
   // нақты, міндетті түрде split-layout қолдануды тапсырамыз.
@@ -726,6 +755,7 @@ ${contextList}
 Generate DETAILED, FULLY-FORMED content for ONLY these slides:
 ${batchList}
 
+${factsBlock}
 IMPORTANT — CLIENT FIRST: if a slide's topic above already contains specific details (section names, numbers, key terms, sub-points from the client's brief/syllabus), you MUST use those exact details. Do NOT replace with a generic summary. Prefer the client's wording. Keep text short (see content rules), but never drop their key facts.
 
 ${slotBlock}
@@ -780,10 +810,16 @@ async function generateSlides(topic, options = {}) {
   const pre = options.outline;
   const outline = pre && Array.isArray(pre.slideTopics) && pre.slideTopics.length === slideCount && pre.title
     ? pre
-    : (console.log(`[Pipeline] Generating outline for ${slideCount} slides...`), await generateOutline(clientBrief, slideCount, language, style));
+    : (console.log(`[Pipeline] Generating outline for ${slideCount} slides...`), await generateOutline(clientBrief, slideCount, language, style, options.research));
   if (outline === pre) console.log(`[Pipeline] Using storyline outline (${slideCount} slides)`);
   const presentationTitle = outline.title;
   const slideTopics = outline.slideTopics;
+
+  // Жоспар дайын → әр мазмұн слайдына нақты іздеу (мұқаба, кіріспе, қорытынды — жалпы деректер жетеді)
+  if (options.research) {
+    const n = slideTopics.length;
+    await R.gatherSlides(options.research, slideTopics, { skip: (i) => i === 0 || i === n - 1 || (n >= 5 && i === 1) });
+  }
 
   // Батчтарға бөлу: [1,2,3], [4,5,6], [7,8]
   const batches = [];
@@ -802,7 +838,7 @@ async function generateSlides(topic, options = {}) {
     const slotRules = Array.isArray(options.slotRules)
       ? batchTopics.map((b) => options.slotRules[b.index - 1]).filter(Boolean).join('\n')
       : '';
-    const slides = await generateSlideBatch(presentationTitle, slideTopics, batchTopics, style, language, usedImageTypes, slotRules, options.slotMode);
+    const slides = await generateSlideBatch(presentationTitle, slideTopics, batchTopics, style, language, usedImageTypes, slotRules, options.slotMode, options.research);
     allSlides.push(...slides);
     slides.forEach(s => { if (s.composition?.image) usedImageTypes.push(s.composition.image); });
     console.log(`[Pipeline] Batch done: slides ${batchTopics.map(b => b.index).join(',')} — image types so far: [${usedImageTypes.join(', ')}]`);

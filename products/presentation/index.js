@@ -35,6 +35,7 @@ const { validateInfographic } = require('./design/infographics');
 const { planPhotoSlides } = require('./photoPlan');
 const { makePhotoJudge } = require('./photoJudge');
 const { makeVisionChooser } = require('./photoVision');
+const { gatherTopic } = require('./research');
 const { generateSlideImage, deckBudget } = require('./imageGen');
 const { buildSpeechDocx } = require('./speechDoc');
 
@@ -274,11 +275,18 @@ async function generatePresentation(userInput, options = {}) {
     if (storyOutline) console.log(`[Pipeline] id=${genId} Template storyline: «${storyOutline.title}» — ${storyOutline.slideTopics.length} слайд`);
   }
 
+  // 0. Мәтін жазылмас БҰРЫН тақырып бойынша дерек жиналады (есім, дата, шығарма модельдің жадынан емес — дереккөзден)
+  let research = null;
+  try {
+    await onProgress('content', 'Тақырып бойынша ақпарат жиналуда...');
+    research = await gatherTopic(topic);
+  } catch (e) { console.warn(`[Pipeline] id=${genId} research failed: ${e.message}`); research = null; }
+
   // 1. Мазмұн генерациясы
   await onProgress('content', 'Мазмұн жазылуда...');
   console.log('[Pipeline] Generating content...');
   let presentation = await generateSlides(topic, {
-    slideCount, language, style, clientBrief: briefForLlm, coverMeta, slotRules, outline: storyOutline, slotMode: tplSchema ? 'facts' : undefined,
+    slideCount, language, style, clientBrief: briefForLlm, coverMeta, slotRules, outline: storyOutline, slotMode: tplSchema ? 'facts' : undefined, research,
   });
   // Модель кейде тақырып тілінде жазып кетеді (орысша таңдалса да қазақша шығады) → 1 рет қайта жазамыз
   const langIssue = mode === 'template' ? null : languageMismatch(presentation && presentation.slides, language);
@@ -286,7 +294,7 @@ async function generatePresentation(userInput, options = {}) {
     console.warn(`[Pipeline] Language mismatch (${langIssue}) — regenerating once`);
     try {
       const retry = await generateSlides(topic, {
-        slideCount, language, style, coverMeta, slotRules, slotMode: tplSchema ? 'facts' : undefined,
+        slideCount, language, style, coverMeta, slotRules, slotMode: tplSchema ? 'facts' : undefined, research,
         clientBrief: userInput + reqBrief + `\n\n[IMPORTANT: write the ENTIRE presentation in ${language}. The topic above may be in another language — translate it.]`,
       });
       if (retry && Array.isArray(retry.slides) && retry.slides.length >= 2 && !languageMismatch(retry.slides, language)) presentation = retry;
