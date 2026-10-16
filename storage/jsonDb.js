@@ -597,6 +597,16 @@ async function getUserJobs(chatId, limit = 20) {
     .map(rowToJob);
 }
 
+/** Аяқталмаған (кезекте/жасалып жатқан) соңғы жұмыстар — сервер қайта қосылғанда жалғастыру үшін */
+async function listUnfinishedJobs(maxAgeMs = 3 * 3600 * 1000) {
+  const cutoff = Date.now() - maxAgeMs;
+  return Object.values(db.jobs)
+    .filter((j) => (j.status === 'queued' || j.status === 'running') && Number(j.created_at) >= cutoff)
+    .sort((a, b) => a.created_at - b.created_at)
+    .slice(0, 50)
+    .map(rowToJob);
+}
+
 // ─── History ─────────────────────────────────────────────────────────────
 async function addHistory(chatId, entry) {
   const id = entry.id || makeJobId();
@@ -881,5 +891,6 @@ module.exports = {
   getHistory,
   addFeedback,
   getFeedbackForJob,
-  cleanupOldJobs
+  cleanupOldJobs,
+  listUnfinishedJobs
 };

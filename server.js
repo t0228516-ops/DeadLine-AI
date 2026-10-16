@@ -1,5 +1,6 @@
 'use strict';
 
+require('./core/crashGuard').install(); // ұсталмаған қате ботты құлатпайды
 require('dotenv').config();
 
 const express = require('express');
@@ -17,7 +18,7 @@ const {
   initDB, getUser, registerUser, useCredit, refundCredit, claimFreeDeck, releaseFreeDeck, countFreeDecksSince, freeFunnel,
   checkRateLimits, markGenerationAttempt, markGenerationSuccess,
   createJob, updateJob, getJob, getUserJobs, addHistory, getHistory,
-  cleanupOldJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
+  cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
   scheduleRatePrompt, takeDueRatePrompts, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
   getDesignMemory, pushDesignMemory,
@@ -529,7 +530,7 @@ app.post('/api/generate', authMiddleware, async (req, res) => {
     if (isTester) { await setTesterPending(chatId, job.id).catch((e) => console.warn('[Tester] pending', e.message)); testerHold = null; }
 
     // Fire-and-forget generation
-    runGeneration(job.id).catch(err => {
+    runGeneration(job.id, { free: isFree }).catch(err => {
       console.error('[Job] unhandled', job.id, err);
     });
 
@@ -830,20 +831,45 @@ function scheduleLearn(job, outcome, info) {
 
 // ─── Generation runner ────────────────────────────────────────────────────
 let activeGenerations = 0;
-const waitQueue = [];
+const waitQueue = []; // [{ resolve, free }]
 
-async function runGeneration(jobId) {
-  // Simple concurrency gate
+/** Кезек: бір уақытта MAX_CONCURRENT генерация; бос орын шыққанда ақылы (не тестер) тапсырыс тегіннен бұрын өтеді */
+async function runGeneration(jobId, opts = {}) {
   if (activeGenerations >= MAX_CONCURRENT) {
-    await new Promise(resolve => waitQueue.push(resolve));
+    await new Promise(resolve => waitQueue.push({ resolve, free: !!opts.free }));
   }
   activeGenerations++;
   try {
     await executeJob(jobId);
   } finally {
     activeGenerations = Math.max(0, activeGenerations - 1);
-    const next = waitQueue.shift();
-    if (next) next();
+    const paid = waitQueue.findIndex((w) => !w.free);
+    const next = waitQueue.splice(paid >= 0 ? paid : 0, 1)[0];
+    if (next) next.resolve();
+  }
+}
+
+/**
+ * Деплой не қайта қосылу кезінде үзілген тапсырыстар (кезекте/жасалып жатқан, соңғы 3 сағат): бір рет қайта
+ * басталады. Қайта басталған жұмыс тағы үзілсе (error='resumed' белгісі) — қайталанбайды: кредит қайтарылып,
+ * клиентке хабар барады (бір жұмыс серверді қайта-қайта құлатып, шексіз айналмасын).
+ */
+async function resumeInterruptedJobs() {
+  const jobs = await listUnfinishedJobs(3 * 3600 * 1000).catch((e) => { console.warn('[Resume] list:', e.message); return []; });
+  for (const job of jobs) {
+    if (job.error === 'resumed') {
+      console.warn(`[Resume] ${job.id} екінші рет үзілді — кредит қайтарылады`);
+      await refundFor(job).catch((e) => console.warn('[Resume] refund', e.message));
+      await updateJob(job.id, { status: 'failed', phase: 'failed', detail: 'Сервер қайта қосылды', progress: 0, error: 'interrupted' }).catch(() => {});
+      logGen(job.id, { status: 'failed', error: 'interrupted', finished_at: Date.now() }).catch(() => {});
+      if (global.__deadlineBot) {
+        global.__deadlineBot.sendMessage(job.chatId, '❌ Сервер жаңартылып жатқанда тапсырысыңыз үзілді, кредитіңіз қайтарылды. Қайта жасатып көріңіз.').catch(() => {});
+      }
+      continue;
+    }
+    console.log(`[Resume] ${job.id} қайта басталды (${job.status})`);
+    await updateJob(job.id, { status: 'queued', phase: 'queued', detail: 'Қайта басталды', progress: 0, error: 'resumed' }).catch(() => {});
+    runGeneration(job.id, { free: !!(job.payload && job.payload.free) }).catch((err) => console.error('[Resume] unhandled', job.id, err));
   }
 }
 
@@ -1184,6 +1210,9 @@ async function main() {
   } catch (err) {
     console.warn('[Server] Bot start skipped/failed:', err.message);
   }
+
+  // үзілген тапсырыстар — бот іске қосылған соң (клиентке хабар жете алсын)
+  resumeInterruptedJobs().catch((e) => console.warn('[Resume]', e.message));
 
   const server = http.createServer(app);
   // Railway қайта іске қосқанда SIGTERM жібереді — базаға қосылымдарды дұрыс жабамыз
