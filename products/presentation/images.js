@@ -161,12 +161,17 @@ const NAME = "[A-Z][A-Za-z'’-]+(?:\\s+[A-Z][A-Za-z'’-]+)*";
 const TWO_NAMED = new RegExp(`(${NAME})\\s+(?:and|&|vs\\.?|versus)\\s+${NAME}`);
 
 /** «subject, warm golden hour lighting, inspiring mood» → «subject»: тек стиль сөздерінен тұратын бөліктер алынады. */
+// «Kerey and Zhanibek monument» — ескерткіш/мүсін екеуіне ортақ: «and» сақталады
+const SHARED_OBJECT = /\b(monument|memorial|statue|sculpture|mausoleum|stamp|banknote)s?\b/i;
 function cleanQuery(query) {
   const parts = String(query || '').split(',').map((p) => p.trim()).filter(Boolean);
   if (!parts.length) return '';
   const keep = parts.filter((p, i) => i === 0 || p.split(/\s+/).some((w) => w.length > 2 && !isStyleWord(w.replace(/[^A-Za-z-]/g, ''))));
-  return keep.join(' ').replace(TWO_NAMED, '$1').replace(NO_PHOTO_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  const joined = keep.join(' ');
+  return (SHARED_OBJECT.test(joined) ? joined : joined.replace(TWO_NAMED, '$1')).replace(NO_PHOTO_WORDS, ' ').replace(/\s+/g, ' ').trim();
 }
+// атақ/лауазым — тек (тегі емес): «Kerey Khan» → «Khan» деп бөлек іздемейміз (кез келген ханның суреті шығады)
+const TITLE_WORDS = new Set(['khan', 'khans', 'sultan', 'batyr', 'bi', 'biy', 'shah', 'emir', 'bey', 'tsar', 'czar', 'king', 'queen', 'emperor', 'empress', 'prince', 'princess', 'saint', 'pope', 'river', 'lake', 'mountains', 'khanate', 'horde', 'empire', 'kingdom', 'museum', 'monument']);
 
 /**
  * Атаулы нәрселер: «Florence Nightingale», «Crimean War», «Silk Road», жыл (1855). Сөйлемнің бірінші сөзі
@@ -228,10 +233,12 @@ function queryVariants(query) {
     push(base);
     // «Chokan Valikhanov» ↔ «Shokan Ualikhanov» — транслитерация әр түрлі: архивтер тегі бойынша жақсы табады
     const first = named[0].split(' ');
-    if (first.length >= 2 && first.length <= 3 && !first.some((w) => PLACE_OK.has(w.toLowerCase()) || /^(1[0-9]{3}|20[0-2][0-9])s?$/.test(w))) variants.splice(2, 0, first[first.length - 1]);
+    if (first.length >= 2 && first.length <= 3 && !first.some((w) => PLACE_OK.has(w.toLowerCase()) || TITLE_WORDS.has(w.toLowerCase()) || /^(1[0-9]{3}|20[0-2][0-9])s?$/.test(w))) variants.splice(2, 0, first[first.length - 1]);
   }
   if (words.length >= 2) push(words.slice(0, 5).join(' '));
-  if (words.length >= 1) push(words.slice(0, 3).join(' '));
+  // 1–3 сөзді қысқа нұсқа — тек атау не нысан болса (жалғыз «Astana», «Khan» сияқты сөз кездейсоқ сурет әкеледі)
+  const tail = words.slice(0, 3);
+  if (tail.length >= 2 || (tail.length === 1 && !PLACE_OK.has(tail[0].toLowerCase()) && !TITLE_WORDS.has(tail[0].toLowerCase()))) push(tail.join(' '));
   return variants.slice(0, 4);
 }
 
