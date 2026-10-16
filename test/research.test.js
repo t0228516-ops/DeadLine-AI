@@ -50,3 +50,28 @@ test('reference list takes only real titles with stable links', () => {
   assert.ok(!R.citable({ url: 'https://x.kz/a.pdf', title: 'Шығармалары қайшылыққа толы, күрделі тұлға саналған зар-заман ақындарына М' }), 'cut sentence');
   assert.ok(!R.citable({ url: 'https://x.kz/a', title: 'Идеологиялық қатаң қысымшылыққа қарамастан аталған дәуірдің айтулы өкілдері Дулат, Шортанбай, Мұрат, Әбубәкір, Асан шығармаларын' }), 'too long');
 });
+
+test('re-running slide research (language retry) starts clean; slide sources carry no raw URL', async () => {
+  const keep = process.env.DEEPSEEK_API_KEY; process.env.DEEPSEEK_API_KEY = 'x';
+  const realFetch = global.fetch;
+  const hit = (u, t) => ({ url: u, title: t, site_name: 'kk.wikipedia.org', summary: t + ' мәтін', rerank_score: 2, authority: 4 });
+  global.fetch = async (url, init) => {
+    const q = JSON.parse(init.body).query;
+    const results = /site:wikipedia/.test(q) ? [hit('https://kk.wikipedia.org/wiki/%D0%97%D0%B0%D1%80', 'Зар заман')] : [hit('https://x.kz/' + encodeURIComponent(q.split(' ').pop()), 'Дереккөз ' + q.split(' ').pop())];
+    return { ok: true, status: 200, json: async () => ({ results }) };
+  };
+  try {
+    const r = await R.gatherTopic('Зар заман ақындары');
+    await R.gatherSlides(r, ['Мұқаба', 'Дулат', 'Шортанбай', 'Қорытынды'], { skip: (i) => i === 0 || i === 3 });
+    const first = Object.keys(r.perSlide).sort().join(',');
+    await R.gatherSlides(r, ['Мұқаба', 'Мұрат', 'Дулат', 'Қорытынды'], { skip: (i) => i === 0 || i === 3 });
+    assert.strictEqual(first, '1,2');
+    assert.deepStrictEqual(Object.keys(r.perSlide).sort().join(','), '1,2', 'second plan gets its own facts, not leftovers');
+    const list = R.sourceList(r);
+    assert.ok(list.length && list.every((x) => !/https?:/.test(x)), 'slide entries: title — site, no URL');
+    assert.strictEqual(R.citableSources(r, 1)[0].url, 'https://kk.wikipedia.org/wiki/Зар', 'readable decoded link for the referat');
+  } finally {
+    global.fetch = realFetch;
+    if (keep === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = keep;
+  }
+});

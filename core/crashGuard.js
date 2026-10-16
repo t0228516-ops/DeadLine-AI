@@ -9,14 +9,16 @@
  *   uncaughtException  → желі/Telegram қатесі болса — логқа; басқа (бағдарлама қатесі) — логқа жазып шығады,
  *                         Railway процесті таза күйден қайта қосады (күйі бұзылған процесс жұмыс істемесін).
  */
-const RECOVERABLE = /ETELEGRAM|EFATAL|EPARSE|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EPIPE|ENOTFOUND|EAI_AGAIN|socket hang up|network|aborted/i;
+const NET_CODES = new Set(['ETELEGRAM', 'EFATAL', 'EPARSE', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT']);
+// хабар бойынша тек нақты белгілер (жалпы «network»/«aborted» сөзі бағдарлама қатесінде де кездеседі)
+const NET_MSG = /^(ETELEGRAM|EFATAL|EPARSE):|socket hang up|read ECONNRESET|connect ETIMEDOUT/i;
 
 function describe(e) {
   if (!e) return String(e);
   return [e.code, e.message || String(e)].filter(Boolean).join(' ');
 }
 function isRecoverable(e) {
-  return !!e && (RECOVERABLE.test(String(e.code || '')) || RECOVERABLE.test(String(e.message || '')));
+  return !!e && (NET_CODES.has(String(e.code || '')) || NET_MSG.test(String(e.message || '')));
 }
 
 let installed = false;
@@ -42,22 +44,28 @@ function install(opts = {}) {
 const PARSE_ERR = /can't parse entities|can't find end of the entity/i;
 const BLOCKED_ERR = /bot was blocked by the user|user is deactivated|bot can't initiate conversation/i;
 const withoutParseMode = (o) => { const c = { ...o }; delete c.parse_mode; return c; };
+/** Markdown белгілерін алып тастайды: «\\_» → «_», қалың «*» жоғалады — клиент қиғаш сызық пен жұлдызша көрмейді */
+const plainText = (t) => String(t).replace(/\\([_*`\[\]])/g, '$1').replace(/\*/g, '');
 function hardenBot(bot, opts = {}) {
   if (!bot || bot.__hardened) return bot;
   bot.__hardened = true;
   const send = bot.sendMessage.bind(bot);
-  bot.sendMessage = (chatId, text, o) => send(chatId, text, o).catch((err) => {
-    const m = String((err && err.message) || '');
-    if (o && o.parse_mode && PARSE_ERR.test(m)) return send(chatId, text, withoutParseMode(o));
-    if (BLOCKED_ERR.test(m) && opts.onBlocked) opts.onBlocked(chatId);
+  const blocked = (chatId) => (err) => {
+    if (BLOCKED_ERR.test(String((err && err.message) || '')) && opts.onBlocked) opts.onBlocked(chatId);
     throw err;
+  };
+  bot.sendMessage = (chatId, text, o) => send(chatId, text, o).catch((err) => {
+    if (o && o.parse_mode && PARSE_ERR.test(String((err && err.message) || ''))) {
+      return send(chatId, plainText(text), withoutParseMode(o)).catch(blocked(chatId));
+    }
+    return blocked(chatId)(err);
   });
   const edit = bot.editMessageText.bind(bot);
   bot.editMessageText = (text, o) => edit(text, o).catch((err) => {
-    if (o && o.parse_mode && PARSE_ERR.test(String((err && err.message) || ''))) return edit(text, withoutParseMode(o));
+    if (o && o.parse_mode && PARSE_ERR.test(String((err && err.message) || ''))) return edit(plainText(text), withoutParseMode(o));
     throw err;
   });
   return bot;
 }
 
-module.exports = { install, isRecoverable, describe, hardenBot };
+module.exports = { install, isRecoverable, describe, hardenBot, plainText };

@@ -272,11 +272,12 @@ function factsFor(ctx, unit) {
   const own = (unit.key != null && r.perSlide[unit.key]) ? r.perSlide[unit.key].items : [];
   const items = [...own, ...r.items.slice(0, own.length ? 3 : 5)];
   if (!items.length) return '';
-  const line = (it) => { const n = ctx.refIndex.get(it.url); return `- ${it.summary}${n ? ` [${n}]` : ''}`; };
+  const noCite = ctx.prof && ctx.prof.citations === 'none'; // үлгіде мәтін ішінде сілтеме жоқ — [n] де жоқ
+  const line = (it) => { const n = noCite ? 0 : ctx.refIndex.get(R.cleanUrl(it.url)); return `- ${it.summary}${n ? ` [${n}]` : ''}`; };
   return `
 FACTS FROM SOURCES — collected by web search BEFORE writing. Base this part on them:
 ${items.map(line).join('\n')}
-FACT RULES: names, dates, places, titles of works and numbers come from these facts or the brief; if the facts give no date or number, do not write one; do not add people or works that are not in the facts; where the facts and your memory disagree, the facts win; where the facts disagree with each other (e.g. two birth years), use the encyclopedia (Wikipedia) or the majority, and if still unclear give no exact date. Write in your own words (never copy a source sentence). A fact marked [n] may be cited as [n].
+FACT RULES: names, dates, places, titles of works and numbers come from these facts or the brief; if the facts give no date or number, do not write one; do not add people or works that are not in the facts; where the facts and your memory disagree, the facts win; where the facts disagree with each other (e.g. two birth years), use the encyclopedia (Wikipedia) or the majority, and if still unclear give no exact date. Write in your own words (never copy a source sentence).${noCite ? '' : ' A fact marked [n] may be cited as [n].'}
 `;
 }
 
@@ -284,18 +285,10 @@ FACT RULES: names, dates, places, titles of works and numbers come from these fa
 const E_RES = { kk: 'Электрондық ресурс', ru: 'Электронный ресурс', en: 'Electronic resource' };
 function webRefs(research, lang, max) {
   if (!research || max <= 0) return [];
-  const all = [...research.items, ...Object.values(research.perSlide || {}).flatMap((p) => p.items)];
-  const seen = new Set(); const out = [];
-  for (const it of [...all.filter((x) => x.authority >= 3), ...all.filter((x) => !(x.authority >= 3))]) {
-    if (!R.citable(it)) continue; // үзік атау не уақытша сілтеме — тізімге кірмейді
-    const url = R.cleanUrl(it.url);
-    if (seen.has(url)) continue;
-    seen.add(url);
+  return R.citableSources(research, max).map((it) => {
     const site = it.site && !it.title.includes(it.site) ? ` // ${it.site}` : '';
-    out.push({ url: it.url, text: `${it.title.replace(/[.\s]+$/, '')}${site} [${E_RES[lang] || E_RES.kk}]. – URL: ${url}` });
-    if (out.length >= max) break;
-  }
-  return out;
+    return { url: it.url, text: `${it.title.replace(/[.\s]+$/, '')}${site} [${E_RES[lang] || E_RES.kk}]. – URL: ${it.url}` };
+  });
 }
 
 async function pool(items, limit, fn) {

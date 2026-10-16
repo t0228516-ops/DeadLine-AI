@@ -12,6 +12,8 @@
  * Бір колодаға ≈ 10 сұрау ≈ $0.0075. Кілт жоқ / RESEARCH=0 / қате → null: генерация бұрынғыдай жүре береді.
  */
 
+const { recordSearch } = require('../../core/cost');
+
 const ENDPOINT = 'https://api.deepseek.com/v1/tools/search';
 const MIN_GAP_MS = 230;          // аккаунт шегі 5 QPS — бір процестегі барлық генерацияға ортақ
 const TIMEOUT_MS = 12_000;
@@ -57,7 +59,9 @@ async function searchWeb(query, opts = {}) {
       }
       if (!res.ok) { console.warn(`[Research] HTTP ${res.status} for "${q.slice(0, 60)}"`); return []; }
       const data = await res.json().catch(() => ({}));
-      return Array.isArray(data.results) ? data.results : [];
+      const results = Array.isArray(data.results) ? data.results : [];
+      if (results.length) recordSearch(); // тек нәтижесі бар сұрау ақылы
+      return results;
     } catch (e) {
       if (attempt === 0 && e.name !== 'AbortError') continue;
       console.warn(`[Research] ${e.name === 'AbortError' ? 'timeout' : e.message} for "${q.slice(0, 60)}"`);
@@ -136,7 +140,7 @@ async function gatherTopic(topic, opts = {}) {
   const items = pick([...b, ...a], 7, seen);
   console.log(`[Research] topic "${q.slice(0, 60)}": ${items.length} sources (${searchCount - before} searches, ${Date.now() - t0}ms)`);
   if (!items.length) return null;
-  return { query: q, items, sheet: sheetText(items), seen, perSlide: {} };
+  return { query: q, items, sheet: sheetText(items), seen, baseSeen: new Set(seen), perSlide: {} };
 }
 
 /**
@@ -146,6 +150,9 @@ async function gatherTopic(topic, opts = {}) {
  */
 async function gatherSlides(research, slideTopics, opts = {}) {
   if (!research || !Array.isArray(slideTopics)) return research;
+  // қайта шақыру (мыс. тіл қате шығып, жоспар қайта жасалғанда) — алдыңғы жоспардың слайд деректері қалмасын
+  research.perSlide = {};
+  research.seen = new Set(research.baseSeen || []);
   const skip = opts.skip || (() => false);
   const base = clip(research.query, 60);
   const jobs = slideTopics
@@ -176,23 +183,27 @@ function citable(it) {
   if (/(?:^|\s)\p{L}\.?$/u.test(t) || /[,;:–-]$/.test(t)) return false; // «…ақындарына М», үзік
   return true;
 }
-const cleanUrl = (u) => String(u).replace(/#.*$/, '');
+/** #якорьсіз, оқылатын (кириллица %D0%97… емес) сілтеме */
+const cleanUrl = (u) => { const x = String(u).replace(/#.*$/, ''); try { return decodeURI(x); } catch { return x; } };
 
-/** Әдебиеттер слайдына: нақты табылған дереккөздер (ойдан емес) */
-function sourceList(research, max = 6) {
+/** Әдебиеттер тізіміне жарайтын дереккөздер: беделділері алдымен, атауы мен сілтемесі дұрыс, қайталанбайды */
+function citableSources(research, max = 6) {
   if (!research) return [];
-  // әдебиеттер тізіміне тек беделді дереккөздер (газет мақаласы емес); жетпесе — қалғаны
-  const all0 = [...research.items, ...Object.values(research.perSlide || {}).flatMap((p) => p.items)];
-  const all = [...all0.filter((it) => it.authority >= 3), ...all0.filter((it) => !(it.authority >= 3))];
+  const all = [...research.items, ...Object.values(research.perSlide || {}).flatMap((p) => p.items)];
   const seen = new Set(); const out = [];
-  for (const it of all) {
+  for (const it of [...all.filter((x) => x.authority >= 3), ...all.filter((x) => !(x.authority >= 3))]) {
     if (!citable(it)) continue;
     const k = cleanUrl(it.url);
     if (seen.has(k)) continue; seen.add(k);
-    out.push(`${it.title}${it.site ? ' — ' + it.site : ''}. ${k}`);
+    out.push({ ...it, url: k });
     if (out.length >= max) break;
   }
   return out;
 }
 
-module.exports = { gatherTopic, gatherSlides, sourceList, citable, cleanUrl, searchWeb, topicQuery, pick, sheetText, enabled, _count: () => searchCount };
+/** Әдебиеттер слайдына: «Атауы — сайт» (ұзын URL слайдқа сыймайды; толық сілтеме рефератта/жазбада) */
+function sourceList(research, max = 6) {
+  return citableSources(research, max).map((it) => `${it.title}${it.site ? ' — ' + it.site : ''}`);
+}
+
+module.exports = { gatherTopic, gatherSlides, sourceList, citableSources, citable, cleanUrl, searchWeb, topicQuery, pick, sheetText, enabled, _count: () => searchCount };
