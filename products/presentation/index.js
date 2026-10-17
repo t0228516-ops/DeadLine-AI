@@ -63,6 +63,25 @@ function shortTopicKeyword(topic) {
   return topic.slice(0, 40);
 }
 
+const LAST_FIT = Number(process.env.PHOTO_LAST_RESORT_FIT) || 5;
+async function bestSeen(seen, ctx, place) {
+  const { canonKey, fitsPlace, downloadCached, imageMeta } = require('./images');
+  const { BAD_FLAW } = require('./photoVision');
+  const used = ctx.used instanceof Set ? ctx.used : new Set();
+  const pool = seen
+    .filter((x) => x.s.fit >= LAST_FIT && x.s.appeal >= 5 && !BAD_FLAW.test(x.s.flaw || '') && !used.has(x.c.url) && !used.has(canonKey(x.c.url)))
+    .sort((a, b) => (b.s.fit * 0.6 + b.s.appeal * 0.4) - (a.s.fit * 0.6 + a.s.appeal * 0.4));
+  for (const x of pool.slice(0, 3)) {
+    const key = canonKey(x.c.url);
+    used.add(x.c.url); used.add(key);
+    const dataUri = await downloadCached(x.c.url);
+    if (!dataUri || !fitsPlace(imageMeta(dataUri), place)) continue;
+    console.log(`[Image] last resort source=${x.c.source} fit=${x.s.fit} appeal=${x.s.appeal}${x.s.flaw ? ' flaw=' + x.s.flaw : ''}`);
+    return { dataUri, focus: x.s.focus || '', source: x.c.source, key, credit: x.c.credit || '', license: x.c.license || '' };
+  }
+  return null;
+}
+
 /**
  * Екінші айналым сұраныстары: бірінші іздеу ештеңе таппағанда DeepSeek-тен шын бар, суретке түскен нысандар сұралады.
  * @returns {Promise<{queries:string[], commons:string[]}>} сәтсіз болса — бос тізімдер (ешқашан лақтырмайды)
@@ -107,10 +126,15 @@ async function fetchPhotoVision(slide, ctx) {
   const deadline = Date.now() + (Number(process.env.PHOTO_SLIDE_DEADLINE_MS) || 25_000); // бір слайдқа іздеу+таңдау шегі
   // көретін модель қабылдамаған фотолардың себептері («modern», «wrong country») — екінші айналымға беріледі
   const flaws = [];
+  const seen = []; // көрілген барлық кандидат + баға: ештеңе өтпесе, ең жақсысы қойылады (слайд бос қалмасын)
   const vision = async (batch) => {
     const r = await ctx.vision(batch);
     if (r !== null && typeof ctx.vision.scoreOf === 'function') {
-      for (const c of batch) { const sc = ctx.vision.scoreOf(c); if (sc && sc.flaw && !flaws.includes(sc.flaw)) flaws.push(sc.flaw); }
+      for (const c of batch) {
+        const sc = ctx.vision.scoreOf(c);
+        if (sc && sc.flaw && !flaws.includes(sc.flaw)) flaws.push(sc.flaw);
+        if (sc) seen.push({ c, s: sc });
+      }
     }
     return r;
   };
@@ -135,6 +159,9 @@ async function fetchPhotoVision(slide, ctx) {
       if (hit && hit.dataUri) { console.log(`[Image] rescue ok q="${t.q.slice(0, 60)}"${t.archive ? ' (archive)' : ''}`); return pack(hit); }
     }
   }
+  // Соңғы сақтандыру: көрілгендердің ішінен тақырыпқа жуық (fit ≥ 5), көрікті (appeal ≥ 5), жарнамасыз/белгісіз ең жақсысы
+  const best = await bestSeen(seen, ctx, place);
+  if (best) return best;
   // нақты тұлға/оқиға/жыл — AI-мен жасалмайды (жалған тарих); жер/халық атауы («Kazakh steppe») — жасалады
   const named = queries.some((q) => isRealSubject(q));
   const gen = await generateSlideImage({

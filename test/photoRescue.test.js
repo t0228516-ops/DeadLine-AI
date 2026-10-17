@@ -48,3 +48,18 @@ test('photo rescue: nothing fits → DeepSeek suggests real archive subjects (Ru
   assert.match(asked, /rejected as: modern/, 'бас тартылған себеп DeepSeek-ке берілді');
   assert.ok(calls.some((c) => c.q === 'Колхоз Казахстан 1930'), 'орысша атау Commons-та ізделді');
 });
+
+test('last resort: nothing passes even after the rescue round → the best photo seen (fit ≥ 5) still goes on the slide', async () => {
+  global.fetch = async () => {
+    const content = JSON.stringify({ queries: [], commons: [] });
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content }, finish_reason: 'stop' }], usage: {} }), text: async () => content };
+  };
+  const scores = new Map();
+  const vision = async (batch) => { batch.forEach((c) => scores.set(c.url, { fit: 5, appeal: 6, bg: 5, flaw: 'modern' })); return []; };
+  vision.scoreOf = (c) => scores.get(c.url) || null;
+  const got = await _fetchPhotoVision({ title: 'Ұжымдастыру саясаты' }, {
+    query: 'Kazakh village collectivization 1930s', topic: 'Ұжымдастыру', topicTitle: 'Ұжымдастыру',
+    used: new Set(), avoid: new Set(), vision, budget: { left: 5 },
+  });
+  assert.ok(got.dataUri, 'бос қалмады');
+});

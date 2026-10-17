@@ -65,7 +65,8 @@ flaw: one or two words if something is wrong (e.g. "watermark", "text", "blurry"
 Be strict and honest: a slide without a photo is better than a wrong or ugly photo.`;
 
 // көретін модель өзі «басқа дәуір / басқа ел / қазіргі» деп белгілеген фото fit жоғары болса да өтпейді (1930 жылғы слайдқа қазіргі ферма)
-const BAD_FLAW = /modern|contemporary|wrong|anachron|reenact|watermark|\bads?\b|advert|logo|stock pose|ai[- ]?generated/i;
+// «modern» өздігінен тоқтатпайды (иесінің шешімі: тақырыпқа жалпы сай фото жарайды) — басқа дәуір/ел/зат, жарнама, белгі тоқтатады
+const BAD_FLAW = /wrong|anachron|reenact|watermark|\bads?\b|advert|logo|stock pose|ai[- ]?generated/i;
 
 // ақаусыз сипаттар (сапа туралы) — бас әріппен жазылса да ел/жер атауы емес
 const QUALITY_FLAW = /^(blurry|dark|text|watermark|cluttered|grainy|noisy|damaged|close-?up|diagram|screenshot|cropped|small|busy|low|faded|sepia|generic|tilted|overexposed|underexposed|black and white|b&w|irrelevant)/i;
