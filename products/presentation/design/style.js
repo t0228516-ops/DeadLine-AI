@@ -385,7 +385,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* ── diagram ── */
 .diag{align-items:center}
 .diag-l{align-self:center}
-.figure{margin:0;width:100%;height:740px;border-radius:var(--radius);overflow:hidden;background:var(--bg2);border:1px solid var(--line-soft);box-shadow:var(--sh-sm);display:flex;align-items:center;justify-content:center}
+/* сурет/сызба слайдтың өзінде тұрады — карточка, жиек, көлеңке жоқ (бұрын «шаршы үстіне салынғандай» көрінетін) */
+.figure{margin:0;width:100%;height:740px;overflow:visible;background:transparent;border:0;box-shadow:none;display:flex;align-items:center;justify-content:center}
 .figure img{display:block;width:100%;height:100%;object-fit:contain}
 .diag-r{align-self:center}
 

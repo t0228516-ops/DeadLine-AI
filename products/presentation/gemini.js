@@ -480,11 +480,12 @@ const CONTENT_RULES = `CONTENT & LANGUAGE (teach, do not encyclopedia-dump):
 
 const VISUAL_RULES = `SEMANTIC VISUAL FIELD (diagram only when it teaches faster than text):
 - visual is null on MOST slides — prefer the "infographic" field (charts, cycle, funnel, pyramid, venn, matrix, roadmap, icon grid). Use visual only for what the library cannot draw:
+  • illustration — a drawing of the ONE concrete physical object the slide explains (киіз үй, домбыра, human heart, plant cell, steam engine, telescope, a mausoleum façade) when seeing its shape and parts teaches more than text. brief = English: the object and its characteristic parts; data = 0-6 part names to label, in presentation language. Never for abstract ideas, people's portraits or events.
   • diagram — architecture or cause→effect with 3-6 named parts and a clear direction
   • map — places/routes as SCHEMATIC only (never fake borders)
 - Never set both "visual" and "infographic" on the same slide.
 - At most ONE visual per batch; never on cover. If in doubt, null.
-- Shape: {"type":"diagram|infographic|map","brief":"English: what to draw and the relationship","data":["3-8 short items in presentation language from THIS slide only"]}
+- Shape: {"type":"illustration|diagram|infographic|map","brief":"English: what to draw (and the relationship for diagrams)","data":["short items in presentation language from THIS slide only: 3-8 for diagrams, 0-6 part labels for an illustration"]}
 - NEVER invent statistics. Prefer qualitative structure over fake numbers.
 - Brief must state the relationship (e.g. "left-to-right pipeline: data → model → deploy"), not "nice infographic".
 - Slide with visual still needs title, subtitle, 2-4 short bullets as text fallback.`;
