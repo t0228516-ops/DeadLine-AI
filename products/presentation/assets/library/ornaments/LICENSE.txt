@@ -1,0 +1,2 @@
+Kazakh ornament set drawn programmatically for DeadLine (scripts/build-ornaments.js). Own work; free to use inside DeadLine products.
+Motifs are traditional Kazakh folk ornament elements (public cultural heritage); the drawings are original.

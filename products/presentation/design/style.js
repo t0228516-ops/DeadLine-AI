@@ -267,7 +267,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 /* concept columns (3–4 labelled ideas) */
 /* тақырып жоғарыда, ұғымдар төменгі жиекте: аралықтағы ауа — әдейі (асты бос қалмайды) */
-.conc{display:flex;flex-direction:column;justify-content:space-between;gap:var(--s8)}
+.conc{display:flex;flex-direction:column;justify-content:flex-start;gap:var(--s8)}.conc>.concepts{margin-block:auto}
 .concepts{list-style:none;margin:0;padding:0;display:grid;column-gap:var(--gut);align-items:start}
 .concepts.n2{grid-template-columns:repeat(2,1fr)}.concepts.n3{grid-template-columns:repeat(3,1fr)}.concepts.n4{grid-template-columns:repeat(4,1fr)}.concepts.n5,.concepts.n6{grid-template-columns:repeat(3,1fr);row-gap:var(--s5)}
 .concept{border-top:1px solid var(--line);padding-top:var(--s3);padding-right:var(--s2);position:relative}
@@ -502,6 +502,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* accent rule becomes a gradient bar */
 .rule{background:linear-gradient(90deg,var(--accent),var(--accent2))}
 /* decoration sits behind the text, never on top of the folio */
+.decor{position:absolute;visibility:hidden;pointer-events:none;object-fit:contain;mix-blend-mode:multiply;opacity:.62}
+/* кітапхана әшекейі (decorPick.js): ою — палитра түсімен, жіңішке; doodle — қисайтусыз; қараңғы фонда гравюра ақ сызбаға айналады */
+#stage .slide img.decor-ornament{filter:none;mix-blend-mode:normal;opacity:.45;transform:none}
+#stage .slide img.decor-doodle{filter:none;mix-blend-mode:multiply;opacity:.88;transform:none}
+#stage .slide img.decor-dark{mix-blend-mode:screen;filter:grayscale(1) invert(1) contrast(1.2);opacity:.5}
 .deco{opacity:.75;-webkit-mask-image:linear-gradient(0deg,transparent 0,#000 140px);mask-image:linear-gradient(0deg,transparent 0,#000 140px)}
 
 /* ══ INFOGRAPHICS (design/infographics.js) — one highlighted mark, muted rest, hairline axes, text in text colours ══ */

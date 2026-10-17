@@ -56,3 +56,13 @@ test('empty / malformed slides never throw', () => {
   assert.doesNotThrow(() => build3DPresentationHTML([{}, { title: null, bullets: 'x' }, { stats: [{}] }], 't'));
   assert.doesNotThrow(() => build3DPresentationHTML([], 't'));
 });
+
+test('auto-picked palettes are light unless the client asks for a dark background', () => {
+  const SYS = require('../products/presentation/design/systems');
+  for (let i = 0; i < 40; i++) {
+    const d = SYS.pickDesign({ seed: 'seed' + i, brief: 'Қазақ хандығының құрылуы', avoidSystems: ['heritage', 'blueprint', 'academy', 'journal'], avoidMoods: ['sand', 'ivory', 'light'] });
+    assert.ok(T.isLightMood(d.mood), d.system + '/' + d.mood);
+  }
+  const dark = SYS.pickDesign({ seed: 'x', brief: 'Python негіздері, қара фон' });
+  assert.ok(!T.isLightMood(dark.mood), 'asked for dark → dark');
+});
