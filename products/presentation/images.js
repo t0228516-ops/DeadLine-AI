@@ -587,17 +587,21 @@ function withTimeout(promise, ms, label) {
  *   {failed:true} → vision шақыруы сәтсіз (желі/кілт): шақырушы мәтіндік тексеру жолына өтеді
  */
 async function findImageVision(query, opts = {}) {
-  if (!isLatinQuery(query) || typeof opts.vision !== 'function') return null;
+  // archive: екінші айналым — тек Wikimedia Commons (+ латынша болса ашық архивтер); Commons-та орысша атау да жарайды
+  const archive = !!opts.archive;
+  const latin = isLatinQuery(query);
+  if (typeof opts.vision !== 'function') return null;
+  if (!latin && !(archive && String(query || '').trim().length >= 3)) return null;
   const used = opts.used instanceof Set ? opts.used : new Set();
   const avoid = opts.avoid instanceof Set ? opts.avoid : new Set();
   const place = opts.place === 'bg' ? 'bg' : 'frame';
-  const named = isNamedQuery(query);
-  const keyed = providerOrder({ free: !!opts.free, named });
-  const open = routeOpen(query, { named }).filter((n) => PROVIDERS[n] && !keyed.includes(n));
+  const named = archive || isNamedQuery(query);
+  const keyed = archive ? ['wikimedia'] : providerOrder({ free: !!opts.free, named });
+  const open = latin ? routeOpen(query, { named }).filter((n) => PROVIDERS[n] && !keyed.includes(n)) : [];
   const order = keyed.concat(open);
   const budget = opts.budget || { left: 4 };
   const openBudget = { left: OPEN_SEARCHES_PER_PHOTO };
-  const variants = queryVariants(query).slice(0, (opts.maxVariants || 2) + (named ? 1 : 0)); // атаулыға +1 (тегі бойынша)
+  const variants = latin ? queryVariants(query).slice(0, (opts.maxVariants || 2) + (named ? 1 : 0)) : [clip(query)]; // атаулыға +1 (тегі бойынша)
   const taken = (c) => used.has(c.url) || used.has(canonKey(c.url));
   let attempts = 0;
   for (const q of variants) {
