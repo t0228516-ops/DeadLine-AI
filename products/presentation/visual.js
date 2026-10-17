@@ -15,8 +15,10 @@ const { recordApiUsage } = require('../../core/cost');
  * Ешқашан лақтырмайды: визуал ешқашан бүкіл презентацияны құлатпауы керек.
  *
  * Провайдер (env):
- *   VISUAL_PROVIDER = deepseek (әдепкі) | anthropic
- *   VISUAL_FALLBACK = anthropic | deepseek | (бос) — негізгі сәтсіз болса, бір рет қана
+ *   VISUAL_PROVIDER = deepseek (әдепкі: deepseek-v4-pro, ойлау режимі қосулы) | deepseek-flash | anthropic
+ *   VISUAL_FALLBACK = deepseek-flash (deepseek үшін әдепкі) | anthropic | deepseek | (бос) — негізгі сәтсіз болса, бір рет қана
+ *   VISUAL_VISION_CHECK = 1 (әдепкі) — салынған суретті көретін модель (deepseek-flash) бағалайды; әлсіз болса
+ *     ескертулерімен бір рет қайта салынады
  *   Толық тізім — .env.example
  */
 
@@ -24,7 +26,8 @@ const { slideSvgPalette } = require('./html3DBuilder');
 const { validateInfographic } = require('./design/infographics');
 
 const DEFAULT_VB = { w: 1100, h: 740 };            // builder-дегі .figure өлшемімен бірдей
-const TYPES = new Set(['diagram', 'infographic', 'map']);
+// illustration — слайдтың нақты затын салу (киіз үй, домбыра, жүрек, бу машинасы): қорап-сызба емес, заттың өзі
+const TYPES = new Set(['diagram', 'infographic', 'map', 'illustration']);
 const ANTHROPIC_VERSION = '2023-06-01';
 
 // ═══════════════════════════════ Config ═══════════════════════════════
@@ -39,39 +42,45 @@ function flag(v, d) {
 }
 
 // Бағалар: $/1M токен. Anthropic — ресми құжаттан (Sonnet 5.5: $2/$10).
-// DeepSeek — peak кезіндегі (қымбат) баға, консервативті есеп үшін.
+// DeepSeek — бюджет есебі үшін ең қымбат белгілі баға (V4-Pro: дереккөздерде $0.44–1.32 / $0.87–3.96; нақтысы env арқылы).
+// Сурет салу — кеңістікті ойлау: Pro моделі ойлау режимімен (thinking) салады; ойлау токендері max_tokens ішінде.
 const PROVIDER_DEFAULTS = {
-  deepseek:  { model: 'deepseek-flash', priceIn: 0.30, priceOut: 1.20,  maxTokens: 6000 },
-  anthropic: { model: 'claude-sonnet-5-5', priceIn: 2.00, priceOut: 10.00, maxTokens: 4500 },
+  deepseek:         { api: 'deepseek', model: 'deepseek-v4-pro', priceIn: 1.32, priceOut: 3.96, maxTokens: 20000, thinking: true },
+  'deepseek-flash': { api: 'deepseek', model: 'deepseek-flash', priceIn: 0.30, priceOut: 1.20, maxTokens: 8000, thinking: false },
+  anthropic:        { api: 'anthropic', model: 'claude-sonnet-5-5', priceIn: 2.00, priceOut: 10.00, maxTokens: 6000, thinking: false },
 };
 
 function providerConfig(name, env) {
   const d = PROVIDER_DEFAULTS[name];
   if (!d) return null;
-  const P = name.toUpperCase();
+  const P = name.toUpperCase().replace(/-/g, '_');
   return {
     name,
-    apiKey: name === 'deepseek' ? (env.DEEPSEEK_API_KEY || '') : (env.ANTHROPIC_API_KEY || ''),
+    api: d.api,
+    apiKey: d.api === 'deepseek' ? (env.DEEPSEEK_API_KEY || '') : (env.ANTHROPIC_API_KEY || ''),
     model: env[`VISUAL_${P}_MODEL`] || d.model,
     priceIn: num(env[`VISUAL_${P}_PRICE_IN`], d.priceIn),
     priceOut: num(env[`VISUAL_${P}_PRICE_OUT`], d.priceOut),
     maxTokens: Math.floor(num(env[`VISUAL_${P}_MAX_TOKENS`], d.maxTokens)),
     // Sonnet 5.5-те adaptive thinking әдепкіде ҚОСУЛЫ (ресми құжат) — өшірмесек, thinking токендері де ақыланады.
-    sendThinkingDisabled: flag(env[`VISUAL_${P}_THINKING_DISABLED`], true),
+    sendThinkingDisabled: flag(env[`VISUAL_${P}_THINKING_DISABLED`], !d.thinking),
   };
 }
 
 function getConfig(env = process.env) {
   const primaryName = String(env.VISUAL_PROVIDER || 'deepseek').trim().toLowerCase();
-  const fallbackName = String(env.VISUAL_FALLBACK || '').trim().toLowerCase();
+  // Pro моделі қолжетімсіз/қате болса — Flash (бос мән берілсе — fallback жоқ)
+  const fallbackName = String(env.VISUAL_FALLBACK == null ? (primaryName === 'deepseek' ? 'deepseek-flash' : '') : env.VISUAL_FALLBACK).trim().toLowerCase();
   const mp = Number(env.VISUAL_MAX_PER_DECK);
   return {
     enabled: flag(env.VISUAL_ENABLED, true),
     mapsEnabled: flag(env.VISUAL_MAPS, true),
     maxPerDeck: Number.isFinite(mp) && mp >= 0 ? Math.floor(mp) : 2,
-    budgetTg: num(env.VISUAL_BUDGET_TG, 50),
+    budgetTg: num(env.VISUAL_BUDGET_TG, 120),
+    visionCheck: flag(env.VISUAL_VISION_CHECK, true),
+    minScore: num(env.VISUAL_MIN_SCORE, 6),
     usdKzt: num(env.USD_KZT, 470),
-    timeoutMs: Math.floor(num(env.VISUAL_TIMEOUT_MS, 120000)),
+    timeoutMs: Math.floor(num(env.VISUAL_TIMEOUT_MS, 180000)),
     estInputTokens: 2600,               // system+user промпт бағасы (қор ретінде)
     primaryName,
     primary: providerConfig(primaryName, env),
@@ -98,14 +107,15 @@ function normalizeVisualSpec(v) {
   if (!v || typeof v !== 'object') return null;
   const type = String(v.type || '').toLowerCase().trim();
   if (!TYPES.has(type)) return null;
-  const brief = String(v.brief || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+  const brief = String(v.brief || '').replace(/\s+/g, ' ').trim().slice(0, 300);
   const data = (Array.isArray(v.data) ? v.data : [])
     .map((x) => (x && typeof x === 'object') ? Object.values(x).join(': ') : String(x == null ? '' : x))
     .map((x) => x.replace(/\s+/g, ' ').trim().slice(0, 140))
     .filter(Boolean)
     .slice(0, 8);
-  if (data.length < 2) return null;     // мәліметсіз визуал — мағынасыз, әрі модель ойдан толтырады
-  return { type, brief, data };
+  // сызбаға мәлімет керек (әйтпесе модель ойдан толтырады); затты салуға — не салатынын айтатын brief жеткілікті
+  if (type === 'illustration' ? brief.length < 8 : data.length < 2) return null;
+  return { type, brief, data: type === 'illustration' ? data.slice(0, 6) : data };
 }
 
 // DeepSeek қайтарған слайдтарды тазалау: жарамсыз/қате visual-ды өшіру, мұқабада ешқашан болмайды
@@ -228,7 +238,7 @@ function cleanAttrs(attrStr, isRoot) {
 
 /** Модель жауабынан таза, қауіпсіз SVG жасайды. Жарамсыз болса null. */
 function sanitizeSvg(input) {
-  if (typeof input !== 'string' || input.length > 200000) return null;
+  if (typeof input !== 'string' || input.length > 400000) return null;
   let s = input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
   const start = s.search(/<svg[\s>\/]/i);
   if (start < 0) return null;
@@ -294,7 +304,7 @@ function sanitizeSvg(input) {
     const isRoot = stack.length === 0;
     if (isRoot && lname !== 'svg') return null;
     if (!canon || (!isRoot && lname === 'svg')) { if (!selfClose) skip = 1; continue; }
-    if (++elements > 700) return null;
+    if (++elements > 3000) return null;
 
     const attrs = cleanAttrs(attrStr, isRoot);
     if (isRoot) {
@@ -318,7 +328,7 @@ function sanitizeSvg(input) {
   while (stack.length) closeTop();
 
   const svg = out.join('');
-  if (svg.length > 60000 || !/^<svg[\s>]/.test(svg) || !/<\/svg>$/.test(svg)) return null;
+  if (svg.length > 160000 || !/^<svg[\s>]/.test(svg) || !/<\/svg>$/.test(svg)) return null;
   return { svg, vbW, vbH, elements };
 }
 
@@ -428,40 +438,47 @@ function toDataUri(svg) {
 
 // ═══════════════════════════════ Prompt ═══════════════════════════════
 
-const SYSTEM_PROMPT = `You draw ONE self-contained SVG figure for a presentation slide. Reply with the <svg>…</svg> markup ONLY — no markdown fences, no comments, no explanation.
+const BASE_RULES = `You draw ONE self-contained SVG figure for a presentation slide. Reply with the <svg>…</svg> markup ONLY — no markdown fences, no comments, no explanation.
 
 CANVAS
 - Root: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 740"> — no width/height attributes.
-- The slide already provides the panel background. Do NOT draw a full-canvas background rectangle.
-- Keep 40px margins: everything inside x 40..1060 and y 40..700. The slide has its own title, so do not add a figure title.
+- The figure sits DIRECTLY on the slide (background = PALETTE.bg). There is NO card or panel behind it.
+- NEVER draw a background rectangle, an outer frame, a border or a card around the figure. No full-canvas or near-full-canvas <rect>.
+- Keep 30px margins: everything inside x 30..1070 and y 30..710. The slide has its own title, so do not add a figure title.
+- FILL THE CANVAS. The figure must spread over at least 85% of the width and 70% of the height. A small figure floating in the middle with empty space around it is a failure. Make shapes generous (nodes at least 200px wide or circles of radius 110+).
 
 TEXT (the most common failure — be strict)
 - font-family="Inter, 'Segoe UI', 'Noto Sans', Arial, sans-serif".
-- Font sizes: labels 24 or more, secondary 22 or more, key numbers 44-72. Never below 22.
-- The text width in the viewer can be up to: characters × font-size × 0.65. Check EVERY label against its box or bar with 14px padding on each side. If it does not fit: shorten it or break it into several lines.
-- Break lines with separate <text> elements or <tspan x="…" dy="…">. Max 3 lines per label, max about 14 characters per line at size 24 inside a 200px-wide box.
-- Centered labels: text-anchor="middle" and x = the exact center of the box.
+- Font sizes: labels 30-36, secondary text 26 or more, key numbers 56-96. Never below 24. Big, bold labels read from the back of a classroom.
+- The text width in the viewer can be up to: characters × font-size × 0.65. Check EVERY label against the space it has, with 14px padding. If it does not fit: shorten it or break it into lines (separate <text> or <tspan x="…" dy="…">, max 3 lines).
 - Write text in the language of DATA exactly as given. Do not translate. Do not add words that are not in DATA.
+- Use ONLY the facts, names and numbers in DATA. NEVER invent numbers, dates, percentages or names.
 
-CONTENT
+COLOURS
+- Use ONLY the PALETTE colors, plus lighter/darker tints of them made with fill-opacity or a linearGradient between two palette colours. The accent colour marks the single most important element.
+- Text on a filled shape must contrast with that fill (dark text on light fills, PALETTE.bg-coloured text on accent fills).
+
+FORBIDDEN: <script>, <style>, <foreignObject>, <image>, filters, masks, external links or fonts, animations, emoji.`;
+
+const TYPE_RULES = {
+  illustration: `TYPE: ILLUSTRATION — draw the REAL OBJECT itself, recognisable at a glance, like a good textbook or museum illustration.
+- Draw the object described in BRIEF: its true silhouette, proportions and characteristic details (a yurt has a dome of roof poles, a lattice wall (kerege), a door and a shanyrak on top; a dombra has a pear-shaped body, a long neck with frets and two strings; a heart has atria, ventricles, aorta and vessels).
+- NEVER replace the object with boxes, circles, icons-in-squares, a flowchart or an abstract blob. If a part is mentioned, it must be drawn where it really is.
+- Style: flat vector illustration with depth — 3-5 tones per surface (base colour, shade, highlight) using palette colours and their tints, consistent outline (stroke 2-4 in PALETTE.text at 60-90% opacity), curved <path> shapes (C/Q/A commands), soft ground shadow ellipse under the object.
+- The object fills 70-85% of the canvas height and is centred (or slightly right if labels go left).
+- Labels: if DATA lists parts, add short callout labels (font 30+, bold) with thin leader lines from the label to the exact part; put labels in empty space around the object, never over it. If DATA is empty, no text at all.
+- Detail is welcome: up to ~40000 characters, many paths. Quality over brevity.`,
+  diagram: `TYPE: DIAGRAM — 3-6 named parts with a clear direction or structure.
 - Semantic relationships must be obvious at a glance: clear arrow direction, hierarchy top→bottom or left→right, equal spacing, no overlapping nodes or labels.
-- Complexity must match DATA size: 3 parts → simple 3 nodes; never add decorative boxes without labels from DATA.
-- Use ONLY the facts, names and numbers in DATA. NEVER invent numbers, dates, percentages or names. If DATA has no numbers, draw a qualitative diagram without axis values.
-- Charts: bar lengths/heights must be proportional to the given numbers; label every bar with its value.
-- diagram: 3-6 boxes or nodes with clear arrows (use simple <path> arrows or <line> + small <polygon> heads), evenly spaced, no overlaps.
-- infographic: one dominant element (a big number or a bar set) plus 2-4 supporting facts.
-- map: a SIMPLIFIED SCHEMATIC only — rough region blobs, dots for places, labeled routes. Never try exact borders or coastlines. Add the given CAPTION as small text (size 22) at the bottom-left.
-
-STYLE
-- Flat, clean, high contrast. Use ONLY the PALETTE colors (opacity via fill-opacity / stroke-opacity is allowed). Use the accent color for the single most important element.
-- Rounded rectangles (rx 16), stroke-width 2-3, consistent spacing, aligned edges, no overlapping shapes or labels.
-- Forbidden: <script>, <style>, <foreignObject>, <image>, filters, masks, external links or fonts, animations.
-- Keep the whole SVG under 9000 characters: simple shapes, no detailed paths. At most 3 tiny icons made of basic shapes.
-
-EXAMPLE of a correct labeled box (200px wide, centered text, two lines):
-<rect x="80" y="120" width="200" height="110" rx="16" fill="#131519" stroke="#3a3c40" stroke-width="2"/>
-<text x="180" y="168" text-anchor="middle" font-size="24" font-weight="700" fill="#f5f7fb">Ерте жылдар</text>
-<text x="180" y="200" text-anchor="middle" font-size="22" fill="#909296">356–336</text>`;
+- Complexity must match DATA size: 3 parts → 3 nodes; never add decorative boxes without labels from DATA.
+- Nodes are shapes that fit their meaning (circles for stages, rounded rectangles rx 18 for components, a cylinder for a store) with soft palette fills — not grey boxes. Each node may carry a small drawn pictogram (2-6 paths) of what it is.
+- Arrows: smooth <path> curves with a <marker> arrowhead, stroke 3-4.`,
+  infographic: `TYPE: INFOGRAPHIC — one dominant element (a big number, a drawn object or a bar set) plus 2-4 supporting facts.
+- Charts: bar lengths/heights proportional to the given numbers; label every bar with its value. If DATA has no numbers, draw a qualitative layout without axis values.
+- Prefer a drawn object over a box: e.g. a water drop filled to a level, a person row, a stack of coins — made of real shapes.`,
+  map: `TYPE: MAP — a SIMPLIFIED SCHEMATIC only: rough region shapes with soft fills, dots for places, labeled routes with curved dashed paths. Never try exact borders or coastlines. Add the given CAPTION as small text (size 24) at the bottom-left.`,
+};
+function systemFor(type) { return BASE_RULES + '\n\n' + (TYPE_RULES[type] || TYPE_RULES.diagram); }
 
 function captionFor(texts) {
   const t = texts.join(' ');
@@ -470,7 +487,7 @@ function captionFor(texts) {
   return 'Schematic, not to scale';
 }
 
-function buildPrompt(slide, palette) {
+function buildPrompt(slide, palette, critique) {
   const spec = slide.visual;
   const caption = spec.type === 'map' ? captionFor([slide.title || '', ...spec.data]) : null;
   const user = [
@@ -478,11 +495,13 @@ function buildPrompt(slide, palette) {
     `PALETTE: ${JSON.stringify(palette)}`,
     `SLIDE TITLE (context only, do not draw it): ${String(slide.title || '').slice(0, 120)}`,
     `BRIEF: ${spec.brief || '(none — choose the clearest simple layout)'}`,
-    'DATA (the only facts you may use):',
+    spec.data.length ? (spec.type === 'illustration' ? 'PARTS TO LABEL (exact wording):' : 'DATA (the only facts you may use):') : 'DATA: (none — no text labels)',
     ...spec.data.map((d, i) => `${i + 1}. ${d}`),
     caption ? `CAPTION: ${caption}` : '',
+    // алдыңғы нұсқаны көретін модель айтқан ақаулар: қайта салғанда түзетілсін
+    critique && critique.length ? `A PREVIOUS ATTEMPT WAS REJECTED BY A REVIEWER WHO SAW IT. Fix these problems:\n${critique.map((c) => '- ' + c).join('\n')}` : '',
   ].filter(Boolean).join('\n');
-  return { system: SYSTEM_PROMPT, user };
+  return { system: systemFor(spec.type), user };
 }
 
 // ═══════════════════════════════ HTTP / providers ═══════════════════════════════
@@ -524,7 +543,7 @@ async function httpJson(url, headers, body, cfg, fetchImpl) {
 }
 
 async function callProvider(p, system, user, cfg, fetchImpl) {
-  if (p.name === 'deepseek') {
+  if (p.api === 'deepseek') {
     // Формат — gemini.js-тегі жұмыс істеп тұрған шақырумен бірдей (thinking өшірулі)
     const data = await httpJson(
       'https://api.deepseek.com/v1/chat/completions',
@@ -538,7 +557,7 @@ async function callProvider(p, system, user, cfg, fetchImpl) {
       cfg, fetchImpl
     );
     const ch = data.choices && data.choices[0];
-    recordApiUsage(data.usage || null, { label: 'visual:deepseek', model: p.model });
+    recordApiUsage(data.usage || null, { label: 'visual:' + p.name, model: p.model });
     return {
       text: (ch && ch.message && ch.message.content) || '',
       stop: ch && ch.finish_reason === 'length' ? 'length' : 'ok',
@@ -583,14 +602,78 @@ function noteFailure(err) {
   }
 }
 function noteSuccess() { breaker.fails = 0; }
+// Pro моделінің атауы өзгерсе/жабылса (400/404 «model …»): процесс бойы Flash-пен жалғасамыз, бүкіл визуалды бөгемейміз
+let proMissing = false;
+function _resetProMissing() { proMissing = false; }
+
+// ═══════════════════════════════ Vision check ═══════════════════════════════
+// Мәтін тексерісі (inspectSvg) суреттің ӨЗІН көрмейді: «жүрек» орнына үш шаршы салынса да өтіп кетеді.
+// Сондықтан салынған SVG суретке айналдырылып, көретін модельге (deepseek-flash) көрсетіледі.
+
+const VISION_PROMPT = (spec, title) => `This image is an SVG figure drawn for a presentation slide titled "${String(title || '').slice(0, 120)}".
+It was supposed to show (${spec.type}): ${spec.brief || '(see title)'}${spec.data.length ? '\nWith these labels: ' + spec.data.join('; ') : ''}
+Judge it strictly, as a picky designer:
+- ${spec.type === 'illustration' ? 'Is it clearly the REAL object, recognisable at a glance, with its characteristic parts? Boxes, icons in squares, flowcharts or abstract blobs instead of the object = score 0-3.' : 'Are the parts and their relationships clear at a glance (direction, hierarchy)?'}
+- Is any text cut off, overlapping a shape or another label, too small, or written over a busy area?
+- Is the figure too small for its canvas, with large empty areas around it? That alone caps the score at 5.
+- Is there an unwanted frame, card or background rectangle around the figure?
+- Does it look professional (balanced, aligned, pleasant colours), not childish or broken?
+Reply JSON only: {"score": 0-10, "issues": ["short concrete problem", ...]} — issues empty if score ≥ 8.`;
+
+/**
+ * SVG → PNG (слайд фонында) + суреттің кенептен алатын үлесі (getBBox, viewBox бірлігімен).
+ * sharp тәуелділікте жоқ — рендерердің Chromium-ы қолданылады. SVG тазаланған (скрипт/сілтеме жоқ), бетке тікелей қойылады.
+ */
+async function svgToPng(svg, bg) {
+  const puppeteer = require('puppeteer');
+  const { launchBrowser } = require('./renderer');
+  const browser = await launchBrowser(puppeteer);
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 880, height: 592, deviceScaleFactor: 1 });
+    const color = /^#[0-9a-f]{3,8}$/i.test(String(bg || '')) ? bg : '#ffffff';
+    await page.setContent('<html><body style="margin:0;background:' + color + '"><div id="f" style="width:880px;height:592px">' + svg.replace('<svg', '<svg width="880" height="592"') + '</div></body></html>');
+    const fill = await page.evaluate(() => {
+      const el = document.querySelector('#f svg'); if (!el) return null;
+      const vb = el.viewBox && el.viewBox.baseVal; const b = el.getBBox();
+      return vb && vb.width ? { w: b.width / vb.width, h: b.height / vb.height } : null;
+    }).catch(() => null);
+    const png = await page.screenshot({ type: 'png' });
+    return { png, fill };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+/** SVG → PNG → көретін модель: { score, issues } не null (тексеру мүмкін болмаса — бөгемейміз) */
+async function visionCheck(svg, spec, slide, palette, opts = {}) {
+  try {
+    const { png, fill } = await (opts.rasterize || svgToPng)(svg, palette && palette.bg);
+    // кенептің аз бөлігін алатын (ортада кішкентай, айналасы бос) сурет — көретін модельсіз-ақ қайта салынады
+    const small = fill && (fill.w < 0.7 || fill.h < 0.55)
+      ? `the figure uses only ${Math.round(fill.w * 100)}% of the width and ${Math.round(fill.h * 100)}% of the height — make it much larger so it fills the canvas`
+      : null;
+    const ask = opts.vision || require('../../core/llm').deepseekVisionJson;
+    const res = await ask([{ text: VISION_PROMPT(spec, slide && slide.title) }, { image: { mime: 'image/png', data: png.toString('base64') } }],
+      { label: 'visual:check', maxTokens: 600, detail: 'high' });
+    const score = res && res.score != null ? Number(res.score) : NaN;
+    const issues = (res && Array.isArray(res.issues) ? res.issues : []).map((x) => String(x).slice(0, 160)).slice(0, 6);
+    if (small) return { score: Number.isFinite(score) ? Math.min(score, 4) : 4, issues: [small, ...issues].slice(0, 6) };
+    if (!Number.isFinite(score)) return null;
+    return { score, issues };
+  } catch (e) {
+    console.warn('[Visual] vision check unavailable: ' + e.message);
+    return null;
+  }
+}
 
 // ═══════════════════════════════ One visual ═══════════════════════════════
 
-async function runProvider(p, slide, palette, cfg, fetchImpl) {
+async function runProvider(p, slide, palette, cfg, fetchImpl, critique, opts = {}) {
   const started = Date.now();
   const r = { provider: p.name, ok: false, reason: '', inTok: 0, outTok: 0, costTg: 0, ms: 0, warnings: [] };
   try {
-    const { system, user } = buildPrompt(slide, palette);
+    const { system, user } = buildPrompt(slide, palette, critique);
     const resp = await callProvider(p, system, user, cfg, fetchImpl);
     r.inTok = resp.inTok;
     r.outTok = resp.outTok;
@@ -603,13 +686,23 @@ async function runProvider(p, slide, palette, cfg, fetchImpl) {
     const q = inspectSvg(clean.svg, clean.vbW, clean.vbH);
     r.warnings = q.warnings;
     if (q.severe) { r.reason = q.placeholders ? `${q.placeholders} empty label(s)` : `text overflow ~${Math.round(q.overflowPx)}px`; return r; }
+    if (cfg.visionCheck) {
+      const v = await visionCheck(clean.svg, slide.visual, slide, palette, opts);
+      if (v) {
+        r.score = v.score;
+        if (v.score < cfg.minScore) { r.reason = `vision score ${v.score}: ${v.issues.join('; ') || 'weak'}`; r.issues = v.issues; return r; }
+      }
+    }
     r.ok = true;
     r.svg = clean.svg;
     r.dataUri = toDataUri(clean.svg);
     return r;
   } catch (e) {
     r.reason = e.message || String(e);
-    noteFailure(e);
+    if (p.name === 'deepseek' && [400, 404].includes(e.status) && /model/i.test(r.reason)) {
+      if (!proMissing) console.warn(`[Visual] ${p.model} қолжетімсіз (${r.reason.slice(0, 120)}) — Flash-пен жалғасамыз`);
+      proMissing = true;
+    } else noteFailure(e);
     return r;
   } finally {
     r.ms = Date.now() - started;
@@ -626,8 +719,9 @@ async function runProvider(p, slide, palette, cfg, fetchImpl) {
 async function attachVisuals(slides, opts = {}) {
   const env = opts.env || process.env;
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
-  const cfg = opts.config || getConfig(env);
-  const stats = { requested: 0, attempted: 0, ok: 0, failed: 0, costTg: 0, provider: cfg.primaryName, results: [] };
+  let cfg = opts.config || getConfig(env);
+  if (proMissing && cfg.primaryName === 'deepseek' && cfg.fallback) cfg = { ...cfg, primary: cfg.fallback, fallback: null };
+  const stats = { requested: 0, attempted: 0, ok: 0, failed: 0, costTg: 0, provider: cfg.primary ? cfg.primary.name : cfg.primaryName, results: [] };
 
   try {
     prepareVisuals(slides);
@@ -660,17 +754,27 @@ async function attachVisuals(slides, opts = {}) {
       const palette = slideSvgPaletteSafe(s);
       const worst = worstCaseTg(cfg.primary, cfg);
       budget.reserved += worst;
-      let r = await runProvider(cfg.primary, s, palette, cfg, fetchImpl);
+      let r = await runProvider(cfg.primary, s, palette, cfg, fetchImpl, null, opts);
       budget.reserved -= worst;
       budget.spent += r.costTg;
       stats.attempted++;
       const attempts = [r];
 
+      // көретін модель қабылдамаса — оның ескертулерімен сол модель бір рет қайта салады
+      if (!r.ok && r.issues && r.issues.length && budget.spent + budget.reserved + worst <= cfg.budgetTg) {
+        budget.reserved += worst;
+        const again = await runProvider(cfg.primary, s, palette, cfg, fetchImpl, r.issues, opts);
+        budget.reserved -= worst;
+        budget.spent += again.costTg;
+        attempts.push(again);
+        r = again;
+      }
+
       if (!r.ok && fbUsable) {
         const fw = worstCaseTg(cfg.fallback, cfg);
         if (budget.spent + budget.reserved + fw <= cfg.budgetTg) {
           budget.reserved += fw;
-          const r2 = await runProvider(cfg.fallback, s, palette, cfg, fetchImpl);
+          const r2 = await runProvider(cfg.fallback, s, palette, cfg, fetchImpl, r.issues || null, opts);
           budget.reserved -= fw;
           budget.spent += r2.costTg;
           attempts.push(r2);
@@ -723,7 +827,7 @@ async function drawOnce(slide, providerName, opts = {}) {
   if (!p.apiKey) return { ok: false, provider: p.name, reason: `${p.name} API кілті жоқ`, costTg: 0, inTok: 0, outTok: 0, ms: 0, warnings: [] };
   const spec = normalizeVisualSpec(slide.visual);
   if (!spec) return { ok: false, provider: p.name, reason: 'жарамсыз visual spec', costTg: 0, inTok: 0, outTok: 0, ms: 0, warnings: [] };
-  return runProvider(p, { ...slide, visual: spec }, slideSvgPaletteSafe(slide), cfg, fetchImpl);
+  return runProvider(p, { ...slide, visual: spec }, slideSvgPaletteSafe(slide), cfg, fetchImpl, null, opts);
 }
 
 function slideSvgPaletteSafe(slide) {
@@ -731,6 +835,6 @@ function slideSvgPaletteSafe(slide) {
 }
 
 module.exports = {
-  attachVisuals, drawOnce, prepareVisuals, normalizeVisualSpec, sanitizeSvg, inspectSvg, buildPrompt,
-  getConfig, costTg, worstCaseTg, allowedSlots, _resetBreaker,
+  attachVisuals, drawOnce, prepareVisuals, normalizeVisualSpec, sanitizeSvg, inspectSvg, buildPrompt, systemFor, visionCheck,
+  getConfig, providerConfig, costTg, worstCaseTg, allowedSlots, _resetBreaker, _resetProMissing,
 };

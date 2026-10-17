@@ -92,3 +92,20 @@ test('composition timeline is chronological', () => {
   const sh = shapeOf(a, 'timeline');
   assert.deepStrictEqual(sh.items.map((m) => m.date), ['1920', '1930', '1937', '1989']);
 });
+
+test('infographics: detail text never shrinks below 20px; pictogram about people uses a person icon', () => {
+  const pal = require('../products/presentation/design/tokens').buildPalette('sand');
+  const long = 'Өте ұзын сипаттама '.repeat(12);
+  const html = IG.renderInfographic(IG.validateInfographic({ kind: 'roadmap', items: [{ label: '2024', detail: long }, { label: '2025', detail: long }, { label: '2026', detail: long }] }), 1664, 620, pal);
+  const sizes = [...html.matchAll(/font-size:(\d+)px/g)].map((m) => Number(m[1]));
+  assert.ok(Math.min(...sizes) >= 20, 'min ' + Math.min(...sizes));
+  const pic = IG.renderInfographic(IG.validateInfographic({ kind: 'pictogram', items: [{ label: 'жастар күн сайын онлайн оқиды', value: '70%' }] }), 1100, 720, pal);
+  assert.ok(!/wifi/.test(pic));
+});
+
+test('tables: rows with a year column are put in chronological order', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const html = build3DPresentationHTML([{ title: 'Cover' }, { title: 'Хандар', table: { headers: ['Хан', 'Жылдары', 'Жетістігі', 'Астанасы'], rows: [['Тәуке', '1680–1715', 'Жеті жарғы', 'Түркістан'], ['Есім', '1598–1628', 'Ескі жол', 'Түркістан'], ['Керей', '1465–1474', 'Хандық', 'Шу']] } }], 'T');
+  const order = ['Керей', 'Есім', 'Тәуке'].map((n) => html.indexOf('>' + n + '<'));
+  assert.ok(order[0] > 0 && order[0] < order[1] && order[1] < order[2], JSON.stringify(order));
+});

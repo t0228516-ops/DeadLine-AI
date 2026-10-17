@@ -101,8 +101,11 @@ test('limitTables: <=1 table per 4 slides, never adjacent; extras become bullets
 test('decoration is rendered on plain slides, not on photo slides', () => {
   const plain = [{ title: 'cover' }, { title: 'Points', bullets: ['a: b', 'c: d'] }];
   plain.forEach((s) => { s.composition = { mood: 'midnight', accentColor: T.MOODS.midnight.accent }; });
+  // әдепкіде қарапайым слайдқа құрастырылған фон түседі (ескі «жарқыл» әшекейінің орнына)
   const html = build3DPresentationHTML(plain, 'T', {});
-  assert.ok(/class="deco deco-grid dp-1"/.test(html), 'deco present');
+  assert.ok(/class="bgk/.test(html.split('<article')[2]), 'composed background present');
+  process.env.BG_KIT = '0';
+  try { assert.ok(/class="deco deco-grid dp-1"/.test(build3DPresentationHTML(plain, 'T', {})), 'old deco without the background kit'); } finally { delete process.env.BG_KIT; }
 });
 
 test('image search never receives Kazakh/Russian queries', async () => {

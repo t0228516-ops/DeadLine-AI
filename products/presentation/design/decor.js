@@ -236,10 +236,10 @@ function placeDecor(only) {
     var prevDisp = slide.style.display; slide.style.display = 'block';
     var sr = slide.getBoundingClientRect();
     var blocks = [];
-    [].forEach.call(slide.querySelectorAll('.layer-mid *, .layer-bg .photo, .layer-bg .bleed, .layer-bg .arch-photo, .layer-bg .full, .layer-bg .doodle, .figure, .layer-bg .botanic, .layer-bg .cx-part'), function (el) {
+    [].forEach.call(slide.querySelectorAll('.layer-mid *, .layer-bg .photo, .layer-bg .bleed, .layer-bg .arch-photo, .layer-bg .full, .layer-bg .doodle, .figure, .layer-bg .botanic, .layer-bg .cx-part, .layer-bg .bgk-solid'), function (el) {
       if (el.tagName === 'IMG' && el.classList.contains('decor')) return;
       var own = [].some.call(el.childNodes, function (n) { return n.nodeType === 3 && n.nodeValue.trim(); });
-      var visual = /^(IMG|SVG|CANVAS)$/i.test(el.tagName) || el.classList.contains('photo') || el.classList.contains('bleed') || el.classList.contains('full') || el.classList.contains('concept') || el.classList.contains('stat') || el.classList.contains('ig-card');
+      var visual = /^(IMG|SVG|CANVAS)$/i.test(el.tagName) || el.classList.contains('bgk-solid') || el.classList.contains('photo') || el.classList.contains('bleed') || el.classList.contains('full') || el.classList.contains('concept') || el.classList.contains('stat') || el.classList.contains('ig-card');
       var r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) return;
       // құрастырылған композицияның фон бөлшектері (стикер қағазы, билет, панель, мөр, көмескі нөмір, арка):

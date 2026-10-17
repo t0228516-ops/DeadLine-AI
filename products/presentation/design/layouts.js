@@ -684,10 +684,21 @@ L.hierarchy = (ctx) => {
   return { bg: '<div class="plate"></div>', fg: fg + folio(ctx), cls: '' };
 };
 
+/** Бір баған толығымен жыл/жыл аралығы болса (хандар, оқиғалар) — жолдар хронология бойынша (модель кейде шатастырады) */
+function chronoRows(rows) {
+  if (rows.length < 3) return rows;
+  const yearOf = (c) => { const m = String(c == null ? '' : c).trim().match(/^(?:[~≈c.\s]*)(\d{3,4})(?=\s*(?:[–—-]\s*\d{2,4})?\s*(?:ж\.?|жж\.?|гг?\.?|ғ\.)?\s*$)/i); return m ? Number(m[1]) : null; };
+  const ncol = Math.max(...rows.map((r) => r.length));
+  for (let k = 0; k < ncol; k++) {
+    const ys = rows.map((r) => yearOf(r[k]));
+    if (ys.every((y) => y != null)) return rows.map((r, i) => ({ r, i, y: ys[i] })).sort((a, b) => (a.y - b.y) || (a.i - b.i)).map((x) => x.r);
+  }
+  return rows;
+}
 L.table = (ctx) => {
   const a = ctx.a; const t = a.table;
   const headers = (t.headers || []).slice(0, 5);
-  const rows = (t.rows || []).slice(0, 7).map((r) => (Array.isArray(r) ? r : [r]));
+  const rows = chronoRows((t.rows || []).slice(0, 7).map((r) => (Array.isArray(r) ? r : [r])));
   const ncols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
   const fs = rows.length <= 4 ? 34 : rows.length <= 5 ? 30 : 26;
   const fsz = ncols >= 4 ? fs - 2 : fs;
@@ -708,9 +719,10 @@ L.diagram = (ctx) => {
   const fg = '<div class="canvas g12 diag">' +
     '<div class="cell diag-l" style="' + cols(1, 4) + '"><div class="block">' +
       kicker(ctx, sectionLabel(ctx)) +
-      titleH1(ctx, a.title, { width: tw, maxLines: 5, scale: [64, 58, 52, 46, 42] }) +
-      (a.subtitle ? lead(ctx, a.subtitle, 28, { maxw: tw }) : '') +
-      notes(ctx, a.bullets.slice(0, 2), 24) +
+      // ірі мәтін: бұрын 64/28/24px — сызбаның қасында ұсақ әрі бос көрінетін
+      titleH1(ctx, a.title, { width: tw, maxLines: 5, scale: [84, 76, 68, 60, 52] }) +
+      (a.subtitle ? lead(ctx, a.subtitle, 36, { maxw: tw }) : '') +
+      notes(ctx, a.bullets.slice(0, 2), 30) +
     '</div></div>' +
     '<div class="cell diag-r" style="' + cols(5, 12) + '">' + fig + '</div></div>';
   return { bg: '<div class="plate"></div>', fg: fg + folio(ctx), cls: '' };
@@ -736,7 +748,9 @@ L.infographic = (ctx) => {
       '</div></div>' +
       '<div class="cell igs-r" style="' + cols(6, 12) + '">' + el(ctx, 'div', 'ig-wrap', IG.renderInfographic(d, W, H, p) + source, { role: 'figure-wrap' }) + '</div></div>';
   } else {
-    const W = GRID.contentW; const H = 540;
+    // биіктік: тақырып бір жолға сыйса — графикке 620px, екі жол болса 560px (бұрын әрдайым 540 → асты бос қалатын)
+    const oneLine = String(a.title || '').length <= 38;
+    const W = GRID.contentW; const H = (oneLine ? 620 : 560) - (d.source ? 30 : 0);
     fg = '<div class="canvas igk"><div class="igk-head g12"><div class="block" style="' + cols(1, 8) + '">' +
       kicker(ctx, sectionLabel(ctx)) +
       titleH1(ctx, a.title, { width: GRID.span(8), maxLines: 2, scale: [80, 70, 62, 54, 48] }) + '</div>' +

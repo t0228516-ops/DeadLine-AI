@@ -55,7 +55,7 @@ function measure(slide){
   if(t&&body){var tf=parseFloat(getComputedStyle(t).fontSize),bf=parseFloat(getComputedStyle(body).fontSize);if(tf<bf*1.25)issues.push({type:'weak-hierarchy',hard:false,detail:Math.round(tf)+'/'+Math.round(bf)});}
   return {issues:issues,density:density,minFont:mf};
 }
-var GROW={points:1,cards:1,stackPoints:1,stackRefs:1,editorial:1,process:1,timeline:1,hierarchy:1,stats:1,closing:1};
+var GROW={points:1,cards:1,stackPoints:1,stackRefs:1,editorial:1,process:1,timeline:1,hierarchy:1,stats:1,closing:1,diagram:1};
 /** Мазмұнның тігінен алатын үлесі (0..1): тақырыптың басынан соңғы элементтің астына дейін */
 function fill(slide){
   var kk=k(),sr=slide.getBoundingClientRect(),top=1e9,bot=-1e9;

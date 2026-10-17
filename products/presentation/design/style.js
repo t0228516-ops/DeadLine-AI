@@ -385,7 +385,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* ── diagram ── */
 .diag{align-items:center}
 .diag-l{align-self:center}
-.figure{margin:0;width:100%;height:740px;border-radius:var(--radius);overflow:hidden;background:var(--bg2);border:1px solid var(--line-soft);box-shadow:var(--sh-sm);display:flex;align-items:center;justify-content:center}
+/* сурет/сызба слайдтың өзінде тұрады — карточка, жиек, көлеңке жоқ (бұрын «шаршы үстіне салынғандай» көрінетін) */
+.figure{margin:0;width:100%;height:740px;overflow:visible;background:transparent;border:0;box-shadow:none;display:flex;align-items:center;justify-content:center}
 .figure img{display:block;width:100%;height:100%;object-fit:contain}
 .diag-r{align-self:center}
 
@@ -534,7 +535,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .ig-track{border-radius:0 8px 8px 0;background:color-mix(in srgb,var(--text) 8%,transparent)}
 .ig-bar{border-radius:0 8px 8px 0;background:color-mix(in srgb,var(--text) 30%,transparent)}
 .ig-bar.on{background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 0 26px color-mix(in srgb,var(--accent) 45%,transparent)}
-.ig-col{border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--text) 22%,transparent)}
+.ig-col{border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--accent) 30%,transparent)}
 .ig-col.on{background:linear-gradient(180deg,var(--accent2),var(--accent));box-shadow:0 0 30px color-mix(in srgb,var(--accent) 40%,transparent)}
 .ig-axis{background:var(--line)}
 .ig-grid{stroke:var(--line-soft);stroke-width:1}
@@ -568,6 +569,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* pros / cons */
 .ig-col-head{border-radius:3px}.ig-col-head.good{background:linear-gradient(90deg,var(--accent),var(--accent2))}.ig-col-head.bad{background:var(--text3)}
 .ig-mark{display:flex;align-items:center;justify-content:center;border-radius:50%}
+/* SWOT төрттігі мен артықшылық/кемшілік панельдері: жүйе карточкаларды «жалаңаштаса» да тонды фоны қалады */
+.ig-quad{border-radius:calc(var(--radius) + 6px)}.ig-pc{border-radius:calc(var(--radius) + 6px)}.ig-pc.good{background:color-mix(in srgb,var(--accent) 9%,transparent)}.ig-pc.bad{background:color-mix(in srgb,var(--text) 5%,transparent)}
+.ig-bar{background:color-mix(in srgb,var(--accent) 34%,transparent)}
 .ig-mark.good{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
 .ig-mark.bad{background:color-mix(in srgb,var(--text) 10%,transparent);color:var(--text2)}
 /* roadmap */
