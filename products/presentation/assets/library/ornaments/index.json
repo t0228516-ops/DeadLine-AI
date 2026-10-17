@@ -1,0 +1,592 @@
+{
+ "kz-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "koshkar",
+  "title": "Қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "koshkar"
+  ]
+ },
+ "kz-synar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "synar",
+  "title": "Сыңар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "synar"
+  ]
+ },
+ "kz-arkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "arkar",
+  "title": "Арқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "arkar"
+  ]
+ },
+ "kz-synyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "synyk",
+  "title": "Сынық мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "synyk"
+  ]
+ },
+ "kz-tuyetaban.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "tuyetaban",
+  "title": "Түйетабан",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "tuyetaban"
+  ]
+ },
+ "kz-botakoz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "botakoz",
+  "title": "Ботакөз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "botakoz"
+  ]
+ },
+ "kz-kazmoyin.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "kazmoyin",
+  "title": "Қазмойын",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "kazmoyin"
+  ]
+ },
+ "kz-kustumsyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "kustumsyk",
+  "title": "Құстұмсық",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "kustumsyk"
+  ]
+ },
+ "kz-orkesh.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "orkesh",
+  "title": "Өркеш",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "orkesh"
+  ]
+ },
+ "kz-tortkulak.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "tortkulak",
+  "title": "Төртқұлақ",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "tortkulak"
+  ]
+ },
+ "kz-zhuldyz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "zhuldyz",
+  "title": "Жұлдыз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "zhuldyz"
+  ]
+ },
+ "kz-kun.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "kun",
+  "title": "Күн",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "kun"
+  ]
+ },
+ "kz-ai.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "ai",
+  "title": "Ай",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "ai"
+  ]
+ },
+ "kz-tumar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "tumar",
+  "title": "Тұмар",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "tumar"
+  ]
+ },
+ "kz-shanyrak.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "shanyrak",
+  "title": "Шаңырақ",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "shanyrak"
+  ]
+ },
+ "kz-gul.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "gul",
+  "title": "Гүл",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "gul"
+  ]
+ },
+ "kz-kuskanat.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "motif",
+  "motif": "kuskanat",
+  "title": "Құсқанат",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "kuskanat"
+  ]
+ },
+ "kz-medallion-4.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "koshkar",
+  "title": "Медальон (4 мүйіз)",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "rosette"
+  ]
+ },
+ "kz-medallion-6.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "koshkar",
+  "title": "Медальон (6 мүйіз)",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "rosette"
+  ]
+ },
+ "kz-medallion-8.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "koshkar",
+  "title": "Медальон (8 мүйіз)",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "rosette"
+  ]
+ },
+ "kz-band-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "koshkar",
+  "title": "Бордюр: Қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "koshkar"
+  ]
+ },
+ "kz-band-synyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "synyk",
+  "title": "Бордюр: Сынық мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "synyk"
+  ]
+ },
+ "kz-band-kazmoyin.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "kazmoyin",
+  "title": "Бордюр: Қазмойын",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "kazmoyin"
+  ]
+ },
+ "kz-band-orkesh.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "orkesh",
+  "title": "Бордюр: Өркеш",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "orkesh"
+  ]
+ },
+ "kz-band-botakoz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "botakoz",
+  "title": "Бордюр: Ботакөз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "botakoz"
+  ]
+ },
+ "kz-band-kustumsyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "kustumsyk",
+  "title": "Бордюр: Құстұмсық",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "kustumsyk"
+  ]
+ },
+ "kz-corner-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "corner",
+  "motif": "koshkar",
+  "title": "Бұрыш: Қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "corner",
+   "koshkar"
+  ]
+ },
+ "kz-corner-arkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "corner",
+  "motif": "arkar",
+  "title": "Бұрыш: Арқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "corner",
+   "arkar"
+  ]
+ },
+ "kz-corner-synyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "corner",
+  "motif": "synyk",
+  "title": "Бұрыш: Сынық мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "corner",
+   "synyk"
+  ]
+ },
+ "kz-divider-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "divider",
+  "motif": "koshkar",
+  "title": "Бөлгіш: Қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "divider",
+   "koshkar"
+  ]
+ },
+ "kz-divider-tuyetaban.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "divider",
+  "motif": "tuyetaban",
+  "title": "Бөлгіш: Түйетабан",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "divider",
+   "tuyetaban"
+  ]
+ },
+ "kz-divider-botakoz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "divider",
+  "motif": "botakoz",
+  "title": "Бөлгіш: Ботакөз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "divider",
+   "botakoz"
+  ]
+ },
+ "kz-divider-zhuldyz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "divider",
+  "motif": "zhuldyz",
+  "title": "Бөлгіш: Жұлдыз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "divider",
+   "zhuldyz"
+  ]
+ },
+ "kz-frame-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "frame",
+  "motif": "koshkar",
+  "title": "Жиектеме: қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "frame"
+  ]
+ },
+ "kz-band-itkuyryk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "band",
+  "motif": "itkuyryk",
+  "title": "Бордюр: Ит құйрық",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "border",
+   "band",
+   "wave"
+  ]
+ },
+ "kz-medallion-tuyetaban.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "tuyetaban",
+  "title": "Медальон: Түйетабан",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "tuyetaban"
+  ]
+ },
+ "kz-medallion-tortkulak.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "tortkulak",
+  "title": "Медальон: Төртқұлақ",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "tortkulak"
+  ]
+ },
+ "kz-medallion-kun.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "kun",
+  "title": "Медальон: Күн",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "kun"
+  ]
+ },
+ "kz-medallion-gul.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "medallion",
+  "motif": "gul",
+  "title": "Медальон: Гүл",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "medallion",
+   "gul"
+  ]
+ },
+ "kz-corner-tortkulak.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "corner",
+  "motif": "tortkulak",
+  "title": "Бұрыш: Төртқұлақ",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "corner",
+   "tortkulak"
+  ]
+ },
+ "kz-corner-tuyetaban.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "corner",
+  "motif": "tuyetaban",
+  "title": "Бұрыш: Түйетабан",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "corner",
+   "tuyetaban"
+  ]
+ },
+ "kz-frame-synyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "frame",
+  "motif": "synyk",
+  "title": "Жиектеме: сынық мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "frame"
+  ]
+ },
+ "kz-tile-botakoz.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "tile",
+  "motif": "botakoz",
+  "title": "Өрнек-плитка: Ботакөз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "pattern",
+   "tile",
+   "botakoz"
+  ]
+ },
+ "kz-tile-tuyetaban.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "tile",
+  "motif": "tuyetaban",
+  "title": "Өрнек-плитка: Түйетабан",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "pattern",
+   "tile",
+   "tuyetaban"
+  ]
+ },
+ "kz-tile-synyk.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "tile",
+  "motif": "synyk",
+  "title": "Өрнек-плитка: Сынық мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "pattern",
+   "tile",
+   "synyk"
+  ]
+ },
+ "kz-tile-koshkar.svg": {
+  "license": "own (DeadLine)",
+  "source": "scripts/build-ornaments.js",
+  "kind": "tile",
+  "motif": "koshkar",
+  "title": "Өрнек-плитка: Қошқар мүйіз",
+  "tags": [
+   "kazakh",
+   "ornament",
+   "pattern",
+   "tile",
+   "koshkar"
+  ]
+ }
+}
