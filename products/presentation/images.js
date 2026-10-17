@@ -715,4 +715,6 @@ module.exports = {
   unsplashCandidates,
   wikimediaCandidates,
   downloadAsDataUri,
+  downloadCached,
+  imageMeta,
 };

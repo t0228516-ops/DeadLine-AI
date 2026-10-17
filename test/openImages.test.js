@@ -159,8 +159,8 @@ test('archive rescue: a Russian Commons title is searched on Wikimedia only; ord
   assert.strictEqual(calls[0].params.gsrsearch, 'Коллективизация в Казахстане');
 });
 
-test('vision: a photo the viewer flagged as modern / wrong country never passes, however high its fit', () => {
+test('vision: wrong country / era / watermark never passes; "modern" alone no longer blocks a general photo', () => {
   const { BAD_FLAW } = require('../products/presentation/photoVision');
-  for (const f of ['modern', 'modern farm', 'wrong country', 'wrong era', 'watermark', 'reenactors']) assert.ok(BAD_FLAW.test(f), f);
-  for (const f of ['', 'slightly dark', 'small subject', 'sepia']) assert.ok(!BAD_FLAW.test(f), f);
+  for (const f of ['wrong country', 'wrong era', 'watermark', 'reenactors']) assert.ok(BAD_FLAW.test(f), f);
+  for (const f of ['', 'slightly dark', 'small subject', 'sepia', 'modern']) assert.ok(!BAD_FLAW.test(f), f);
 });
