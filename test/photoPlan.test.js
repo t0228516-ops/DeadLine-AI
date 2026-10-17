@@ -33,3 +33,22 @@ test('the budget keeps the cover first', () => {
   assert.deepStrictEqual([...indexes], [0]);
   assert.strictEqual(planPhotoSlides(deck, { budget: 0 }).indexes.size, 0);
 });
+
+test('photo plan: content slides the composition engine can show a photo on get one, even when DeepSeek set image "none"; closing/section are skipped', () => {
+  const { planPhotoSlides } = require('../products/presentation/photoPlan');
+  const B = ['Бір — ұзын толық факт сегіз он төрт сөзден тұратын мысал сөйлем', 'Екі — ұзын толық факт сегіз он төрт сөзден тұратын мысал сөйлем', 'Үш — ұзын толық факт сегіз он төрт сөзден тұратын мысал сөйлем'];
+  const deck = [
+    { title: 'Мұқаба', subtitle: 'x' },
+    { title: 'Бастауы', bullets: B, composition: { image: 'none' } },
+    { title: 'Сандар', stats: [{ value: '1', label: 'a' }, { value: '2', label: 'b' }] },
+    { title: 'Әдістері', bullets: B, composition: { image: 'none' } },
+    { title: 'Кезеңдер', bullets: ['1928 — a', '1929 — b', '1931 — c'], composition: { visualPurpose: 'timeline' } },
+    { title: 'Салдары', bullets: B, composition: { image: 'none' } },
+    { title: 'Қорытынды', bullets: B, composition: { visualPurpose: 'conclusion' } },
+  ];
+  const p = planPhotoSlides(deck, { budget: 4 });
+  assert.ok(p.indexes.has(0), 'мұқаба');
+  assert.ok(p.indexes.size >= 3, 'кемі 3 фото слайд: ' + [...p.indexes]);
+  assert.ok(!p.indexes.has(2) && !p.indexes.has(4), 'сандар мен уақыт сызығына фото ізделмейді');
+  if (p.planned[6] === 'closing') assert.ok(!p.indexes.has(6), 'closing-seal фотоны көрсетпейді');
+});

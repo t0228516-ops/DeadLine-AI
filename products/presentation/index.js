@@ -670,7 +670,7 @@ async function generatePresentation(userInput, options = {}) {
   const photoBudget = options.free
     ? Math.max(Number(process.env.PHOTO_BUDGET_FREE) || 3, Math.min(5, Math.round(slides.length * 0.3)))
     : Math.max(Number(process.env.PHOTO_BUDGET) || 4, Math.min(7, Math.round(slides.length * 0.45)));
-  const photoPlan = planPhotoSlides(slides, { budget: photoBudget });
+  const photoPlan = planPhotoSlides(slides, { budget: photoBudget, skin: !!(refAnalysis && refAnalysis.skin) });
   const sysDef = require('./design/systems').getSystem(design && design.system);
   const sysCover = (sysDef && sysDef.cover) || 'classic';
   const sysClosing = (sysDef && sysDef.closing) || 'rows';
@@ -684,8 +684,7 @@ async function generatePresentation(userInput, options = {}) {
     const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
     const query = isLatinQuery(raw) ? raw : '';
     if (raw && !query) console.warn(`[Image] non-English imageQuery ignored: "${raw.slice(0, 60)}"`);
-    // image:"none" слайдтарға (кесте/диаграмма) сурет керек емес — бекер іздемейміз
-    if (slide.composition && slide.composition.image === 'none') return null;
+    // кесте/диаграмма слайдтарын фото жоспары әлдеқашан шығарып тастаған (photoPlan.mayCarryPhoto)
     // инфографика слайды фотоны қолданбайды (сызба толық ені/оң жағын алады)
     if (validateInfographic(slide.infographic)) return null;
     console.log(`[Image] query="${query}"`);

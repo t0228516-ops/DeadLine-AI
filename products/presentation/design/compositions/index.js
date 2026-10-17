@@ -85,7 +85,7 @@ function shapeOf(a, type) {
   }
   if (a.body) return null;
   const short = items.every((m) => m.label.length <= 34 && (m.detail || '').length <= 90);
-  if (a.hasPhoto && items.length >= 3 && items.length <= 5 && items.every((m) => (m.label + ' ' + (m.detail || '')).length <= 130)) return { kind: 'photoList', items };
+  if (a.hasPhoto && items.length >= 3 && items.length <= 5 && items.every((m) => (m.label + ' ' + (m.detail || '')).length <= 170)) return { kind: 'photoList', items }; // толық фактілі пункттер (8-14 сөз) фото макетінен шығып қалмасын
   if (items.length >= 2 && items.length <= 5 && short && items.filter((m) => m.detail).length >= items.length - 1) return { kind: 'concepts', items };
   // ұзынырақ пункттер (бұрын ескі «мәтін торы» макетіне түсетін)
   if (items.length >= 3 && items.length <= 5 && items.every((m) => m.label.length <= 70 && (m.detail || '').length <= 180)) return { kind: 'list', items };
