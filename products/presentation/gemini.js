@@ -463,10 +463,10 @@ const COMPOSITION_RULES = `ART-DIRECTOR COMPOSITION (every slide needs a clear v
 
 const CONTENT_RULES = `CONTENT & LANGUAGE (teach, do not encyclopedia-dump):
 - title: 4-8 words, concrete, no vague "Introduction/Overview/Basics" alone
-- A SLIDE IS NOT A PAGE: at most ~30 words of visible text per slide. The full explanation the student reads aloud goes to the speaker notes (generated separately) — never pack it onto the slide. (When TEMPLATE SLOT rules are given above, their slot types and lengths win over this.)
-- subtitle: always present, ONE short sentence (6-14 words) — the slide's takeaway
-- body: null (do not write body text on slides)
-- bullets: 3-4 items, each "Key term — short fact" (2-3 word term, " — ", then 3-8 words), e.g. "Ақыл — білім мен ойлау қабілеті", NOT a full sentence of 15 words and NOT a bare label alone — one idea each, no filler
+- THE STUDENT PRESENTS FROM THE SLIDE: a classmate who reads only the slide must get the point AND the key facts (names, dates, numbers, causes, results) — about 45-70 words of visible text per slide. Speaker notes (generated separately) add examples and transitions, never the essentials. Not a wall of text either: no slide over ~80 words. (When TEMPLATE SLOT rules are given above, their slot types and lengths win over this.)
+- subtitle: always present, 1-2 sentences (12-28 words) — the slide's takeaway with one concrete fact, e.g. "Хандықта билік пен әскер рулық жүйеге сүйенді, ал сауда қалалары оның экономикалық тірегі болды."
+- body: null on slides with bullets. On an explanation / definition / key-idea slide WITHOUT bullets: 2-3 complete sentences (35-60 words) with concrete facts. About one slide in five, never two adjacent.
+- bullets: 3-4 items, each "Key term — full fact" (1-3 word term, " — ", then ONE complete informative clause of 8-14 words that says who/what/when/why or the result), e.g. "Билік — хан мен сұлтандар кеңесі соғыс, бітім және көш бағыты туралы шешім қабылдады". NOT a bare label, NOT a vague 3-word phrase, NOT two sentences — one idea each, no filler
 - STEP / LEVEL / DATE slides (visualPurpose "process", "hierarchy" or "timeline"): write every bullet as "short label — phrase": a 1-4 word label, a spaced dash " — ", then 4-9 words, e.g. "Деректерді жинау — спутниктер мен далалық өлшеулер учаскенің шекарасын нақтылайды". Timeline labels are the date or year ("1997 — ...").
 - stats: ONLY real numbers from the client brief or universally known facts; labels 2-5 words. If unsure, set stats null
 - table: ONLY for a true side-by-side comparison of 2+ things across the same attributes; at most ONE table per 4 slides and NEVER on two adjacent slides. Everything else is bullets, stats, body text or a diagram — a deck where most slides are tables is a failure. Default for "table" is null.
@@ -872,12 +872,12 @@ ${batchJSON}
 Fix only:
 - Text readability over images (fix overlay or textPosition)
 - Title too long (>10 words) → shorten
-- Subtitle longer than 16 words → trim to one short sentence
-- Body present → remove it (slides carry no paragraphs; details live in speaker notes)
+- Subtitle longer than 30 words → trim to at most 2 sentences (keep the concrete fact)
+- Body on a slide that also has bullets → remove the body; body on a slide without bullets → keep it, trim to at most 3 sentences
 - full_background + dark_gradient_left → textPosition must be center_left
 - full_background + dark_gradient_right → textPosition must be center_right
 - Too many bullets (>5) → keep the strongest 3-4
-- Each bullet >12 words → shorten to "Key term — short fact" (never a bare 1-word label)
+- Each bullet >18 words → shorten to "Key term — full fact" (8-14 words after the dash, keep names/dates/numbers; never a bare label). Do NOT shorten bullets that are already within this length
 - full_background + overlay=none → add dark_gradient_bottom
 - Vague imageQuery → rewrite in English naming the literal subject the photo must show (exact name for a person/event/place/artwork); remove lighting/mood/camera words; two subjects joined by "and" → keep only the one this slide is about
 - If a slide has a clear physical/scientific/historical subject, add or improve visualIntent so the 3D renderer can select a semantic model; never use generic words like "object" or "shape"
