@@ -127,8 +127,10 @@ function fitDetail(text, w, h, maxFs, minFs) {
   const maxLines = Math.max(1, Math.floor(h / (minFs * 1.38)));
   return { html: esc(truncate(t, Math.floor(perLine * maxLines * 0.9))), fs: minFs };
 }
+// Слайдты дауыстап оқиды: сипаттама 20px-тен кішірейтілмейді (бұрын 17px-ке дейін түсетін — проекторда оқылмайды)
+const MIN_DETAIL = 20;
 const detTxt = (cls, text, x, y, w, h, maxFs, minFs, extra) => {
-  const f = fitDetail(text, w, h, maxFs, minFs);
+  const f = fitDetail(text, w, h, Math.max(maxFs, MIN_DETAIL), Math.max(minFs, MIN_DETAIL));
   return txt(cls, f.html, box(x, y, w, h, 'font-size:' + f.fs + 'px' + (extra ? ';' + extra : '')));
 };
 function hiIndex(d, values) {
@@ -157,15 +159,16 @@ def('bar', {
     const n = d.items.length; const vals = d.items.map((x) => x.value);
     const hi = hiIndex(d, vals); const max = Math.max(...vals) || 1;
     const rowH = Math.min(118, H / n); const top = (H - rowH * n) / 2;
-    const labelW = W * 0.36; const barX = labelW + 28; const valW = 150; const barW = W - barX - valW;
-    const thick = clamp(rowH * 0.3, 16, 30);
+    const labelW = W * 0.36; const barX = labelW + 28; const valW = 130; const barW = W - barX - valW - 16;
+    const thick = clamp(rowH * 0.42, 22, 52);
     const fs = n <= 4 ? 30 : n <= 6 ? 26 : 23;
     return d.items.map((it, i) => {
       const y = top + i * rowH; const w = Math.max(8, barW * (it.value / max)); const on = i === hi;
       return '<div class="ig-track" style="' + box(barX, y + (rowH - thick) / 2, barW, thick) + '"></div>' +
         '<div class="ig-bar' + (on ? ' on' : '') + '" style="' + box(barX, y + (rowH - thick) / 2, w, thick) + '"></div>' +
         txt('ig-lab right' + (on ? ' strong' : ''), esc(it.label), box(0, y, labelW, rowH, 'font-size:' + fs + 'px;display:flex;align-items:center;justify-content:flex-end')) +
-        txt('ig-val' + (on ? ' on' : ''), esc(showValue(it, d)), box(barX + w + 16, y, valW + barW - w - 16, rowH, 'font-size:' + (fs + 4) + 'px;display:flex;align-items:center'));
+        // мәндер жолақтың соңынан кейін бір бағанда — қысқа жолақтың фонына мінбейді, сандар тураланады
+        txt('ig-val' + (on ? ' on' : ''), esc(showValue(it, d)), box(barX + barW + 16, y, valW, rowH, 'font-size:' + (fs + 4) + 'px;display:flex;align-items:center'));
     }).join('');
   },
 });
@@ -216,13 +219,13 @@ def('line', {
     const every = n <= 8 ? 1 : Math.ceil(n / 7);
     d.items.forEach((it, i) => {
       if (i % every && i !== last) return;
-      svg += txt('ig-lab center', esc(truncate(it.label, 16)), box(clamp(X(i) - 80, 0, W - 160), padT + ph + 14, 160, labH - 14, 'font-size:22px'));
+      svg += txt('ig-lab center', esc(truncate(it.label, 16)), box(clamp(X(i) - 80, 0, W - 160), padT + ph + 14, 160, labH - 14, 'font-size:24px'));
     });
     // every point carries its value (a trend without numbers reads as decoration); long series: every k-th + key points
     const gap = n > 1 ? pw / (n - 1) : pw;
     const tw = clamp(gap - 8, 120, 220);
     const tag = (i, cls, fs) => txt('ig-val center ' + cls, esc(showValue(d.items[i], d)), box(clamp(pts[i][0] - tw / 2, 0, W - tw), pts[i][1] - (fs + 32), tw, fs + 14, 'font-size:' + fs + 'px'));
-    const fsMuted = gap >= 190 ? 24 : 21;
+    const fsMuted = gap >= 190 ? 26 : 23;
     d.items.forEach((it, i) => {
       if (i === last || i === hi) return;
       if ((i % every && i !== 0) || (every > 1 && (i === last - 1 || Math.abs(i - hi) === 1))) return;
@@ -251,13 +254,13 @@ def('donut', {
     const hiTxt = d.items.every((x) => isPct(x, d)) ? showValue(d.items[hi], d) : pct(vals[hi]);
     let out = '<svg class="ig-svg" width="' + W + '" height="' + H + '"><circle cx="' + r1(cx) + '" cy="' + r1(cy) + '" r="' + r1(rr) + '" fill="none" class="ig-ring-track" stroke-width="' + r1(sw) + '"/>' + segs + '</svg>' +
       txt('ig-big center', esc(hiTxt), box(cx - R * 0.62, cy - 64, R * 1.24, 84, 'font-size:' + Math.round(clamp(R * 0.36, 48, 96)) + 'px'), 'numeral') +
-      txt('ig-lab center', esc(truncate((d.center && !/\d/.test(d.center) ? d.center : '') || d.items[hi].label, 30)), box(cx - R * 0.6, cy + 26, R * 1.2, 60, 'font-size:22px'));
+      txt('ig-lab center', esc(truncate((d.center && !/\d/.test(d.center) ? d.center : '') || d.items[hi].label, 30)), box(cx - R * 0.6, cy + 26, R * 1.2, 60, 'font-size:24px'));
     const lx = D + 70; const lw = W - lx; const rowH = Math.min(96, (H - 40) / vals.length); const ly = cy - (rowH * vals.length) / 2;
     d.items.forEach((it, i) => {
       const y = ly + i * rowH;
       out += '<div class="ig-sw" style="' + box(lx, y + 14, 18, 18, 'background:' + cols[i]) + '"></div>' +
         txt('ig-val' + (i === hi ? ' on' : ''), esc(d.items.every((x) => isPct(x, d)) ? showValue(it, d) : pct(it.value)), box(lx + 34, y, 140, 46, 'font-size:32px')) +
-        txt('ig-lab' + (i === hi ? ' strong' : ''), esc(truncate(it.label, 44)), box(lx + 34, y + 44, lw - 34, rowH - 44, 'font-size:22px'));
+        txt('ig-lab' + (i === hi ? ' strong' : ''), esc(truncate(it.label, 44)), box(lx + 34, y + 44, lw - 34, rowH - 44, 'font-size:26px'));
     });
     return out;
   },
@@ -275,8 +278,8 @@ def('compare', {
       txt('ig-big right', esc(showValue(b, d)), box(W - half, yNum, half, bigFs * 1.15, 'font-size:' + bigFs + 'px'), 'numeral') +
       txt('ig-lab strong', esc(a.label), box(0, yNum + bigFs * 1.2, half, 50, 'font-size:30px')) +
       txt('ig-lab strong right', esc(b.label), box(W - half, yNum + bigFs * 1.2, half, 50, 'font-size:30px')) +
-      (a.detail ? txt('ig-det', esc(a.detail), box(0, yNum + bigFs * 1.2 + 52, half, 120, 'font-size:22px')) : '') +
-      (b.detail ? txt('ig-det right', esc(b.detail), box(W - half, yNum + bigFs * 1.2 + 52, half, 120, 'font-size:22px')) : '') +
+      (a.detail ? detTxt('ig-det', a.detail, 0, yNum + bigFs * 1.2 + 52, half, 130, 26, 20) : '') +
+      (b.detail ? detTxt('ig-det right', b.detail, W - half, yNum + bigFs * 1.2 + 52, half, 130, 26, 20) : '') +
       '<div class="ig-vs" style="' + box(W / 2 - 44, yNum + bigFs * 0.1, 88, 88) + '"></div>' +
       txt('ig-vs-t center', 'vs', box(W / 2 - 44, yNum + bigFs * 0.1 + 22, 88, 44, 'font-size:26px')) +
       '<div class="ig-split" style="' + box(0, H * 0.78, W, 26) + '"><i class="a" style="width:' + r1(fa * 100) + '%"></i><i class="b" style="width:' + r1((1 - fa) * 100) + '%"></i></div>';
@@ -288,7 +291,9 @@ def('pictogram', {
   validate: (d) => d.items.length >= 1 && d.items[0].value != null && (isPct(d.items[0], d) ? d.items[0].value >= 0 && d.items[0].value <= 100 : false),
   render(d, W, H) {
     const it = d.items[0]; const total = 20; const on = Math.round((it.value / 100) * total);
-    const icon = pickIcon(it.icon, it.label) === 'users' || !pickIcon(it.icon, it.label) ? 'person-standing' : pickIcon(it.icon, it.label);
+    // үлесі адамдар туралы болса — адам белгісі (бұрын «онлайн» сөзі «жастардың 70%»-ын Wi-Fi белгісімен салатын)
+    const pk = pickIcon(it.icon, it.label);
+    const icon = !pk || pk === 'users' || PEOPLE.test(it.label + ' ' + (it.detail || '')) ? 'person-standing' : pk;
     const cols = 10; const cell = Math.min((W - 20) / cols, 90); const gx = (W - cell * cols) / 2; const gy = H * 0.42;
     let out = txt('ig-big', esc(showValue(it, d)), box(0, 0, W, 150, 'font-size:132px;color:var(--accent)'), 'numeral') +
       txt('ig-lab strong', esc(it.label), box(0, 158, W, 90, 'font-size:30px'));
@@ -296,10 +301,12 @@ def('pictogram', {
       const x = gx + (k % cols) * cell; const y = gy + Math.floor(k / cols) * (cell * 1.25);
       out += '<div class="ig-pic' + (k < on ? ' on' : '') + '" style="' + box(x, y, cell, cell * 1.15) + '">' + iconSvg(icon, Math.round(cell * 0.92), 2) + '</div>';
     }
-    if (it.detail) out += txt('ig-det', esc(it.detail), box(0, gy + cell * 2.6 + 20, W, H - gy - cell * 2.6 - 20, 'font-size:22px'));
+    if (it.detail) out += detTxt('ig-det', it.detail, 0, gy + cell * 2.6 + 20, W, H - gy - cell * 2.6 - 20, 26, 20);
     return out;
   },
 });
+
+const PEOPLE = /(?<![\p{L}])(адам|жастар|жас(?:тардың)?\s|оқушы|студент|тұрғын|халық|қызметкер|әйел|ер\s|бала|ата-ана|мұғалім|дәрігер|жұмысшы|сайлаушы|азамат|люд|молодеж|школьник|студент|жител|населени|работник|женщин|мужчин|дет|родител|учител|врач|граждан|people|youth|student|resident|citizen|worker|women|men\b|children|parents|teachers|doctors)/iu;
 
 // ── STRUCTURE COMPONENTS ───────────────────────────────────────────────────
 function iconOrNum(it, i, size) {
@@ -333,7 +340,7 @@ def('cycle', {
       const lx = right ? lx0 : x - nd / 2 - 24 - lw;
       if (pole) out += '<div class="ig-lead" style="' + box(x + nd / 2 + 8, y, lx0 - x - nd / 2 - 18, 2) + '"></div>';
       out += txt('ig-lab strong' + (right ? '' : ' right'), '<span class="ig-k">' + String(i + 1).padStart(2, '0') + '</span> ' + esc(it.label), box(lx, y - 46, lw, 44, 'font-size:28px')) +
-        (it.detail ? detTxt('ig-det' + (right ? '' : ' right'), it.detail, lx, y + 6, lw, 104, 24, 19) : '');
+        (it.detail ? detTxt('ig-det' + (right ? '' : ' right'), it.detail, lx, y + 6, lw, 104, 26, 21) : '');
     });
     return out;
   },
@@ -352,7 +359,7 @@ def('funnel', {
       out += '<div class="ig-band" style="' + box((fw - w0) / 2, y, w0, bh, 'background:' + fill + ';clip-path:polygon(0 0,100% 0,' + r1(100 - inset) + '% 100%,' + r1(inset) + '% 100%)') + '"></div>' +
         (it.display ? txt('ig-val center', esc(showValue(it, d)), box((fw - w1) / 2, y, w1, bh, 'font-size:' + Math.round(clamp(bh * 0.36, 24, 40)) + 'px;display:flex;align-items:center;justify-content:center;color:' + ink(fill, p))) : '') +
         txt('ig-lab strong', esc(it.label), box(fw + 36, y, W - fw - 36, it.detail ? 40 : bh * 0.55, 'font-size:' + (n <= 4 ? 28 : 24) + 'px;display:flex;align-items:flex-end')) +
-        (it.detail ? detTxt('ig-det', it.detail, fw + 36, y + 44, W - fw - 36, bh - 44, 24, 18) : '');
+        (it.detail ? detTxt('ig-det', it.detail, fw + 36, y + 44, W - fw - 36, bh - 44, 26, 20) : '');
     });
     return out;
   },
@@ -371,7 +378,7 @@ def('pyramid', {
       out += '<div class="ig-band" style="' + box(0, y, pw, lh, 'background:' + fill + ';clip-path:polygon(' + r1(lT) + '% 0,' + r1(100 - lT) + '% 0,' + r1(100 - lB) + '% 100%,' + r1(lB) + '% 100%)') + '"></div>' +
         '<div class="ig-lead" style="' + box(pw * (1 - lB / 100) - 8, y + lh / 2, pw * 0.08 + W * 0.04, 2) + '"></div>' +
         txt('ig-lab strong', esc(it.label), box(pw + W * 0.07, y + lh * 0.08, W - pw - W * 0.07, lh * 0.46, 'font-size:' + (n <= 4 ? 28 : 25) + 'px;display:flex;align-items:flex-end')) +
-        (it.detail ? detTxt('ig-det', it.detail, pw + W * 0.07, y + lh * 0.55, W - pw - W * 0.07, lh * 0.45, 24, 18) : '');
+        (it.detail ? detTxt('ig-det', it.detail, pw + W * 0.07, y + lh * 0.55, W - pw - W * 0.07, lh * 0.45, 26, 20) : '');
     });
     return out;
   },
@@ -390,7 +397,7 @@ def('venn', {
     d.items.forEach((it, i) => {
       const q = away(C[i]); const lw = R * 1.05;
       out += txt('ig-lab strong center', esc(truncate(it.label, 30)), box(q[0] - lw / 2, q[1] - 40, lw, 44, 'font-size:28px')) +
-        (it.detail ? detTxt('ig-det center', it.detail, q[0] - lw / 2, q[1] + 6, lw, R * 0.62, 22, 17) : '');
+        (it.detail ? detTxt('ig-det center', it.detail, q[0] - lw / 2, q[1] + 6, lw, R * 0.62, 24, 20) : '');
     });
     if (d.center) out += '<div class="ig-dot" style="' + box(cx - 10, (n === 2 ? cy : cy - R * 0.03) - 10, 20, 20) + '"></div>' + txt('ig-center center', esc(d.center), box(cx - R * 0.5, (n === 2 ? cy : cy - R * 0.03) + 18, R, 50, 'font-size:24px'), 'title');
     return out;
@@ -406,11 +413,12 @@ def('matrix', {
       const x = (i % 2) * (cw + g); const y = Math.floor(i / 2) * (ch + g);
       const ic = pickIcon(it.icon, it.label);
       const letter = (it.label.match(/\p{L}/u) || [''])[0].toUpperCase();
-      return '<div class="ig-card" style="' + box(x, y, cw, ch, '--c:' + cols[i]) + '"></div>' +
-        '<div class="ig-badge" style="' + box(x + 32, y + 32, 72, 72, 'background:' + cols[i] + ';color:' + ink(cols[i], p)) + '">' + (ic ? iconSvg(ic, 38, 2) : '') + '</div>' +
-        (!ic ? txt('ig-n center', esc(letter), box(x + 32, y + 46, 72, 44, 'font-size:34px;color:' + ink(cols[i], p))) : '') +
-        txt('ig-lab strong', esc(it.label), box(x + 128, y + 34, cw - 160, 70, 'font-size:32px;display:flex;align-items:center')) +
-        (it.detail ? detTxt('ig-det', it.detail, x + 32, y + 124, cw - 64, ch - 150, 26, 19) : '');
+      // тонды төрттік: әр жүйеде көрінеді (Мұра .ig-card-ты жіңішке сызыққа айналдырады — SWOT бос көрінетін)
+      return '<div class="ig-quad" style="' + box(x, y, cw, ch, 'background:color-mix(in srgb,' + cols[i] + ' 13%,transparent)') + '"></div>' +
+        '<div class="ig-badge" style="' + box(x + 36, y + 36, 80, 80, 'background:' + cols[i] + ';color:' + ink(cols[i], p)) + '">' + (ic ? iconSvg(ic, 42, 2) : '') + '</div>' +
+        (!ic ? txt('ig-n center', esc(letter), box(x + 36, y + 52, 80, 48, 'font-size:38px;color:' + ink(cols[i], p))) : '') +
+        txt('ig-lab strong', esc(it.label), box(x + 140, y + 38, cw - 176, 76, 'font-size:34px;display:flex;align-items:center')) +
+        (it.detail ? detTxt('ig-det', it.detail, x + 36, y + 136, cw - 72, ch - 160, 28, 22) : '');
     }).join('');
   },
 });
@@ -425,15 +433,17 @@ def('prosCons', {
   render(d, W, H, p) {
     const pros = d.items.filter((x) => /pro|plus|\+|артық|плюс|adv/.test(x.group)).slice(0, 5);
     const cons = d.items.filter((x) => /con|minus|-|кем|минус|dis/.test(x.group)).slice(0, 5);
-    const g = 40; const cw = (W - g) / 2; const hdr = 76;
+    const g = 36; const cw = (W - g) / 2; const hdr = 96; const pad = 36;
     const col = (list, x, good, head) => {
-      const rowH = Math.min(104, (H - hdr - 20) / Math.max(list.length, 1));
-      let o = '<div class="ig-col-head ' + (good ? 'good' : 'bad') + '" style="' + box(x, 0, cw, 6) + '"></div>' +
-        txt('ig-lab strong', esc(head), box(x, 18, cw, 50, 'font-size:32px'));
+      const rowH = Math.min(170, (H - hdr - pad) / Math.max(list.length, 1));
+      // әр жақ — өз тонды панелінде (бұрын ақ фонда жалаң тізім, асты бос)
+      let o = '<div class="ig-pc ' + (good ? 'good' : 'bad') + '" style="' + box(x, 0, cw, H) + '"></div>' +
+        '<div class="ig-col-head ' + (good ? 'good' : 'bad') + '" style="' + box(x, 0, cw, 8) + '"></div>' +
+        txt('ig-lab strong', esc(head), box(x + pad, 30, cw - pad * 2, 50, 'font-size:34px'));
       list.forEach((it, i) => {
-        const y = hdr + 12 + i * rowH;
-        o += '<div class="ig-mark ' + (good ? 'good' : 'bad') + '" style="' + box(x, y + 4, 44, 44) + '">' + iconSvg(good ? 'check' : 'x', 26, 3) + '</div>' +
-          txt('ig-lab', esc(it.label) + (it.detail ? '<span class="ig-det-in"> — ' + esc(truncate(it.detail, 160)) + '</span>' : ''), box(x + 64, y, cw - 64, rowH - 8, 'font-size:' + (it.detail ? 24 : 27) + 'px'));
+        const y = hdr + 8 + i * rowH;
+        o += '<div class="ig-mark ' + (good ? 'good' : 'bad') + '" style="' + box(x + pad, y + 2, 52, 52) + '">' + iconSvg(good ? 'check' : 'x', 30, 3) + '</div>' +
+          txt('ig-lab', esc(it.label) + (it.detail ? '<span class="ig-det-in"> — ' + esc(truncate(it.detail, 160)) + '</span>' : ''), box(x + pad + 76, y + 4, cw - pad * 2 - 76, rowH - 10, 'font-size:' + (it.detail ? 26 : list.length <= 3 ? 34 : 30) + 'px'));
       });
       return o;
     };
@@ -457,10 +467,10 @@ def('roadmap', {
       const lab = it.display && String(it.label).trim() !== String(it.display).trim() ? it.label : '';
       out += '<div class="ig-stem" style="' + box(x - 1, up ? ly - 70 : ly + 18, 2, 52) + '"></div>' +
         '<div class="ig-mile' + (on ? ' on' : '') + '" style="' + box(x - 17, ly - 17, 34, 34) + '"></div>' +
-        txt('ig-date' + (up ? '' : ''), esc(it.display || it.label), box(cx, up ? ly - 70 - 150 : ly + 78, cardW, 46, 'font-size:34px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')), 'numeral') +
+        txt('ig-date' + (up ? '' : ''), esc(it.display || it.label), box(cx, up ? ly - 70 - 196 : ly + 78, cardW, 46, 'font-size:36px;text-align:' + (cx === x - cardW / 2 ? 'center' : cx === 0 ? 'left' : 'right')), 'numeral') +
         (lab
-          ? txt('ig-lab strong', esc(lab), box(cx, up ? ly - 70 - 104 : ly + 124, cardW, 40, 'font-size:26px;text-align:' + al)) +
-            (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 62 : ly + 166, cardW, up ? 58 : H - (ly + 166), 22, 17, 'text-align:' + al) : '')
+          ? txt('ig-lab strong', esc(lab), box(cx, up ? ly - 70 - 146 : ly + 128, cardW, 40, 'font-size:28px;text-align:' + al)) +
+            (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 100 : ly + 174, cardW, up ? 92 : H - (ly + 174), 26, 20, 'text-align:' + al) : '')
           // жеке белгі жоқ (тек жыл) → сипаттама белгінің орнына шығады, ірі әрі оқылатын
           : (it.detail ? detTxt('ig-det', it.detail, cx, up ? ly - 70 - 108 : ly + 124, cardW, up ? 104 : H - (ly + 124), 28, 20, 'text-align:' + al + ';color:var(--text)') : ''));
     });
