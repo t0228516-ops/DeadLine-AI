@@ -105,3 +105,15 @@ test('visual pipeline: without a working vision check the figure is still accept
   const st = await V.attachVisuals(s, { env, fetchImpl: async () => reply(YURT), vision: async () => null });
   assert.strictEqual(st.ok, 1);
 });
+
+test('visual pipeline: a small figure floating in the middle is redrawn larger, even without the vision model', async () => {
+  V._resetBreaker(); V._resetProMissing();
+  const SMALL = '<svg viewBox="0 0 1100 740"><circle cx="450" cy="370" r="60" fill="#c9a24a"/><circle cx="650" cy="370" r="60" fill="#c9a24a"/><text x="450" y="380" text-anchor="middle" font-size="28">А</text></svg>';
+  const s = deck();
+  const bodies = [];
+  const fetchImpl = async (url, init) => { bodies.push(JSON.parse(init.body)); return reply(bodies.length === 1 ? SMALL : YURT); };
+  const st = await V.attachVisuals(s, { env, fetchImpl, vision: async () => null });
+  assert.strictEqual(st.ok, 1);
+  assert.strictEqual(bodies.length, 2);
+  assert.match(bodies[1].messages[1].content, /uses only \d+% of the width/);
+});

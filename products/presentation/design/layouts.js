@@ -719,9 +719,10 @@ L.diagram = (ctx) => {
   const fg = '<div class="canvas g12 diag">' +
     '<div class="cell diag-l" style="' + cols(1, 4) + '"><div class="block">' +
       kicker(ctx, sectionLabel(ctx)) +
-      titleH1(ctx, a.title, { width: tw, maxLines: 5, scale: [64, 58, 52, 46, 42] }) +
-      (a.subtitle ? lead(ctx, a.subtitle, 28, { maxw: tw }) : '') +
-      notes(ctx, a.bullets.slice(0, 2), 24) +
+      // ірі мәтін: бұрын 64/28/24px — сызбаның қасында ұсақ әрі бос көрінетін
+      titleH1(ctx, a.title, { width: tw, maxLines: 5, scale: [84, 76, 68, 60, 52] }) +
+      (a.subtitle ? lead(ctx, a.subtitle, 36, { maxw: tw }) : '') +
+      notes(ctx, a.bullets.slice(0, 2), 30) +
     '</div></div>' +
     '<div class="cell diag-r" style="' + cols(5, 12) + '">' + fig + '</div></div>';
   return { bg: '<div class="plate"></div>', fg: fg + folio(ctx), cls: '' };

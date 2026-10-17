@@ -445,10 +445,11 @@ CANVAS
 - The figure sits DIRECTLY on the slide (background = PALETTE.bg). There is NO card or panel behind it.
 - NEVER draw a background rectangle, an outer frame, a border or a card around the figure. No full-canvas or near-full-canvas <rect>.
 - Keep 30px margins: everything inside x 30..1070 and y 30..710. The slide has its own title, so do not add a figure title.
+- FILL THE CANVAS. The figure must spread over at least 85% of the width and 70% of the height. A small figure floating in the middle with empty space around it is a failure. Make shapes generous (nodes at least 200px wide or circles of radius 110+).
 
 TEXT (the most common failure — be strict)
 - font-family="Inter, 'Segoe UI', 'Noto Sans', Arial, sans-serif".
-- Font sizes: labels 24 or more, secondary 22 or more, key numbers 44-72. Never below 22.
+- Font sizes: labels 30-36, secondary text 26 or more, key numbers 56-96. Never below 24. Big, bold labels read from the back of a classroom.
 - The text width in the viewer can be up to: characters × font-size × 0.65. Check EVERY label against the space it has, with 14px padding. If it does not fit: shorten it or break it into lines (separate <text> or <tspan x="…" dy="…">, max 3 lines).
 - Write text in the language of DATA exactly as given. Do not translate. Do not add words that are not in DATA.
 - Use ONLY the facts, names and numbers in DATA. NEVER invent numbers, dates, percentages or names.
@@ -465,7 +466,7 @@ const TYPE_RULES = {
 - NEVER replace the object with boxes, circles, icons-in-squares, a flowchart or an abstract blob. If a part is mentioned, it must be drawn where it really is.
 - Style: flat vector illustration with depth — 3-5 tones per surface (base colour, shade, highlight) using palette colours and their tints, consistent outline (stroke 2-4 in PALETTE.text at 60-90% opacity), curved <path> shapes (C/Q/A commands), soft ground shadow ellipse under the object.
 - The object fills 70-85% of the canvas height and is centred (or slightly right if labels go left).
-- Labels: if DATA lists parts, add short callout labels (font 24+) with thin leader lines from the label to the exact part; put labels in empty space around the object, never over it. If DATA is empty, no text at all.
+- Labels: if DATA lists parts, add short callout labels (font 30+, bold) with thin leader lines from the label to the exact part; put labels in empty space around the object, never over it. If DATA is empty, no text at all.
 - Detail is welcome: up to ~40000 characters, many paths. Quality over brevity.`,
   diagram: `TYPE: DIAGRAM — 3-6 named parts with a clear direction or structure.
 - Semantic relationships must be obvious at a glance: clear arrow direction, hierarchy top→bottom or left→right, equal spacing, no overlapping nodes or labels.
@@ -475,7 +476,7 @@ const TYPE_RULES = {
   infographic: `TYPE: INFOGRAPHIC — one dominant element (a big number, a drawn object or a bar set) plus 2-4 supporting facts.
 - Charts: bar lengths/heights proportional to the given numbers; label every bar with its value. If DATA has no numbers, draw a qualitative layout without axis values.
 - Prefer a drawn object over a box: e.g. a water drop filled to a level, a person row, a stack of coins — made of real shapes.`,
-  map: `TYPE: MAP — a SIMPLIFIED SCHEMATIC only: rough region shapes with soft fills, dots for places, labeled routes with curved dashed paths. Never try exact borders or coastlines. Add the given CAPTION as small text (size 22) at the bottom-left.`,
+  map: `TYPE: MAP — a SIMPLIFIED SCHEMATIC only: rough region shapes with soft fills, dots for places, labeled routes with curved dashed paths. Never try exact borders or coastlines. Add the given CAPTION as small text (size 24) at the bottom-left.`,
 };
 function systemFor(type) { return BASE_RULES + '\n\n' + (TYPE_RULES[type] || TYPE_RULES.diagram); }
 
@@ -614,11 +615,15 @@ It was supposed to show (${spec.type}): ${spec.brief || '(see title)'}${spec.dat
 Judge it strictly, as a picky designer:
 - ${spec.type === 'illustration' ? 'Is it clearly the REAL object, recognisable at a glance, with its characteristic parts? Boxes, icons in squares, flowcharts or abstract blobs instead of the object = score 0-3.' : 'Are the parts and their relationships clear at a glance (direction, hierarchy)?'}
 - Is any text cut off, overlapping a shape or another label, too small, or written over a busy area?
+- Is the figure too small for its canvas, with large empty areas around it? That alone caps the score at 5.
 - Is there an unwanted frame, card or background rectangle around the figure?
 - Does it look professional (balanced, aligned, pleasant colours), not childish or broken?
 Reply JSON only: {"score": 0-10, "issues": ["short concrete problem", ...]} — issues empty if score ≥ 8.`;
 
-/** SVG → PNG (слайд фонында). sharp тәуелділікте жоқ — рендерердің Chromium-ы қолданылады. */
+/**
+ * SVG → PNG (слайд фонында) + суреттің кенептен алатын үлесі (getBBox, viewBox бірлігімен).
+ * sharp тәуелділікте жоқ — рендерердің Chromium-ы қолданылады. SVG тазаланған (скрипт/сілтеме жоқ), бетке тікелей қойылады.
+ */
 async function svgToPng(svg, bg) {
   const puppeteer = require('puppeteer');
   const { launchBrowser } = require('./renderer');
@@ -627,9 +632,14 @@ async function svgToPng(svg, bg) {
     const page = await browser.newPage();
     await page.setViewport({ width: 880, height: 592, deviceScaleFactor: 1 });
     const color = /^#[0-9a-f]{3,8}$/i.test(String(bg || '')) ? bg : '#ffffff';
-    await page.setContent('<html><body style="margin:0;background:' + color + '"><img src="' + toDataUri(svg) + '" style="display:block;width:880px;height:592px;object-fit:contain"></body></html>');
-    await page.waitForFunction(() => document.images[0] && document.images[0].complete, { timeout: 15000 });
-    return await page.screenshot({ type: 'png' });
+    await page.setContent('<html><body style="margin:0;background:' + color + '"><div id="f" style="width:880px;height:592px">' + svg.replace('<svg', '<svg width="880" height="592"') + '</div></body></html>');
+    const fill = await page.evaluate(() => {
+      const el = document.querySelector('#f svg'); if (!el) return null;
+      const vb = el.viewBox && el.viewBox.baseVal; const b = el.getBBox();
+      return vb && vb.width ? { w: b.width / vb.width, h: b.height / vb.height } : null;
+    }).catch(() => null);
+    const png = await page.screenshot({ type: 'png' });
+    return { png, fill };
   } finally {
     await browser.close().catch(() => {});
   }
@@ -638,14 +648,19 @@ async function svgToPng(svg, bg) {
 /** SVG → PNG → көретін модель: { score, issues } не null (тексеру мүмкін болмаса — бөгемейміз) */
 async function visionCheck(svg, spec, slide, palette, opts = {}) {
   try {
-    const png = await (opts.rasterize || svgToPng)(svg, palette && palette.bg);
+    const { png, fill } = await (opts.rasterize || svgToPng)(svg, palette && palette.bg);
+    // кенептің аз бөлігін алатын (ортада кішкентай, айналасы бос) сурет — көретін модельсіз-ақ қайта салынады
+    const small = fill && (fill.w < 0.7 || fill.h < 0.55)
+      ? `the figure uses only ${Math.round(fill.w * 100)}% of the width and ${Math.round(fill.h * 100)}% of the height — make it much larger so it fills the canvas`
+      : null;
     const ask = opts.vision || require('../../core/llm').deepseekVisionJson;
     const res = await ask([{ text: VISION_PROMPT(spec, slide && slide.title) }, { image: { mime: 'image/png', data: png.toString('base64') } }],
       { label: 'visual:check', maxTokens: 600, detail: 'high' });
-    if (!res || res.score == null) return null;
-    const score = Number(res.score);
+    const score = res && res.score != null ? Number(res.score) : NaN;
+    const issues = (res && Array.isArray(res.issues) ? res.issues : []).map((x) => String(x).slice(0, 160)).slice(0, 6);
+    if (small) return { score: Number.isFinite(score) ? Math.min(score, 4) : 4, issues: [small, ...issues].slice(0, 6) };
     if (!Number.isFinite(score)) return null;
-    return { score, issues: (Array.isArray(res.issues) ? res.issues : []).map((x) => String(x).slice(0, 160)).slice(0, 6) };
+    return { score, issues };
   } catch (e) {
     console.warn('[Visual] vision check unavailable: ' + e.message);
     return null;
