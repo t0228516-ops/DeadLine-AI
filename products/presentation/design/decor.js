@@ -236,13 +236,26 @@ function placeDecor(only) {
     var prevDisp = slide.style.display; slide.style.display = 'block';
     var sr = slide.getBoundingClientRect();
     var blocks = [];
-    [].forEach.call(slide.querySelectorAll('.layer-mid *, .layer-bg .photo, .layer-bg .bleed, .layer-bg .arch-photo, .layer-bg .full, .layer-bg .doodle, .figure, .layer-bg .botanic'), function (el) {
+    [].forEach.call(slide.querySelectorAll('.layer-mid *, .layer-bg .photo, .layer-bg .bleed, .layer-bg .arch-photo, .layer-bg .full, .layer-bg .doodle, .figure, .layer-bg .botanic, .layer-bg .cx-part'), function (el) {
       if (el.tagName === 'IMG' && el.classList.contains('decor')) return;
       var own = [].some.call(el.childNodes, function (n) { return n.nodeType === 3 && n.nodeValue.trim(); });
       var visual = /^(IMG|SVG|CANVAS)$/i.test(el.tagName) || el.classList.contains('photo') || el.classList.contains('bleed') || el.classList.contains('full') || el.classList.contains('concept') || el.classList.contains('stat') || el.classList.contains('ig-card');
-      if (!own && !visual) return;
       var r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) return;
+      // құрастырылған композицияның фон бөлшектері (стикер қағазы, билет, панель, мөр, көмескі нөмір, арка):
+      // әшекей олардың үстіне түспейді. Бүкіл фонды жабатын текстура/пластина — кедергі емес.
+      if (el.classList.contains('cx-part')) {
+        if ((r.width / k) * (r.height / k) > 1920 * 1080 * 0.55) return;
+        var cs = getComputedStyle(el); var bgc = cs.backgroundColor.match(/[\d.]+/g);
+        var painted = (bgc && (bgc.length < 4 || parseFloat(bgc[3]) > 0.05)) || (cs.backgroundImage !== 'none' && !/repeating|radial-gradient/.test(cs.backgroundImage)) || parseFloat(cs.borderTopWidth) > 0 || el.querySelector('img,svg');
+        if (!own && !painted) return;
+        visual = true;
+      }
+      if (!own && !visual) return;
+      // фоны жоқ мәтін блогы: кедергі — жолдардың өзі (блок кең болса да, қысқа жолдың оң жағы бос)
+      if (own && !visual) {
+        try { var rg = document.createRange(); rg.selectNodeContents(el); var tr = rg.getBoundingClientRect(); if (tr.width > 2 && tr.height > 2) r = tr; } catch (e) { /* ескі r */ }
+      }
       blocks.push({ x: (r.left - sr.left) / k, y: (r.top - sr.top) / k, w: r.width / k, h: r.height / k, m: el.closest('h1,.title') ? 110 : 36 });
     });
     var full = blocks.some(function (b) { return b.w > 1800 && b.h > 1000; }); // бүкіл фон-фото — әшекей керек емес

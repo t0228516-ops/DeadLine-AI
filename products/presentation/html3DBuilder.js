@@ -166,9 +166,11 @@ function renderSlide(slide, index, plan, ctxDeck) {
   if (ctxDeck.skin && ctxDeck.skin.photoShape === 'circle' && layoutName === 'imageFocus') layoutName = 'split';
   let out;
   // Құрастырылған композиция (compositions/): мазмұнға сай болса — бұрынғы макеттің орнына
+  let ownVisual = false;
   if (ctxDeck.compEnv && !plan.locked) {
+    const before = ctxDeck.compEnv.used ? ctxDeck.compEnv.used.size : 0;
     const got = require('./design/compositions').compose(makeCtx(a, plan, palette, ts, deckTitle, ctxDeck.sys), ctxDeck.compEnv);
-    if (got) { out = got.out; layoutName = 'cx-' + got.id; }
+    if (got) { out = got.out; layoutName = 'cx-' + got.id; ownVisual = !!ctxDeck.compEnv.used && ctxDeck.compEnv.used.size > before; }
   }
   if (!out) try {
     out = (L[layoutName] || L.statement)(makeCtx(a, plan, palette, ts, deckTitle, ctxDeck.sys));
@@ -177,9 +179,21 @@ function renderSlide(slide, index, plan, ctxDeck) {
     layoutName = 'statement';
     out = L.statement(makeCtx(a, plan, palette, ts, deckTitle, ctxDeck.sys));
   }
+  // Кітапханадан DeepSeek таңдаған әшекей (decorPick.js): бос бұрышқа, орнын рендер өлшейді. Модель көрген слайдта
+  // (decorPick !== undefined) бұрынғы сөз-тізім әшекейі қосылмайды — «сай зат жоқ» деген шешімі де құрметтеледі.
+  const pick = slide && slide.decorPick;
+  const cxo = (slide && slide.composition && slide.composition.cx) || {};
+  const rhythmOk = !(ctxDeck.lastDecor === index - 1 && ctxDeck.lastDecor2 === index - 2); // қатарынан 3 әшекей болмасын
+  if (pick && out && rhythmOk && !cxo.noDecor && !ownVisual && !/^(fullImage|table|infographic|imageFocus)$/.test(layoutName) && !(index === 0 && plan.a.hasPhoto)) {
+    const uri = require('./design/decorPick').decorPickUri(pick, pick.kind === 'engraving' ? null : palette.accent);
+    if (uri) {
+      ctxDeck.lastDecor2 = ctxDeck.lastDecor; ctxDeck.lastDecor = index;
+      out = { ...out, bg: (out.bg || '') + '<img class="decor decor-lib decor-' + pick.kind + (palette.isLight === false ? ' decor-dark' : '') + '" data-decor="main" data-max="' + (pick.kind === 'ornament' ? 300 : 380) + '" alt="" aria-hidden="true" src="' + uri + '">' };
+    }
+  }
   // Мағыналы әшекей (Мұра): слайд мазмұнына сай ескі гравюра; сай тақырып жоқ → әшекей жоқ. Орнын рендер өлшейді.
   // Заманауи жүйелер: мағынасына сай ірі жіңішке белгіше (Lucide), орнын рендер өлшейді
-  if (ctxDeck.sys && ctxDeck.sys.iconDecor && out && !/^(fullImage|table|infographic|split|imageFocus|cx-.*)$/.test(layoutName) && !(ctxDeck.sys.doodles && (index === 0 || layoutName === 'closing')) && !(ctxDeck.lastDecor === index - 1 && ctxDeck.lastDecor2 === index - 2) && !(index === 0 && plan.a.hasPhoto)) {
+  if (!pick && ctxDeck.sys && ctxDeck.sys.iconDecor && out && !/^(fullImage|table|infographic|split|imageFocus|cx-.*)$/.test(layoutName) && !(ctxDeck.sys.doodles && (index === 0 || layoutName === 'closing')) && !(ctxDeck.lastDecor === index - 1 && ctxDeck.lastDecor2 === index - 2) && !(index === 0 && plan.a.hasPhoto)) {
     const D = require('./design/decor');
     ctxDeck.decorUsed = ctxDeck.decorUsed || new Set();
     const s = slide || {};
@@ -187,7 +201,7 @@ function renderSlide(slide, index, plan, ctxDeck) {
     const imgs = D.pickIconDecor(text, ctxDeck.decorUsed, 2).map((h) => '<img class="decor decor-icon" data-max="' + (ctxDeck.sys.iconMax || 300) + '" data-decor="' + h.role + '" alt="" aria-hidden="true" src="' + D.iconUri(h.name, palette.accent, ctxDeck.sys.iconStroke || 1.1) + '">').join('');
     if (imgs) { ctxDeck.lastDecor2 = ctxDeck.lastDecor; ctxDeck.lastDecor = index; out = { ...out, bg: (out.bg || '') + imgs }; }
   }
-  if (ctxDeck.sys && ctxDeck.sys.decor && out && !/^(fullImage|table|infographic|cx-.*)$/.test(layoutName) && !(ctxDeck.lastDecor === index - 1 && ctxDeck.lastDecor2 === index - 2)) {
+  if (pick === undefined && ctxDeck.sys && ctxDeck.sys.decor && out && !/^(fullImage|table|infographic|cx-.*)$/.test(layoutName) && !(ctxDeck.lastDecor === index - 1 && ctxDeck.lastDecor2 === index - 2)) {
     const D = require('./design/decor');
     ctxDeck.decorUsed = ctxDeck.decorUsed || new Set();
     const s = slide || {};

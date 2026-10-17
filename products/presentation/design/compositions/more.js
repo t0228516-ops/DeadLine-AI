@@ -116,9 +116,9 @@ module.exports = function register(def, K) {
       let fg = wrap(MX, MT, 1400, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: 1400, maxLines: 2, scale: [76, 68, 60, 52, 46], hl: true }));
       sh.items.forEach((m, i) => {
         const x = MX + i * (w + gap);
-        bg += P.ghost(x - 10, 380, H.num(ctx, i + 1), 320, P.mix(p.bg, p.accent, 0.16), { weight: 700 });
-        if (i) bg += P.panel(x - gap / 2, 420, 2, 520, P.mix(p.bg, p.text, 0.16));
-        fg += t('concept', x, 640, w,
+        bg += P.ghost(x - 10, 430, H.num(ctx, i + 1), 320, P.mix(p.bg, p.accent, 0.16), { weight: 700 });
+        if (i) bg += P.panel(x - gap / 2, 470, 2, 520, P.mix(p.bg, p.text, 0.16));
+        fg += t('concept', x, 690, w,
           '<div style="width:56px;height:5px;background:' + p.accent + ';margin-bottom:26px"></div>' +
           '<div style="' + disp + ';' + fs(n <= 3 ? 50 : 42) + ';line-height:1.06;color:var(--text)">' + esc(m.label) + '</div>' +
           (m.detail ? '<div style="margin-top:16px;' + fs(n <= 3 ? 29 : 26) + ';line-height:1.45;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));

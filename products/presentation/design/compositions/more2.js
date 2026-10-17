@@ -223,7 +223,8 @@ module.exports = function register(def, K) {
       const v = P.visualFor(a.title + ' ' + sh.text, ctx.sys, p, env.used, a.index + 17, { stroke: 0.8 });
       const bg = '<div class="plate"></div>' + P.panel(0, 0, 560, HH, P.mix(p.bg, p.text, 0.07)) +
         (v ? P.visualImg(v, 90, 260, 380, 460) : P.ghost(60, 230, (head[0] || '').toUpperCase(), 520, P.mix(p.bg, p.accent, 0.35), { italic: true, w: 440 }));
-      const fg = col(660, 190, W - 660 - MX,
+      // тігінен ортада: қысқа анықтамада слайдтың асты бос қалмайды
+      const fg = vBox(660, MT, W - 660 - MX, HH - MT - MB,
         t('title', 0, 0, W - 660 - MX, esc(head), 'position:static;' + disp + ';' + fs(head.length <= 18 ? 120 : 88) + ';line-height:1;letter-spacing:-.02em;color:var(--text)') +
         '<div style="margin:30px 0 34px;height:2px;background:' + P.mix(p.bg, p.text, 0.2) + '"></div>' +
         '<div style="display:flex;gap:30px"><div style="flex:none;' + disp + ';' + fs(56) + ';line-height:1;color:' + p.accent + '">1.</div>' +

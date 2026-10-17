@@ -66,6 +66,20 @@ function fill(slide){
   });
   return bot>top?(bot-top)/(H-MT-MB):1;
 }
+/** Мәтін блоктары тігінен алмайтын үлес (0..1): блоктар арасындағы және астындағы бос жолақтардың қосындысы */
+function emptyV(slide){
+  var kk=k(),sr=slide.getBoundingClientRect(),iv=[];
+  [].forEach.call(slide.querySelectorAll('[data-role]'),function(e){
+    var role=e.getAttribute('data-role');
+    if(role==='folio'||role==='photo'||e.offsetWidth===0||e.closest('[data-dropped]'))return;
+    var r=rect(e,sr,kk);iv.push([Math.max(MT,r.y),Math.min(H-MB,r.y+r.h)]);
+  });
+  iv=iv.filter(function(x){return x[1]>x[0];}).sort(function(a,b){return a[0]-b[0];});
+  var used=0,cur=null;
+  iv.forEach(function(x){if(!cur||x[0]>cur[1]){if(cur)used+=cur[1]-cur[0];cur=[x[0],x[1]];}else if(x[1]>cur[1])cur[1]=x[1];});
+  if(cur)used+=cur[1]-cur[0];
+  return 1-used/(H-MT-MB);
+}
 /** Құрастырылған слайд: сыймаған сөзі бар блок (--wfit) өз орнында 0.6-ға дейін кішірейеді */
 function fitWords(slide){
   [].forEach.call(slide.querySelectorAll('[style*="--wfit"]'),function(e){
@@ -97,15 +111,19 @@ function revise(slide){
   }
   // Кері бағыт: мазмұн аз болып, слайдтың асты бос қалса — мәтін біртіндеп үлкейеді (тек мәтіндік макеттерде,
   // қатаң ақау шықса алдыңғы өлшемге қайтады). Мұқаба/бөлім/дәйексөз әдейі кең — оларға тиіспейміз.
-  if(!hard(res).length&&!drops&&fs===1&&GROW[slide.getAttribute('data-layout')]){
+  // Құрастырылған композиция (cx-grow): мәтіні бос жолақты толтыра алатындары ғана — басқасында мәтін қағаз/билет
+  // пішінінің ішінде, ол өспейді. Өлшем: мәтін алмайтын тік үлес (блоктар арасы + асты) 40%-дан көп болса.
+  var cxg=slide.classList.contains('cx-grow');
+  if(!hard(res).length&&!drops&&fs===1&&(GROW[slide.getAttribute('data-layout')]||cxg)){
     var grow=[1.08,1.16,1.24,1.32],prev=1;
-    for(var g=0;g<grow.length&&(fill(slide)<0.66||(res.minFont!=null&&res.minFont<28));g++){
+    var want=function(){return (!cxg&&fill(slide)<0.66)||(res.minFont!=null&&res.minFont<28)||emptyV(slide)>0.4;};
+    for(var g=0;g<grow.length&&want();g++){
       set(grow[g]);res=measure(slide);report.iterations++;
-      if(hard(res).length||fill(slide)>0.88){set(prev);res=measure(slide);break;}
+      if(hard(res).length||(!cxg&&fill(slide)>0.88&&emptyV(slide)<0.3)){set(prev);res=measure(slide);break;}
       prev=grow[g];
     }
   }
-  report.fill=+fill(slide).toFixed(2);report.fs=fs;report.dropped=drops;report.issues=res.issues;report.density=+res.density.toFixed(3);report.minFont=res.minFont?Math.round(res.minFont):null;
+  report.fill=+fill(slide).toFixed(2);report.empty=+emptyV(slide).toFixed(2);report.fs=fs;report.dropped=drops;report.issues=res.issues;report.density=+res.density.toFixed(3);report.minFont=res.minFont?Math.round(res.minFont):null;
   report.hard=hard(res).length>0;
   return report;
 }

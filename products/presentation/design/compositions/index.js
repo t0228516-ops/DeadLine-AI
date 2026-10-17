@@ -359,6 +359,8 @@ function variantFor(env, a, id, cx) {
     noDecor: !!cx.noDecor,
   };
 }
+// Мәтін блогы қағаз/билет/стикер пішінінің ІШІНДЕ емес → үлкейсе пішіннен шықпайды (QA тексереді)
+const GROWABLE = new Set(['concepts-ghostcols', 'definition-page', 'closing-seal', 'list-margin', 'list-ghostrows', 'timeline-rail', 'compare-spine', 'process-chevrons', 'statement-arch', 'quote-paper']);
 // Айналы нұсқасы бар композициялар (элементтердің бәрі left+width-пен орналасқан → дәл шағылысады)
 const MIRROR_SAFE = new Set(['cover-arch', 'cover-polaroid', 'statement-arch', 'photo-polaroid', 'cover-bigvisual', 'number-hero', 'definition-page', 'section-band', 'closing-seal', 'list-margin']);
 /** Айна: абсолют элементтің left-і → W − left − width (мәтін тураланымы өзгермейді) */
@@ -397,6 +399,8 @@ function compose(ctx, env) {
       const vctx = ctx.sys && ctx.sys.num === 'bracket' ? ctx : Object.assign(Object.create(Object.getPrototypeOf(ctx)), ctx, { sys: Object.assign({}, ctx.sys, { num: v.num }) });
       let out = c.render(vctx, sh, env);
       if (v.mirror && MIRROR_SAFE.has(c.id)) out = { ...out, bg: mirrorHtml(out.bg), fg: mirrorHtml(out.fg) };
+      // мәтіні еркін ағатын композиция: бос орын қалса QA мәтінді үлкейтеді (qa.js, cx-grow)
+      if (GROWABLE.has(c.id)) out = { ...out, cls: (out.cls || '') + ' cx-grow' };
       env.comps.add(c.id);
       return { id: c.id, out, variant: v };
     } catch (err) {

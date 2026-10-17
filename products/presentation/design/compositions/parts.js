@@ -174,7 +174,9 @@ function visualsForAll(texts, sys, palette, used, seed, o = {}) {
   return vs;
 }
 
-const CSS = '.cx-part img.ph{width:100%;height:100%;object-fit:cover;display:block}.cx-slide .title{margin:0}.cx-slide .lead.cx-center{margin-inline:auto;text-align:center}' +
+const CSS = '.cx-part img.ph{width:100%;height:100%;object-fit:cover;display:block}' +
+  // cx-grow: бос орынды мәтін толтырады, тақырып емес (тақырып өлшемі жол санына қарай таңдалған — тек кішірейе алады)
+  '#stage .cx-grow .title{font-size:calc(var(--ts,72px)*min(var(--fs,1),1))}.cx-slide .title{margin:0}.cx-slide .lead.cx-center{margin-inline:auto;text-align:center}' +
   // қараңғы/түсті жолақ үстіндегі мәтін: жүйенің кілт-сөз бояуы (градиент, түс) жолақпен араласып кетпесін
   '#stage .cx-on-dark .title,#stage .cx-on-dark .title .w,#stage .cx-on-dark .title .hl,#stage .cx-on-dark .lead,#stage .cx-on-dark .kicker,#stage .cx-on-dark .meta-k,#stage .cx-on-dark .meta-v,#stage .cx-on-dark .cover-org' +
   '{color:var(--cx-ink)!important;-webkit-text-fill-color:var(--cx-ink)!important;background:none!important}#stage .cx-on-dark .meta-k{opacity:.7}';

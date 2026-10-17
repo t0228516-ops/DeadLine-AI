@@ -20,6 +20,7 @@ const { repairTemplateSlides } = require('./templateRepair');
 const { planLayout } = require('./templateLayoutPlan');
 const { planStoryline } = require('./templateStory');
 const { build3DPresentationHTML } = require('./html3DBuilder');
+const { pickDeckDecor } = require('./design/decorPick');
 const { attachVisuals }            = require('./visual');
 const { renderHtmlToPngs }        = require('./renderer');
 const { exportToPptx }            = require('./pptxExporter');
@@ -642,9 +643,11 @@ async function generatePresentation(userInput, options = {}) {
     }
   });
   const visualsTask = attachVisuals(slides, { language });
-  const [images, visualStatsOut] = await Promise.all([imagesTask, visualsTask]);
+  // бос бұрыштарға кітапхана әшекейі: DeepSeek әр слайдқа сай зат таңдайды (суреттермен қатар жүреді)
+  const decorTask = refAnalysis ? Promise.resolve() : pickDeckDecor(slides, { topic: title }).catch((e) => console.warn('[Decor] ' + e.message));
+  const [images, visualStatsOut] = await Promise.all([imagesTask, visualsTask, decorTask]);
   visualStats = visualStatsOut;
-  slides.forEach((slide, i) => { slide.webImageUrl = images[i] || ''; });
+  slides.forEach((slide, i) => { slide.webImageUrl = images[i] || ''; if (slide.webImageUrl && slide.decorPick) slide.decorPick = null; });
   // No photo → safe composition (avoid empty half panels / sparse look)
   slides.forEach((slide) => {
     if (slide.webImageUrl) return;
