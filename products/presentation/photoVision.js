@@ -43,7 +43,11 @@ const { imageUA } = require('./unsplash');
 
 const MIN_FIT = Number(process.env.PHOTO_VISION_MIN_FIT) || 7;
 const MIN_APPEAL = Number(process.env.PHOTO_VISION_MIN_APPEAL) || 5;
-const MIN_BG = 6;
+// фонға аса жарамсыз ғана (кішкентай зат, тік кадр) түседі — үстіне бәрібір күңгірт қабат қойылады
+const MIN_BG = Number(process.env.PHOTO_VISION_MIN_BG) || 4;
+// дәл сай фото жоқ болса — тақырыпқа жалпы сай, әдемі фото да жарайды (слайд бос қалғаннан жақсы)
+const MIN_FIT_GENERAL = Number(process.env.PHOTO_VISION_MIN_FIT_GENERAL) || 6;
+const MIN_APPEAL_GENERAL = 6;
 const MAX_PER_CALL = Number(process.env.PHOTO_VISION_BATCH) || 12;
 const THUMB_MAX_BYTES = 700_000; // музей «web» нұсқасы ~600KB; токен саны пиксельге байланысты, байтқа емес
 
@@ -62,6 +66,17 @@ Be strict and honest: a slide without a photo is better than a wrong or ugly pho
 
 // көретін модель өзі «басқа дәуір / басқа ел / қазіргі» деп белгілеген фото fit жоғары болса да өтпейді (1930 жылғы слайдқа қазіргі ферма)
 const BAD_FLAW = /modern|contemporary|wrong|anachron|reenact|watermark|\bads?\b|advert|logo|stock pose|ai[- ]?generated/i;
+
+// ақаусыз сипаттар (сапа туралы) — бас әріппен жазылса да ел/жер атауы емес
+const QUALITY_FLAW = /^(blurry|dark|text|watermark|cluttered|grainy|noisy|damaged|close-?up|diagram|screenshot|cropped|small|busy|low|faded|sepia|generic|tilted|overexposed|underexposed|black and white|b&w|irrelevant)/i;
+// нақты ел/дәуір туралы слайд (жыл, қазақ, кеңес, хан...) — модель «Canada», «not Kazakh» десе, ол фото өтпейді
+const PLACE_SPECIFIC = /\b1[0-9]{3}\b|\b20[0-9]{2}\b|қазақ|kazakh|казах|кеңес|совет|soviet|ussr|ксро|хан\b|хандығ|khan|алматы|астана|almaty|astana|ғасыр|век\b|century/i;
+function placeFlaw(flaw, specific) {
+  const f = String(flaw || '').trim();
+  if (!specific || !f) return false;
+  if (/\bnot\s+[a-z]/i.test(f)) return true; // «not Kazakh», «not Soviet»
+  return /^[A-Z][a-z]{2,}/.test(f) && !QUALITY_FLAW.test(f); // «Canada», «Alberta»
+}
 
 const short = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
 
@@ -121,6 +136,7 @@ function makeVisionChooser(ctx = {}) {
   let calls = 0;
   let apiFailures = 0;
   const maxCalls = ctx.maxCalls || 3;
+  const specific = PLACE_SPECIFIC.test([ctx.topic, ctx.title, ctx.query].filter(Boolean).join(' '));
 
   async function scoreBatch(batch) {
     const thumbs = await mapLimit(batch, 6, (c) => fetchThumb(c.thumb || c.url));
@@ -167,9 +183,11 @@ function makeVisionChooser(ctx = {}) {
     if (apiFailures && todo.length && todo.every((c) => !cache.has(c.url))) return null;
     return cands
       .map((c, i) => ({ i, s: cache.get(c.url) }))
-      .filter((x) => x.s && x.s.fit >= MIN_FIT && x.s.appeal >= MIN_APPEAL && (!ctx.background || x.s.bg >= MIN_BG) && !BAD_FLAW.test(x.s.flaw || ''))
-      .map((x) => ({ i: x.i, ...x.s, score: rankScore(x.s, ctx.background) }))
-      .sort((a, b) => b.score - a.score || a.i - b.i);
+      .filter((x) => x.s && (!ctx.background || x.s.bg >= MIN_BG) && !BAD_FLAW.test(x.s.flaw || '') && !placeFlaw(x.s.flaw, specific)
+        && ((x.s.fit >= MIN_FIT && x.s.appeal >= MIN_APPEAL) || (x.s.fit >= MIN_FIT_GENERAL && x.s.appeal >= MIN_APPEAL_GENERAL)))
+      // дәл сай (fit ≥ MIN_FIT) алдымен, жалпы сайлар — тек солардан кейін
+      .map((x) => ({ i: x.i, ...x.s, exact: x.s.fit >= MIN_FIT, score: rankScore(x.s, ctx.background) }))
+      .sort((a, b) => (b.exact - a.exact) || b.score - a.score || a.i - b.i);
   }
   choose.scoreOf = (c) => (c && cache.has(c.url) ? cache.get(c.url) : null);
   choose.calls = () => calls;
@@ -196,4 +214,4 @@ async function checkGenerated(dataUri, ctx = {}) {
   return { ok: fit >= MIN_FIT && appeal >= 6 && !/text|artefact|artifact|fake/i.test(flaw), fit, appeal, flaw };
 }
 
-module.exports = { visionProvider, makeVisionChooser, checkGenerated, rankScore, normFocus, fetchThumb, SYSTEM, MIN_FIT, BAD_FLAW };
+module.exports = { visionProvider, makeVisionChooser, checkGenerated, rankScore, normFocus, fetchThumb, SYSTEM, MIN_FIT, BAD_FLAW, placeFlaw };

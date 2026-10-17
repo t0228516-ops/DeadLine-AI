@@ -149,3 +149,22 @@ test('no Google key but DeepSeek key → vision runs on deepseek-flash (image_ur
     assert.strictEqual(sent[1].body.messages[0].content.find((c) => c.type === 'image_url').image_url.url, 'https://t/s.jpg');
   } finally { delete process.env.DEEPSEEK_API_KEY; }
 });
+
+test('general photos: fit 6 + appeal 6 passes after the exact ones; bg 4 is enough; a foreign place fails only on a place-specific slide', async () => {
+  process.env.GOOGLE_API_KEY = 'k';
+  stubFetch();
+  replies.push(jsonReply({ photos: [
+    { i: 0, fit: 6, appeal: 7, bg: 5, flaw: '' },          // жалпы сай → өтеді, бірақ дәлдерден кейін
+    { i: 1, fit: 7, appeal: 5, bg: 4, flaw: '' },          // дәл сай → бірінші
+    { i: 2, fit: 6, appeal: 5, bg: 8, flaw: '' },          // жалпы, бірақ әдемі емес → түседі
+    { i: 3, fit: 8, appeal: 8, bg: 3, flaw: '' },          // фонға мүлдем жарамсыз → түседі
+  ] }));
+  const choose = V.makeVisionChooser({ topic: 'Девиантты мінез-құлық', title: 'Қорытынды', background: true });
+  const cands = [0, 1, 2, 3].map((k) => ({ url: `https://big/g${k}.jpg`, thumb: `https://t/g${k}.jpg` }));
+  assert.deepStrictEqual((await choose(cands)).map((r) => r.i), [1, 0]);
+
+  assert.strictEqual(V.placeFlaw('Canada', true), true);
+  assert.strictEqual(V.placeFlaw('not Kazakh', true), true);
+  assert.strictEqual(V.placeFlaw('Blurry', true), false);
+  assert.strictEqual(V.placeFlaw('Canada', false), false, 'жалпы тақырыпта ел маңызды емес');
+});
