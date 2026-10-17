@@ -112,16 +112,12 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
   setBlocked(chatId, false).catch(() => {});
   setUserProfile(chatId, { name: [msg.from && msg.from.first_name, msg.from && msg.from.last_name].filter(Boolean).join(' '), username: msg.from && msg.from.username }).catch(() => {}); // бұрын бұғаттап, қайта оралған адам рассылкаға қайта кіреді
   const me = await getUser(chatId).catch(() => null);
-  const freeLine = me && !me.freeUsed && !me.total && !(me.credits > 0)
-    ? '🎁 *Бірінші презентация — ТЕГІН* (10 слайдқа дейін, өңделетін PPTX + баяндама мәтіні).\n\n'
-    : '';
 
   // Реферал санауы презентация жасатқанда өседі — тіркелуде емес
 
   bot.sendMessage(
     chatId,
     '👋 *Сәлем!* DeadLine — кәсіби AI презентация студиясы.\n\n' +
-    freeLine +
     `💳 *Баға:* ${PRICE}₸ — 1 презентация\n${plusLine}\n\n` +
     '🆕 *Жаңа:* ұнаған шаблоныңызды (.pptx) жүктеңіз — бот дизайнын сақтап, мәтінді сіздің тақырыбыңызға жазады.\n\n' +
     '📱 Презентация мен реферат *Mini App* ішінде жасалады: шаблон, тіл, слайд саны, прогресс және тарих бір жерде.',
