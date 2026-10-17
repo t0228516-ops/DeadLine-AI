@@ -210,13 +210,24 @@ function renderSlide(slide, index, plan, ctxDeck) {
     const imgs = set.map((h) => { const uri = D.decorUri(h.file); return uri ? '<img class="decor decor-' + h.tag + '" data-decor="' + h.role + '" alt="" aria-hidden="true" src="' + uri + '">' : ''; }).join('');
     if (imgs) { ctxDeck.lastDecor2 = ctxDeck.lastDecor; ctxDeck.lastDecor = index; out = { ...out, bg: (out.bg || '') + imgs }; }
   }
+  // Құрастырылған фон (bgkit): жүйе пластинасының дәл үстіне, композиция бөлшектерінің астына.
+  // Фото фонды (пластинасы жоқ) және бөлім пластинасы бар слайдтарға тиіспейді — олардың өз көрінісі бар.
+  let bgk = false;
+  if (ctxDeck.bgRecipe && out && out.bg) {
+    const m = String(out.bg).match(/<div class="plate(?: plate-cover)?"><\/div>/);
+    if (m) {
+      const role = index === 0 ? 'cover' : /^(section|cx-section-band)$/.test(layoutName) ? 'section' : 'content';
+      const layer = require('./design/bgkit').bgFor({ recipe: ctxDeck.bgRecipe, palette, index, seed: ctxDeck.bgSeed, role });
+      if (layer.under || layer.over) { out = { ...out, bg: out.bg.replace(m[0], m[0] + layer.under) + layer.over, cls: (out.cls || '') + ' bgk-on' }; bgk = true; }
+    }
+  }
   const cam = chooseCam(index);
   const accent = palette.accent;
   const sk = ctxDeck.skin;
   const dec = sk && sk.decor ? decorHtml(sk, refIndexFor(sk, index, ctxDeck.total, ctxDeck.roles), layoutName, index, ctxDeck.mediaIds, palette) : { html: '', vars: '' };
   return '<article class="slide L-' + layoutName + ' ' + (out.cls || '') + (ctxDeck.serif ? ' serif-tone' : '') + (palette.ref ? ' ref-skin' : '') + ' cam-' + cam + (index === 0 ? ' is-active' : '') +
     '" data-index="' + index + '" data-layout="' + layoutName + '" data-type="' + plan.type + '" data-cam="' + cam + '" data-accent="' + accent +
-    '" style="' + paletteVars(palette) + dec.vars + '"><div class="layer layer-bg" data-depth="0.12">' + (out.bg || '') + decoFor(out.bg, palette, index) + (sk && sk.decor ? dec.html : skinShapes(ctxDeck.skin, layoutName, index, ctxDeck.total)) +
+    '" style="' + paletteVars(palette) + dec.vars + '"><div class="layer layer-bg" data-depth="0.12">' + (out.bg || '') + (bgk ? '' : decoFor(out.bg, palette, index)) + (sk && sk.decor ? dec.html : skinShapes(ctxDeck.skin, layoutName, index, ctxDeck.total)) +
     '</div><div class="layer layer-mid" data-depth="0.4">' + out.fg + '</div></article>';
 }
 
@@ -271,6 +282,13 @@ function buildNew(slides, presentationTitle, opts) {
   const mt = mediaTable(skin);
   const serif = /Times|DisplayFace|serif/i.test(ts.display.split(',')[0]);
   const ctxDeck = { palette, ts, deckTitle, skin, serif, sys, total: list.length, mediaIds: mt.ids, roles: opts.refRoles || null };
+  // құрастырылған фон: клиент үлгісі (skin) жоқ болса; колодаға бір рецепт, тұқым — колоданың ырғақ тұқымы
+  const BG = require('./design/bgkit');
+  if (!skin && BG.enabled()) {
+    const c0b = (list[0] && list[0].composition) || {};
+    ctxDeck.bgSeed = Number(c0b.layoutSeed) >>> 0 || T.strHash(deckTitle);
+    ctxDeck.bgRecipe = BG.pickRecipe(sys && sys.id, ctxDeck.bgSeed, palette);
+  }
   // Композициялар: клиент үлгісі (skin) жоқ болса; DESIGN_COMPOSE=0 — өшіру
   if (!skin && process.env.DESIGN_COMPOSE !== '0') {
     const c0 = (list[0] && list[0].composition) || {};
@@ -288,7 +306,7 @@ function buildNew(slides, presentationTitle, opts) {
   if (A.truncate.count > cut0) console.warn('[Design] text shortened ' + (A.truncate.count - cut0) + '× (layout too small for the content)');
   const total = String(Math.max(list.length, 1)).padStart(2, '0');
   return '<!DOCTYPE html><html lang="kk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<meta name="theme-color" content="' + palette.bg + '"><title>' + esc(deckTitle) + '</title><style>' + css(palette, ts) + SYS.systemCss(sys, palette) + mt.css + (ctxDeck.compEnv ? require('./design/compositions').CSS : '') + '</style></head><body>' +
+    '<meta name="theme-color" content="' + palette.bg + '"><title>' + esc(deckTitle) + '</title><style>' + css(palette, ts) + SYS.systemCss(sys, palette) + mt.css + (ctxDeck.compEnv ? require('./design/compositions').CSS : '') + (ctxDeck.bgRecipe ? require('./design/bgkit').CSS : '') + '</style></head><body>' +
     '<div id="frame"><div id="stage"' + skinStage(skin, palette, opts.badge, opts.skin ? '' : 'ds-' + sys.id) + '>' + slidesHTML +
     '<div id="topbar" hidden><span id="cur">01</span><span id="total">' + total + '</span></div>' +
     '<div id="dots"></div><div id="controls"><button class="ctrl" id="prev" type="button">‹</button><button class="ctrl" id="next" type="button">›</button><button class="ctrl" id="full" type="button">⛶</button></div>' +
