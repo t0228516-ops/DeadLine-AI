@@ -15,7 +15,7 @@ const { generateReferat } = require('./products/referat/index');
 const { analyzeMaterialFile, materialsToText } = require('./core/materials');
 const { ratingKeyboard, ratePromptText, rateDueAt } = require('./core/feedbackUi');
 const {
-  initDB, getUser, registerUser, useCredit, refundCredit, claimFreeDeck, releaseFreeDeck, countFreeDecksSince, freeFunnel,
+  initDB, getUser, registerUser, useCredit, refundCredit, releaseFreeDeck, freeFunnel,
   checkRateLimits, markGenerationAttempt, markGenerationSuccess,
   createJob, updateJob, getJob, getUserJobs, addHistory, getHistory,
   cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
@@ -99,10 +99,8 @@ app.use('/webapp', express.static(WEBAPP_DIR, {
 // Jobs output dir (PPTX/HTML served securely)
 // Railway-де файлдар жүйесі уақытша: сақтау керек болса Volume қосып, JOBS_DIR=/data/jobs сияқты беріңіз
 const JOBS_DIR = process.env.JOBS_DIR || path.join(__dirname, 'jobs');
-// ─── Тегін бірінші презентация ───
-const FREE_DAILY_LIMIT = Number(process.env.FREE_DAILY_LIMIT) || 100;
+// ─── Тегін бірінші презентация — алынып тасталды (иесінің шешімі). Бұрын басталған тегін жұмыстар ғана осы шекпен аяқталады ───
 const FREE_MAX_SLIDES = 10;
-const startOfDayMs = () => { const H5 = 5 * 3600e3; const t = Date.now() + H5; return t - (t % 86400e3) - H5; }; // Алматы (UTC+5) тәулігінің басы
 const madeInUrl = () => (process.env.BOT_USERNAME ? `https://t.me/${process.env.BOT_USERNAME}?start=madein` : null);
 const speechFile = (jobId) => path.join(JOBS_DIR, String(jobId).replace(/[^\w-]/g, ''), 'speech.docx');
 fs.mkdirSync(JOBS_DIR, { recursive: true });
@@ -185,9 +183,6 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       plus: { amount: PLUS.amount, credits: PLUS.credits },
       kaspi: { phone: KASPI_PHONE, name: KASPI_NAME },
       referralsPerBonus: REFERRALS_PER_BONUS,
-      // бірінші презентация тегін (≤10 слайд, тек AI режимі) — Mini App батырмасы мен баннері үшін
-      freeAvailable: !user.freeUsed && !user.total && (user.credits || 0) <= 0,
-      freeMaxSlides: FREE_MAX_SLIDES,
       tester: testerCore.testerView(await getTester(chatId).catch(() => null)),
     });
   } catch (err) {
@@ -414,20 +409,14 @@ app.post('/api/generate', authMiddleware, async (req, res) => {
         return res.status(402).json({ error: 'tester_limit', message: `Бүгінгі ${testerCore.DAILY} тегін тест презентациясы бітті — ертең таңертең қайта толады 🙂` });
       }
     }
-    // Бірінші презентация тегін: кредиті жоқ, ешқашан сатып алмаған адамға — тек AI режимі, ≤10 слайд, тәуліктік шек
-    let isFree = false;
+    // Тегін тариф жоқ: кредитсіз (тестер емес) адам жасата алмайды
+    const isFree = false;
     if (!isTester && (!user || user.credits <= 0)) {
-      const freeOk = genMode === 'presentation' && user && !user.freeUsed && !user.total
-        && (await countFreeDecksSince(startOfDayMs())) < FREE_DAILY_LIMIT
-        && (await claimFreeDeck(chatId));
-      if (!freeOk) {
-        return res.status(402).json({
-          error: 'no_credits',
-          message: 'Кредит жеткіліксіз. Сатып алыңыз немесе реферал шақырыңыз.',
-          credits: user?.credits || 0,
-        });
-      }
-      isFree = true;
+      return res.status(402).json({
+        error: 'no_credits',
+        message: 'Кредит жеткіліксіз. Сатып алыңыз немесе реферал шақырыңыз.',
+        credits: user?.credits || 0,
+      });
     }
     const effSlides = isFree ? Math.min(parseInt(slideCount, 10) || FREE_MAX_SLIDES, FREE_MAX_SLIDES) : slideCount;
 

@@ -179,7 +179,6 @@
         $('#plusPrice').textContent = me.plus.amount;
         $('#plusEach').textContent = `(≈ ${Math.round(me.plus.amount / me.plus.credits)}₸ / дана)`;
       }
-      $('#freeBanner').classList.toggle('hidden', !me.freeAvailable || !!(me.tester && me.tester.active));
       renderTester(me.tester);
       $('#kaspiPhone').textContent = me.kaspi?.phone || '';
       $('#kaspiName').textContent = me.kaspi?.name || '';
@@ -277,15 +276,11 @@
       haptic('error');
       return showToast('Алдымен шаблон (.pptx) жүктеңіз');
     }
-    const freeNow = !!(state.me && state.me.freeAvailable && state.mode === 'presentation');
     const testerNow = !!(state.me && state.me.tester && state.me.tester.active && state.me.tester.creditsToday > 0);
-    if (state.me && state.me.credits <= 0 && !freeNow && !testerNow) {
+    if (state.me && state.me.credits <= 0 && !testerNow) {
       haptic('error');
-      showToast(state.me.freeAvailable ? 'Тегін презентация тек AI Presentation режимінде' : 'Кредит жоқ — Аккаунт бөліміне өтіңіз');
+      showToast('Кредит жоқ — Аккаунт бөліміне өтіңіз');
       return;
-    }
-    if (freeNow && !testerNow && state.me.credits <= 0 && state.slideCount > (state.me.freeMaxSlides || 10)) {
-      showToast(`Тегін презентация — ${state.me.freeMaxSlides || 10} слайдқа дейін`);
     }
 
     $('#btnGenerate').disabled = true;
@@ -315,7 +310,6 @@
         }),
       });
       state.currentJobId = res.jobId;
-      if (res.free && state.me) { state.me.freeAvailable = false; $('#freeBanner').classList.add('hidden'); }
       if (res.tester && state.me && state.me.tester) {
         state.me.tester.creditsToday = Math.max(0, state.me.tester.creditsToday - 1);
         state.me.tester.pending = res.jobId;
