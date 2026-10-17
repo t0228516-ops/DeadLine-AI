@@ -141,3 +141,26 @@ test('editorial slide without a body shows ALL bullets (rhythm swap used to drop
   const art = html.split('<article').find((a) => a.includes(`data-index="${edIdx}"`));
   for (const b of bullets) assert.ok(art.includes(b), 'жоқ: ' + b);
 });
+
+test('archive rescue: a Russian Commons title is searched on Wikimedia only; ordinary search still refuses Cyrillic', async () => {
+  calls.length = 0;
+  script = {
+    'https://commons.wikimedia.org/w/api.php': () => ({ data: { query: { pages: { 1: { index: 1, title: 'File:Колхоз 1931.jpg', imageinfo: [{
+      mime: 'image/jpeg', url: 'https://upload.wikimedia.org/wikipedia/commons/c/cc/Kolkhoz_1931.jpg',
+      thumburl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Kolkhoz_1931.jpg/1920px-Kolkhoz_1931.jpg', width: 1920, height: 1300 }] } } } } }),
+    'https://upload.wikimedia.org/': img(1920, 1300),
+  };
+  const vision = async (batch) => batch.map((c, i) => ({ i, fit: 8, appeal: 7, focus: '' }));
+  assert.strictEqual(await I.findImageVision('Коллективизация в Казахстане', { vision, place: 'frame', used: new Set() }), null);
+  assert.strictEqual(calls.length, 0, 'кирилл сұраныс қалыпты жолда жіберілмейді');
+  const hit = await I.findImageVision('Коллективизация в Казахстане', { vision, place: 'frame', used: new Set(), archive: true });
+  assert.ok(hit && /Kolkhoz_1931/.test(hit.url));
+  assert.ok(calls.every((c) => /wikimedia\.org/.test(c.url)), 'тек Commons');
+  assert.strictEqual(calls[0].params.gsrsearch, 'Коллективизация в Казахстане');
+});
+
+test('vision: a photo the viewer flagged as modern / wrong country never passes, however high its fit', () => {
+  const { BAD_FLAW } = require('../products/presentation/photoVision');
+  for (const f of ['modern', 'modern farm', 'wrong country', 'wrong era', 'watermark', 'reenactors']) assert.ok(BAD_FLAW.test(f), f);
+  for (const f of ['', 'slightly dark', 'small subject', 'sepia']) assert.ok(!BAD_FLAW.test(f), f);
+});

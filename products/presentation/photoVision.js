@@ -57,8 +57,11 @@ fit (0-10): does the photo SHOW this slide's subject? Judge the slide content, n
 appeal (0-10): how beautiful and usable it is on a big screen: sharp, well exposed, vivid natural colour, clear single subject, strong composition, depth. Low (0-4): blurry, noisy, dark/murky, washed out, tiny object on blank backdrop, cluttered, collage/grid, screenshot, scanned text page, heavy caption/watermark/logo, cheesy stock pose, obvious AI artefacts.
 bg (0-10): would it work as a FULL-SLIDE BACKGROUND behind a title (wide scene with calm areas)? Small object on plain background, close-up texture, portrait-format crop, busy detail everywhere → 0-3.
 focus: where the main subject is, as "x% y%" (0% 0% = top-left), so cropping keeps it.
-flaw: one or two words if something is wrong (e.g. "watermark", "text", "blurry", "wrong era"), else "".
+flaw: one or two words if something is wrong (e.g. "watermark", "text", "blurry", "wrong era", "wrong country", "modern" for a present-day scene on a historical slide), else "".
 Be strict and honest: a slide without a photo is better than a wrong or ugly photo.`;
+
+// көретін модель өзі «басқа дәуір / басқа ел / қазіргі» деп белгілеген фото fit жоғары болса да өтпейді (1930 жылғы слайдқа қазіргі ферма)
+const BAD_FLAW = /modern|contemporary|wrong|anachron|reenact|watermark|\bads?\b|advert|logo|stock pose|ai[- ]?generated/i;
 
 const short = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
 
@@ -164,7 +167,7 @@ function makeVisionChooser(ctx = {}) {
     if (apiFailures && todo.length && todo.every((c) => !cache.has(c.url))) return null;
     return cands
       .map((c, i) => ({ i, s: cache.get(c.url) }))
-      .filter((x) => x.s && x.s.fit >= MIN_FIT && x.s.appeal >= MIN_APPEAL && (!ctx.background || x.s.bg >= MIN_BG))
+      .filter((x) => x.s && x.s.fit >= MIN_FIT && x.s.appeal >= MIN_APPEAL && (!ctx.background || x.s.bg >= MIN_BG) && !BAD_FLAW.test(x.s.flaw || ''))
       .map((x) => ({ i: x.i, ...x.s, score: rankScore(x.s, ctx.background) }))
       .sort((a, b) => b.score - a.score || a.i - b.i);
   }
@@ -193,4 +196,4 @@ async function checkGenerated(dataUri, ctx = {}) {
   return { ok: fit >= MIN_FIT && appeal >= 6 && !/text|artefact|artifact|fake/i.test(flaw), fit, appeal, flaw };
 }
 
-module.exports = { visionProvider, makeVisionChooser, checkGenerated, rankScore, normFocus, fetchThumb, SYSTEM, MIN_FIT };
+module.exports = { visionProvider, makeVisionChooser, checkGenerated, rankScore, normFocus, fetchThumb, SYSTEM, MIN_FIT, BAD_FLAW };

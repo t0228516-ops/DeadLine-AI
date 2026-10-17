@@ -27,6 +27,7 @@ const { exportToPptx }            = require('./pptxExporter');
 const { runQualityLoop, renderWarningsToIssues } = require('./quality');
 const { repairDeckComposition, hintsFromOverflowWarnings } = require('./composition');
 const { createCostTracker, setActiveCostTracker } = require('../../core/cost');
+const { deepseekJson } = require('../../core/llm');
 const { maybeAttachReferencesSlide, sanitizeMetaLeakSlides } = require('./sources');
 const { runNarrativePass, buildDimensionScores } = require('./narrative');
 const { runVisionCritic } = require('./visionCritic');
@@ -63,6 +64,34 @@ function shortTopicKeyword(topic) {
 }
 
 /**
+ * Екінші айналым сұраныстары: бірінші іздеу ештеңе таппағанда DeepSeek-тен шын бар, суретке түскен нысандар сұралады.
+ * @returns {Promise<{queries:string[], commons:string[]}>} сәтсіз болса — бос тізімдер (ешқашан лақтырмайды)
+ */
+async function rescueQueries(slide, ctx, tried, flaws) {
+  const empty = { queries: [], commons: [] };
+  if (!process.env.DEEPSEEK_API_KEY) return empty;
+  const system = 'You find REAL photos for a school presentation slide. The first image search found nothing usable. '
+    + 'Suggest search phrases for things that really exist as photos or scans in archives and museums: a named place, building, monument, '
+    + 'museum object, period photograph, poster, painting, map, document, or a typical object/scene of that time and region. '
+    + 'Never describe a scene that was never photographed (no "protest of peasants in village X"). Keep each phrase 2-5 words, concrete nouns, no adjectives like "beautiful". '
+    + 'Return JSON only: {"queries":["3 English phrases"],"commons":["2 phrases as titled on Wikimedia Commons, in Russian or the local language if the subject is from the former USSR/Kazakhstan, else English"]}';
+  const user = `Presentation topic: ${String(ctx.topicTitle || ctx.topic || '').slice(0, 200)}\nSlide title: ${String(slide.title || '').slice(0, 160)}\n`
+    + (ctx.text ? `Slide says: ${String(ctx.text).slice(0, 400)}\n` : '')
+    + `Already searched (found nothing): ${tried.join(' | ').slice(0, 300) || '-'}\n`
+    + (flaws.length ? `Photos seen were rejected as: ${flaws.slice(0, 6).join(', ')}\n` : '');
+  try {
+    const out = await deepseekJson(system, user, 'photo_rescue', 300, { tries: 1, timeoutMs: 15_000, temperature: 0.3 });
+    const list = (v, n) => (Array.isArray(v) ? v : []).map((x) => String(x || '').replace(/\s+/g, ' ').trim().slice(0, 80)).filter((x) => x.length >= 3 && !tried.includes(x)).slice(0, n);
+    const res = { queries: list(out && out.queries, 3).filter(isLatinQuery), commons: list(out && out.commons, 2) };
+    console.log(`[Image] rescue for "${String(slide.title || '').slice(0, 50)}": ${res.commons.concat(res.queries).join(' | ')}`);
+    return res;
+  } catch (err) {
+    console.warn(`[Image] rescue queries failed: ${err.message}`);
+    return empty;
+  }
+}
+
+/**
  * Бір фото-слайдқа сурет — VISION жолы (Google кілті бар болса):
  *   1) слайдтың ӨЗ сұранысы (+ латынша тақырып) бойынша барлық көздерден кандидат → vision көріп таңдайды;
  *   2) ештеңе сай болмаса → AI сурет (атаулы тұлға/оқиға емес болса, лимит ішінде);
@@ -76,10 +105,35 @@ async function fetchPhotoVision(slide, ctx) {
   if (!ctx.query) add(fallbackQueries('', ctx.topic, [])[0]);
   const place = ctx.background ? 'bg' : 'frame';
   const deadline = Date.now() + (Number(process.env.PHOTO_SLIDE_DEADLINE_MS) || 25_000); // бір слайдқа іздеу+таңдау шегі
+  // көретін модель қабылдамаған фотолардың себептері («modern», «wrong country») — екінші айналымға беріледі
+  const flaws = [];
+  const vision = async (batch) => {
+    const r = await ctx.vision(batch);
+    if (r !== null && typeof ctx.vision.scoreOf === 'function') {
+      for (const c of batch) { const sc = ctx.vision.scoreOf(c); if (sc && sc.flaw && !flaws.includes(sc.flaw)) flaws.push(sc.flaw); }
+    }
+    return r;
+  };
+  const pack = (hit) => ({ dataUri: hit.dataUri, focus: hit.focus || '', source: hit.source, key: hit.key, credit: hit.credit, license: hit.license });
   for (const q of queries) {
-    const hit = await findImageVision(q, { used: ctx.used, avoid: ctx.avoid, free: ctx.free, budget: ctx.budget, vision: ctx.vision, maxVariants: 2, place, deadline });
+    const hit = await findImageVision(q, { used: ctx.used, avoid: ctx.avoid, free: ctx.free, budget: ctx.budget, vision, maxVariants: 2, place, deadline });
     if (hit && hit.failed) return { fallback: true };
-    if (hit && hit.dataUri) return { dataUri: hit.dataUri, focus: hit.focus || '', source: hit.source, key: hit.key, credit: hit.credit, license: hit.license };
+    if (hit && hit.dataUri) return pack(hit);
+  }
+  // Екінші айналым: DeepSeek шын бар, суретке түскен нысандарды ұсынады (архив фото, музей заты, карта, картина) →
+  // алдымен Wikimedia Commons (орысша/жергілікті атаумен де), сосын ағылшынша барлық көздер
+  if (process.env.PHOTO_RESCUE !== '0') {
+    const alt = await rescueQueries(slide, ctx, queries, flaws);
+    const deadline2 = Date.now() + (Number(process.env.PHOTO_RESCUE_DEADLINE_MS) || 25_000);
+    const budget2 = { left: Number(process.env.IMAGE_SEARCHES_PER_PHOTO) || 5 };
+    const tries = alt.commons.map((q) => ({ q, archive: true }))
+      .concat(alt.queries.map((q) => ({ q, archive: true })), alt.queries.slice(0, 1).map((q) => ({ q, archive: false })));
+    for (const t of tries) {
+      if (Date.now() > deadline2) break;
+      const hit = await findImageVision(t.q, { used: ctx.used, avoid: ctx.avoid, free: ctx.free, budget: budget2, vision, maxVariants: 1, place, deadline: deadline2, archive: t.archive });
+      if (hit && hit.failed) break;
+      if (hit && hit.dataUri) { console.log(`[Image] rescue ok q="${t.q.slice(0, 60)}"${t.archive ? ' (archive)' : ''}`); return pack(hit); }
+    }
   }
   // нақты тұлға/оқиға/жыл — AI-мен жасалмайды (жалған тарих); жер/халық атауы («Kazakh steppe») — жасалады
   const named = queries.some((q) => isRealSubject(q));
@@ -585,7 +639,10 @@ async function generatePresentation(userInput, options = {}) {
   const usedImages = new Set(); // бір сурет екі слайдқа түспесін
   const deckQueries = slides.map((sl) => (typeof sl.imageQuery === 'string' ? sl.imageQuery.trim() : '')).filter(isLatinQuery);
   // Фото тек макеті шынымен фото КӨРСЕТЕТІН слайдтарға ізделеді (бұрын әр слайдқа → API лимиті тез бітетін)
-  const photoBudget = options.free ? (Number(process.env.PHOTO_BUDGET_FREE) || 3) : (Number(process.env.PHOTO_BUDGET) || 4);
+  // ұзын колодада фото көбірек (13 слайдқа 4 фото — тым аз): ~45% слайд, ең көбі 7 (тегінде ~30%, ең көбі 5)
+  const photoBudget = options.free
+    ? Math.max(Number(process.env.PHOTO_BUDGET_FREE) || 3, Math.min(5, Math.round(slides.length * 0.3)))
+    : Math.max(Number(process.env.PHOTO_BUDGET) || 4, Math.min(7, Math.round(slides.length * 0.45)));
   const photoPlan = planPhotoSlides(slides, { budget: photoBudget });
   const sysDef = require('./design/systems').getSystem(design && design.system);
   const sysCover = (sysDef && sysDef.cover) || 'classic';
@@ -616,7 +673,7 @@ async function generatePresentation(userInput, options = {}) {
         background: layout === 'fullImage' || (layout === 'cover' && FULL_COVERS.has(sysCover)) || (layout === 'closing' && sysClosing !== 'split'),
       };
       // Суретті КӨЗБЕН таңдау (Gemini Flash-Lite): кілт бар болса — негізгі жол
-      const vision = makeVisionChooser(slideCtx);
+      const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 }); // +2 шақыру екінші айналымға
       if (vision) {
         const got = await fetchPhotoVision(slide, {
           query, topic, topicTitle: title || topic, text: slideCtx.text, background: slideCtx.background,
@@ -1025,4 +1082,4 @@ function compIdsOf(file) {
   try { return [...new Set([...fs.readFileSync(file, 'utf8').matchAll(/data-layout="cx-([a-z0-9-]+)"/g)].map((m) => m[1]))]; } catch { return []; }
 }
 
-module.exports = { generatePresentation };
+module.exports = { generatePresentation, _fetchPhotoVision: fetchPhotoVision };
