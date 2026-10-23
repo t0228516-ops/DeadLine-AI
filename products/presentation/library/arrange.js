@@ -66,14 +66,15 @@ function fitScore(m, shape) {
     case 'quote': return m.role === 'quote' ? 10 : -Infinity;
     case 'section': return m.role === 'section' ? 10 : -Infinity;
     case 'figures': return m.figures ? 10 - 2 * Math.abs(m.figures - want) : -Infinity;
-    case 'compare': return m.role === 'text' || m.role === 'section' ? (k === 2 ? 9 : k ? 5 - Math.abs(k - 2) : 1) : -Infinity;
+    case 'compare': return m.role === 'text' || m.role === 'section' ? (k === 2 ? 9 : k ? 5 - Math.abs(k - 2) : 1) - (m.figures ? 6 : 0) : -Infinity;
     case 'explain':
       if (m.role !== 'text') return -Infinity;
       return (m.bodies || m.subtitle ? 6 : 2) - 2 * Math.max(0, k - 1) + (m.photos ? 1 : 0);
     case 'points': case 'steps':
       if (m.role !== 'text') return -Infinity;
       if (!k) return m.bodies || m.subtitle ? 1 : 0;   // бір абзацқа тізім де сыяды, бірақ нашар
-      return 10 - 3 * Math.abs(k - want);
+      // сан слайды нақты сан талап етеді — пункттерге тек амал қалмағанда (әйтпесе сан ойдан шығарылар еді)
+      return 10 - 3 * Math.abs(k - want) - (m.figures ? 6 : 0);
     default: return m.role === 'text' ? 0 : -Infinity;
   }
 }
@@ -89,24 +90,27 @@ function matchPicks(t, meta, shapes, fixed) {
   const head = [t.cover];
   if (fixed.agenda && t.agenda) head.push(t.agenda);
   const used = new Map();
-  const middle = [];
-  const pick = (sh) => {
+  const middle = new Array(shapes.length).fill(null);
+  const pick = (sh, i) => {
     let best = null; let bs = -Infinity;
     for (const m of meta) {
+      if (m.slide === middle[i - 1] || m.slide === middle[i + 1]) continue;   // бір макет қатар келмейді
       let s = fitScore(m, sh);
       if (s === -Infinity) continue;
       s -= 5 * (used.get(m.slide) || 0);                         // бір макет көп қайталанбасын
-      if (middle.length && middle[middle.length - 1] === m.slide) s -= 12; // қатар келмесін
       if (s > bs) { bs = s; best = m; }
     }
     return best;
   };
-  for (const sh of shapes) {
+  // таңдауы аз формалар (сан, дәйексөз, бөлім) бірінші орналасады — «3 қадам» сан слайдын алып қоймасын
+  const options = (sh) => meta.filter((m) => fitScore(m, sh) > -Infinity).length;
+  const order = shapes.map((sh, i) => i).sort((a, b) => options(shapes[a]) - options(shapes[b]) || a - b);
+  for (const i of order) {
     // сай слайд жоқ (мыс. шаблонда дәйексөз/сан слайды жоқ) — «түсіндіру» формасына ең жақын слайд (элементі ең аз)
-    let best = pick(sh) || pick({ form: 'explain', count: 1 });
-    if (!best) best = meta.find((m) => m.role === 'text') || meta.find((m) => m.role !== 'cover');
+    let best = pick(shapes[i], i) || pick({ form: 'explain', count: 1 }, i);
+    if (!best) best = meta.find((m) => m.role === 'text' && m.slide !== middle[i - 1] && m.slide !== middle[i + 1]) || meta.find((m) => m.role === 'text') || meta.find((m) => m.role !== 'cover');
     used.set(best.slide, (used.get(best.slide) || 0) + 1);
-    middle.push(best.slide);
+    middle[i] = best.slide;
   }
   const tail = fixed.closing && t.closing ? [t.closing] : [];
   return head.concat(middle, tail).map((x) => x - 1);

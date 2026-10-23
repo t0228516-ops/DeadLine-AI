@@ -19,7 +19,7 @@
     { "id": "sc00500", "slug": "matisse-style", "style": "school", "groups": ["general", "education"],
       "cover": 1, "agenda": 3, "section": [12, 15], "text": [5, 7, 8, 13, 16, 19], "stats": [18], "quote": [10], "closing": 22, "credits": 23 },
     { "id": "sc02602", "slug": "elegant-border-slides", "style": "elegant", "groups": ["general", "history", "philosophy"],
-      "cover": 1, "agenda": null, "section": [2, 5, 9], "text": [4, 6, 7, 13], "stats": [], "quote": [8], "closing": 14, "credits": 16 },
+      "cover": 1, "agenda": null, "section": [2, 5, 9], "text": [4, 7, 13], "stats": [], "quote": [8], "closing": 14, "credits": 16 },
     { "id": "sc02600", "slug": "elegant-red-background-slides", "style": "elegant", "groups": ["general", "history"],
       "cover": 1, "agenda": 3, "section": [], "text": [2, 4, 6, 7, 11, 14, 16, 17], "stats": [9, 10], "quote": [13], "closing": null, "credits": 19 },
     { "id": "sc02596", "slug": "elegant-simple-slides", "style": "elegant", "groups": ["general", "philosophy"],

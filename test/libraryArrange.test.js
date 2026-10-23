@@ -56,3 +56,20 @@ test('arrange: plan → picks + storyline of the same length; no LLM → null', 
   assert.strictEqual(await A.arrange({ src, t, n: 10, topic: '' }), null, 'тақырыпсыз');
   if (saved != null) process.env.DEEPSEEK_API_KEY = saved;
 });
+
+test('matchPicks: a scarce form (the only figures slide) is not taken by a list that has other options', () => {
+  const m = [
+    { slide: 1, role: 'cover', cards: 0, labels: 0, figures: 0, bodies: 0, subtitle: false, photos: 0 },
+    { slide: 7, role: 'text', cards: 0, labels: 0, figures: 0, bodies: 3, subtitle: false, photos: 0 },
+    { slide: 13, role: 'text', cards: 3, labels: 0, figures: 3, bodies: 0, subtitle: false, photos: 0 },
+  ];
+  const p = A.matchPicks({ cover: 1 }, m, [{ form: 'steps', count: 3 }, { form: 'figures', count: 3 }], { agenda: false, closing: false }).map((x) => x + 1);
+  assert.deepStrictEqual(p, [1, 7, 13]);
+});
+
+test('fitScore: plain points avoid a figures slide (it would force invented numbers)', () => {
+  const figs = { slide: 13, role: 'text', cards: 3, labels: 0, figures: 3, bodies: 0, subtitle: false, photos: 0 };
+  const plain = { slide: 7, role: 'text', cards: 0, labels: 0, figures: 0, bodies: 3, subtitle: false, photos: 0 };
+  assert.ok(A.fitScore(plain, { form: 'points', count: 3 }) > A.fitScore(figs, { form: 'points', count: 3 }));
+  assert.ok(A.fitScore(figs, { form: 'figures', count: 3 }) > 0);
+});
