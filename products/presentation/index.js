@@ -416,7 +416,12 @@ async function generatePresentation(userInput, options = {}) {
 
   // Template → Content: кәсіби әңгіме желісі ТАҚЫРЫПТАН құрылады (шаблонның мәтіні/бөлім атаулары қолданылмайды)
   let storyOutline = null;
-  if (slotPlan) {
+  // Кітапхана шаблоны мазмұнға қарай жиналған болса — сол жоспар әңгіме желісі болады (қосымша LLM шақыруы жоқ)
+  const libOutline = options.library && options.library.outline;
+  if (slotPlan && libOutline && libOutline.slideTopics.length === slotPlan.length) {
+    storyOutline = libOutline;
+    console.log(`[Pipeline] id=${genId} Library storyline (content-first): «${storyOutline.title}» — ${storyOutline.slideTopics.length} слайд`);
+  } else if (slotPlan) {
     await onProgress('content', 'Презентация құрылымы жоспарлануда...');
     storyOutline = await planStoryline({
       topic, brief: briefBase.slice(0, 12000), language, plan: slotPlan, outline: refAnalysis && refAnalysis.outline,

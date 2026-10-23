@@ -106,12 +106,12 @@ test('prepareDeck: downloads once, caches on disk, carves without credits and ke
   let calls = 0;
   const http = { get: async () => { calls++; return { data: FIX }; } };
   const entry = { id: 'fx1', slug: 'fixture', style: 'test', groups: ['general'], cover: 1, agenda: 2, section: [], text: [3, 4, 5], stats: [6], quote: [7], closing: 9, credits: 10 };
-  const prep = await L.prepareDeck({ entry, slideCount: 8, http });
+  const prep = await L.prepareDeck({ entry, slideCount: 8, http, arrange: false });
   assert.strictEqual(prep.slideCount, 8);
   assert.strictEqual(orderedSlides(readZipAll(prep.deckBuf)).length, 8, 'толтыруға Credits-сіз');
   const done = L.appendCredits(prep.deckBuf, prep);
   assert.strictEqual(orderedSlides(readZipAll(done)).length, 9);
-  await L.prepareDeck({ entry, slideCount: 6, http });
+  await L.prepareDeck({ entry, slideCount: 6, http, arrange: false });
   assert.strictEqual(calls, 1, 'екінші рет дискіден');
 });
 
@@ -176,9 +176,28 @@ test('prepareDeck: an explicitly chosen template that is too heavy is shortened,
   process.env.LIBRARY_MAX_MB = '0.0001';
   delete require.cache[require.resolve('../products/presentation/library')];
   const L2 = require('../products/presentation/library');
-  const fixed = await L2.prepareDeck({ entry: heavy, slideCount: 12, http });
+  const fixed = await L2.prepareDeck({ entry: heavy, slideCount: 12, http, arrange: false });
   assert.strictEqual(fixed.id, 'fxH');
   assert.ok(fixed.slideCount < 12);
   if (old == null) delete process.env.LIBRARY_MAX_MB; else process.env.LIBRARY_MAX_MB = old;
   delete require.cache[require.resolve('../products/presentation/library')];
+});
+
+test('prepareDeck: content-first arrangement — the LLM plan picks the slides and becomes the storyline', async () => {
+  const http = { get: async () => ({ data: FIX }) };
+  const entry = { id: 'fxA', slug: 'a', style: 't', groups: ['general'], cover: 1, agenda: 2, section: [], text: [3, 4, 5], stats: [6], quote: [7], closing: 9, credits: 10 };
+  let prompt = '';
+  const llm = async (sys, p) => {
+    prompt = p;
+    const m = Number(p.match(/Plan exactly (\d+) content slides/)[1]);
+    return { title: 'Тест', slides: Array.from({ length: m }, (_, i) => ({ heading: `Слайд ${i + 1}`, form: i % 2 ? 'points' : 'explain', count: 3, key_points: ['a', 'b', 'c'] })) };
+  };
+  const prep = await L.prepareDeck({ entry, slideCount: 8, http, topic: 'Тест тақырыбы', llm });
+  assert.ok(prep.outline, 'жоспар бар');
+  assert.strictEqual(prep.outline.slideTopics.length, prep.slideCount);
+  assert.strictEqual(orderedSlides(readZipAll(prep.deckBuf)).length, 8);
+  assert.match(prompt, /Тест тақырыбы/);
+  const bad = await L.prepareDeck({ entry, slideCount: 8, http, topic: 'x', llm: async () => ({ slides: [] }) });
+  assert.strictEqual(bad.outline, null, 'жарамсыз жоспар — бұрынғы рет');
+  assert.strictEqual(bad.slideCount, 8);
 });

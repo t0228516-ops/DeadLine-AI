@@ -124,7 +124,7 @@ async function fetchTemplate(t, o = {}) {
 
 /**
  * Толтыруға дайын кесілген шаблон.
- * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object}} o
+ * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object, brief?:string, language?:string, llm?:Function, arrange?:boolean}} o
  */
 async function prepareDeck(o = {}) {
   const fixed = o.entry || (o.id && byId.get(o.id));
@@ -133,8 +133,17 @@ async function prepareDeck(o = {}) {
   const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
   let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
+  // Мазмұнға қарай макет: LLM алдымен мазмұнды жоспарлайды, слайдтар соның формасына сай таңдалады (library/arrange.js)
+  let arranged = o.arrange === false ? null : await require('./arrange').arrange({
+    src, t, n: want, topic: o.topic, brief: o.brief, language: o.language, llm: o.llm, dir: LIB_DIR,
+  }).catch(() => null);
+  if (arranged) {
+    picks = arranged.picks;
+    creditsBuf = carveDeck(src, picks.concat([t.credits - 1]));
+    if (creditsBuf.length > MAX_DECK_BYTES) { console.log(`[Library] ${t.id}: arranged deck too large — default order`); arranged = null; }
+  }
   // файл тым үлкен болса (ауыр фон суреттері) слайд азаяды
-  for (let tries = 0; tries < 4; tries++) {
+  for (let tries = 0; !arranged && tries < 4; tries++) {
     picks = planPicks(t, n);
     creditsBuf = carveDeck(src, picks.concat([t.credits - 1]));
     if (creditsBuf.length <= MAX_DECK_BYTES || n <= 5) break;
@@ -147,7 +156,8 @@ async function prepareDeck(o = {}) {
   }
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i)); // Credits-сіз нұсқа — толтыруға
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
-  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length };
+  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+    outline: arranged ? arranged.outline : null };
 }
 
 const SITE_URL = 'https://www.slidescarnival.com';

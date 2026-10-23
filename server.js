@@ -966,7 +966,11 @@ async function executeJob(jobId) {
     if (!referencePptx && (job.payload?.mode || 'presentation') === 'presentation'
       && libraryCore.eligible({ tester: !!job.payload?.tester, admin: isAdminId(chatId) })) {
       try {
-        library = await libraryCore.prepareDeck({ topic: job.payload?.topic || userInput, slideCount: job.payload?.slideCount, avoid: recentLibs });
+        await updateJob(jobId, { phase: 'content', detail: 'Презентация құрылымы жоспарлануда...', progress: 12 }).catch(() => {});
+        library = await libraryCore.prepareDeck({
+          topic: job.payload?.topic || userInput, slideCount: job.payload?.slideCount, avoid: recentLibs,
+          brief: userInput, language: job.payload?.language,
+        });
         referencePptx = library.deckBuf;
         pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
       } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
