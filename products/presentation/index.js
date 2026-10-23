@@ -690,6 +690,8 @@ async function generatePresentation(userInput, options = {}) {
       fs.writeFileSync(pptxPath, fillTemplatePptx(referencePptxBuf, slides, { language, layout, slotFill, qaReport }));
       // Кітапхана шаблоны: стоктық фотолар → тақырыпқа сай фото; түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады
       if (options.library && options.library.creditsBuf) {
+        // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
+        try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
         });

@@ -105,6 +105,15 @@ function planPicks(t, n) {
   return head.concat(middle, tail).map((x) => x - 1);
 }
 
+/** Каталог бойынша слайдтың рөлі ('cover','agenda','section','text','stats','quote','closing') */
+function roleOf(t, slide) {
+  if (slide === t.cover) return 'cover';
+  if (slide === t.agenda) return 'agenda';
+  if (slide === t.closing) return 'closing';
+  for (const r of ['section', 'stats', 'quote', 'text']) if ((t[r] || []).includes(slide)) return r;
+  return 'text';
+}
+
 function filePath(id) { return path.join(LIB_DIR, `${id}.pptx`); }
 
 /** Шаблонды серверден не SlidesCarnival-дан (бір рет) алу */
@@ -154,10 +163,12 @@ async function prepareDeck(o = {}) {
     console.log(`[Library] ${t.id}: ${want} slides would exceed ${(MAX_DECK_BYTES / 1048576).toFixed(0)}MB — another template`);
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
   }
-  deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i)); // Credits-сіз нұсқа — толтыруға
+  // Credits-сіз нұсқа — толтыруға; мәтін оқылатын етіледі (кегль, контраст, әшекейден арақашықтық)
+  deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
+  if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
   return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
-    outline: arranged ? arranged.outline : null };
+    outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 
 const SITE_URL = 'https://www.slidescarnival.com';
