@@ -115,12 +115,53 @@ async function prepareDeck(o = {}) {
   }
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i)); // Credits-сіз нұсқа — толтыруға
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
-  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length };
+  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length };
 }
 
-/** Толтырылған колодаға түпнұсқа Credits слайдын өзгеріссіз қосу (атрибуция — рұқсаттың міндетті шарты) */
+const SITE_URL = 'https://www.slidescarnival.com';
+const HLINK_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+
+/**
+ * Credits слайдында slidescarnival.com-ға СІЛТЕМЕ болуы — рұқсаттың шарты. Көп шаблонда «SlidesCarnival» тек сөз не логотип,
+ * сілтемесіз. Сондықтан: бар «SlidesCarnival» сөзіне сілтеме қосылады және слайдтың астына кішкентай «www.slidescarnival.com»
+ * сілтемесі жазылады. Слайдтың қалған мазмұны өзгермейді.
+ */
+function linkCredits(buf, idx) {
+  const { readZipAll, writeZipAll } = require('../templateFill');
+  const { orderedSlides } = require('../../../design-dna/structure');
+  const files = readZipAll(buf);
+  const all = orderedSlides(files);
+  const sp = all[idx < 0 ? all.length + idx : idx]; // -1 — соңғы слайд
+  if (!sp) return buf;
+  const rp = sp.replace(/([^/]+)$/, '_rels/$1.rels');
+  let rels = files.get(rp) || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const rid = 'rIdDlScLink';
+  if (!rels.includes(`Id="${rid}"`)) rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="${HLINK_TYPE}" Target="${SITE_URL}" TargetMode="External"/></Relationships>`);
+  let xml = files.get(sp);
+  // бар «SlidesCarnival» сөзі сілтемеге айналады
+  xml = xml.replace(/<a:r>(<a:rPr\b[^>]*?)(\/>|>([\s\S]*?)<\/a:rPr>)(<a:t>[^<]*Slides ?Carnival[^<]*<\/a:t><\/a:r>)/gi, (m, open, close, inner, rest) => {
+    if (/hlinkClick/.test(inner || '')) return m;
+    return `<a:r>${open}>${inner || ''}<a:hlinkClick r:id="${rid}"/></a:rPr>${rest}`;
+  }).replace(/<a:r>(<a:t>[^<]*Slides ?Carnival[^<]*<\/a:t><\/a:r>)/gi, `<a:r><a:rPr lang="en-US"><a:hlinkClick r:id="${rid}"/></a:rPr>$1`);
+  if (!/www\.slidescarnival\.com/i.test(xml)) {
+    const { W, H } = require('./photos').slideSize(files);
+    const color = (xml.match(/<a:rPr\b[^>]*>\s*<a:solidFill>\s*<a:srgbClr val="([0-9A-Fa-f]{6})"/) || [])[1] || '808080';
+    const id = Math.max(1000, ...[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map((x) => +x[1])) + 1;
+    const box = `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="SlidesCarnival link"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>`
+      + `<p:spPr><a:xfrm><a:off x="${Math.round(W * 0.66)}" y="${Math.round(H * 0.935)}"/><a:ext cx="${Math.round(W * 0.31)}" cy="${Math.round(H * 0.045)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
+      + '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>'
+      + `<a:p><a:pPr algn="r"/><a:r><a:rPr lang="en-US" sz="${Math.round(1100 * W / 12192000 / 100) * 100}" u="sng"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="Arial"/><a:hlinkClick r:id="${rid}"/></a:rPr><a:t>www.slidescarnival.com</a:t></a:r></a:p></p:txBody></p:sp>`;
+    xml = xml.replace(/<\/p:spTree>/, `${box}</p:spTree>`);
+  }
+  files.set(sp, xml);
+  files.set(rp, rels);
+  return writeZipAll(files);
+}
+
+/** Толтырылған колодаға түпнұсқа Credits слайдын қосу (атрибуция мен slidescarnival.com сілтемесі — рұқсаттың міндетті шарты) */
 function appendCredits(filledBuf, prep) {
-  return appendSlideFrom(filledBuf, prep.creditsBuf, prep.creditsIdx);
+  const out = appendSlideFrom(filledBuf, prep.creditsBuf, prep.creditsIdx);
+  return linkCredits(out, -1);
 }
 
 /**
@@ -135,4 +176,4 @@ function eligible(o = {}, env = process.env, rng = Math.random) {
   return rng() < share;
 }
 
-module.exports = { CATALOG, topicGroups, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
+module.exports = { CATALOG, linkCredits, topicGroups, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };

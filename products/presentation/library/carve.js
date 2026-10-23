@@ -6,6 +6,7 @@
  *
  *   carveDeck(buf, picks)            — picks: 0-негізді слайд нөмірлері (көрсету реті бойынша)
  *   appendSlideFrom(dest, src, idx)  — src шаблонның idx-слайдын (мыс. Credits) dest соңына сол күйі қосу
+ *   normalizeGroups(slideXml)        — масштабталған топ ішіндегі қораптарға шын өлшем (толтыру дұрыс сыйғызсын)
  */
 const { readZipAll, writeZipAll } = require('../templateFill');
 const { orderedSlides, relsMap, resolvePath } = require('../../../design-dna/structure');
@@ -29,6 +30,50 @@ function rewritePresentation(pres, rids) {
   out = out.replace(/<p:custShowLst>[\s\S]*?<\/p:custShowLst>/g, '');
   out = out.replace(/<p:ext uri="[^"]*"><p14:sectionLst[\s\S]*?<\/p14:sectionLst><\/p:ext>/g, '');
   return out;
+}
+
+/**
+ * Топ масштабын «ашу»: Canva шаблондарында мәтін қорабы масштабталған топтың (p:grpSp, ext ≠ chExt) ішінде тұрады —
+ * геометрия кішірейеді, ал қаріп кішіреймейді. Толтыру қозғалтқышы қорап өлшемін топсыз оқиды, сондықтан мәтін
+ * «сыяды» деп ойлап, сөз ортасынан үзіледі. Мұнда әр топтың ішкі координаталары слайд координатасына аударылады
+ * (chOff/chExt = off/ext): көрінісі дәл сол, бірақ әр қораптың өлшемі енді шын.
+ */
+function normalizeGroups(xml) {
+  const OPEN = '<p:grpSp>'; const CLOSE = '</p:grpSp>';
+  const num = (v) => Math.round(v);
+  const affine = (content, t) => content
+    .replace(/<a:(off|chOff) x="(-?\d+)" y="(-?\d+)"\/>/g, (m, tag, x, y) => `<a:${tag} x="${num(t.ox + (x - t.cx) * t.sx)}" y="${num(t.oy + (y - t.cy) * t.sy)}"/>`)
+    .replace(/<a:(ext|chExt) cx="(\d+)" cy="(\d+)"\/>/g, (m, tag, w, h) => `<a:${tag} cx="${num(w * t.sx)}" cy="${num(h * t.sy)}"/>`);
+  const walk = (str) => {
+    let out = ''; let i = 0;
+    for (;;) {
+      const a = str.indexOf(OPEN, i);
+      if (a < 0) return out + str.slice(i);
+      // осы топтың жабылуын тереңдік бойынша табамыз
+      let depth = 0; let j = a; let end = -1;
+      while (j < str.length) {
+        const o = str.indexOf(OPEN, j); const c = str.indexOf(CLOSE, j);
+        if (c < 0) break;
+        if (o >= 0 && o < c) { depth++; j = o + OPEN.length; } else { depth--; j = c + CLOSE.length; if (!depth) { end = j; break; } }
+      }
+      if (end < 0) return out + str.slice(i);
+      out += str.slice(i, a) + fixGroup(str.slice(a, end));
+      i = end;
+    }
+  };
+  const fixGroup = (g) => {
+    const head = g.match(/^<p:grpSp>[\s\S]*?<p:grpSpPr>[\s\S]*?<\/p:grpSpPr>|^<p:grpSp>[\s\S]*?<p:grpSpPr\/>/);
+    if (!head) return g;
+    const own = head[0]; const body = g.slice(own.length, g.length - CLOSE.length);
+    const inner = walk(body);                                  // ішкі топтар алдымен
+    const m = own.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>\s*<a:chOff x="(-?\d+)" y="(-?\d+)"\/>\s*<a:chExt cx="(\d+)" cy="(\d+)"\/>/);
+    if (!m || !+m[7] || !+m[8] || !+m[3] || !+m[4]) return own + inner + CLOSE;
+    const t = { ox: +m[1], oy: +m[2], cx: +m[5], cy: +m[6], sx: +m[3] / +m[7], sy: +m[4] / +m[8] };
+    if (Math.abs(t.sx - 1) < 1e-3 && Math.abs(t.sy - 1) < 1e-3 && t.ox === t.cx && t.oy === t.cy) return own + inner + CLOSE;
+    const fixedOwn = own.replace(/<a:chOff x="-?\d+" y="-?\d+"\/>\s*<a:chExt cx="\d+" cy="\d+"\/>/, `<a:chOff x="${m[1]}" y="${m[2]}"/><a:chExt cx="${m[3]}" cy="${m[4]}"/>`);
+    return fixedOwn + affine(inner, t) + CLOSE;
+  };
+  return walk(String(xml));
 }
 
 /** _rels/.rels-тен бастап барлық сілтенетін бөліктер жиыны */
@@ -91,7 +136,7 @@ function carveDeck(buf, picks) {
   picks.forEach((k, i) => {
     const s = src.get(order[k]);
     const name = `ppt/slides/slide${i + 1}.xml`;
-    files.set(name, s.xml);
+    files.set(name, normalizeGroups(s.xml));
     if (s.rels != null) files.set(`ppt/slides/_rels/slide${i + 1}.xml.rels`, stripNotes(s.rels));
     const rid = `rIdDl${i + 1}`;
     rids.push(rid);
@@ -180,4 +225,4 @@ function appendSlideFrom(destBuf, srcBuf, srcIdx) {
   return writeZipAll(dest);
 }
 
-module.exports = { carveDeck, appendSlideFrom, collectGarbage, reachable };
+module.exports = { normalizeGroups, carveDeck, appendSlideFrom, collectGarbage, reachable };

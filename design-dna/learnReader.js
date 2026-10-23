@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 const { readZip, parseTheme, parseClrMap } = require('./pptxDna');
-const { orderedSlides, relsMap, resolvePath, analyzeStructure, MAX_REFERENCE_SLIDES } = require('./structure');
+const { orderedSlides, relsMap, resolvePath, analyzeStructure, MAX_REFERENCE_SLIDES, sldSzMatch } = require('./structure');
 
 const READER_VERSION = 1;
 const MAX_ELEMENTS_PER_SLIDE = 80;
@@ -528,7 +528,7 @@ function lumOf(h) {
 function readTemplate(buf) {
   const files = readZip(buf);
   const pres = files.get('ppt/presentation.xml') || '';
-  const sz = pres.match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const sz = sldSzMatch(pres);
   const W = sz ? +sz[1] : 12192000; const H = sz ? +sz[2] : 6858000;
   const themeName = [...files.keys()].find((k) => /^ppt\/theme\/theme\d+\.xml$/.test(k));
   const theme = themeName ? parseTheme(files.get(themeName)) : {};

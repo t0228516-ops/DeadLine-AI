@@ -78,3 +78,29 @@ test('photoSlots + replacePhotos: the slide points at the new photo, the old med
   }
   assert.match(files.get('[Content_Types].xml'), /Extension="png"/i);
 });
+
+test('sldSzMatch: slide size is read whatever the attribute order (Canva writes cy first)', () => {
+  const { sldSzMatch } = require('../design-dna/structure');
+  assert.deepStrictEqual(sldSzMatch('<p:sldSz cy="10287000" cx="18288000"/>').slice(1), ['18288000', '10287000']);
+  assert.deepStrictEqual(sldSzMatch('<p:sldSz cx="12192000" cy="6858000" type="custom"/>').slice(1), ['12192000', '6858000']);
+  assert.strictEqual(sldSzMatch('<p:presentation/>'), null);
+});
+
+test('looksLikePhoto: paper, flat maps and cut-out ornaments stay; colour and B&W photos are replaced', () => {
+  assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 55, top8: 0.3, colors: 250, sat: 0.4 }), true, 'түрлі-түсті фото');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 56, top8: 0.87, colors: 15, sat: 0.01 }), true, 'ақ-қара фото');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 4.6, top8: 1, colors: 9, sat: 0.1 }), false, 'қағаз');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 29, top8: 0.83, colors: 19, sat: 0.5 }), false, 'жалпақ карта');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 0.82, lumStd: 32, top8: 0.68, colors: 91, sat: 0.4 }), false, 'мөлдір фонды әшекей');
+  assert.strictEqual(P.looksLikePhoto(null), false);
+});
+
+test('classify: a big quotation mark is decor — never a drop cap or a text slot', () => {
+  const { classify } = require('../products/presentation/templateFill');
+  const sp = (id, y, sz, t) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="1000000" y="${y}"/><a:ext cx="6000000" cy="900000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US" sz="${sz}"/><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const xml = `<p:sld><p:cSld><p:spTree>${sp(2, 500000, 12000, '“')}${sp(3, 1600000, 4000, 'Write an original statement or inspiring quote')}${sp(4, 3000000, 1400, 'Include a credit')}</p:spTree></p:cSld></p:sld>`;
+  const c = classify(xml, { W: 12192000, H: 6858000 });
+  assert.strictEqual(c.initials.length, 0);
+  assert.ok(c.content.every((s) => s.text !== '“'));
+  assert.strictEqual(c.content.length, 2);
+});

@@ -17,7 +17,7 @@
 
 const zlib = require('zlib');
 const { makeZip } = require('../referat/zipmin');
-const { orderedSlides, tagBlocks, xfrmOf } = require('../../design-dna/structure');
+const { orderedSlides, tagBlocks, xfrmOf, sldSzMatch } = require('../../design-dna/structure');
 const L = require('./templateLayout');
 const QA = require('./templateCheck');
 const { embeddedMetrics } = require('./embeddedMetrics');
@@ -560,7 +560,7 @@ function chunkLines(lines, n) {
 
 function slideSize(files) {
   const pres = files.get('ppt/presentation.xml') || '';
-  const m = pres.match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const m = sldSzMatch(pres);
   return { W: m ? +m[1] : 12192000, H: m ? +m[2] : 6858000 };
 }
 
@@ -610,7 +610,8 @@ function classify(xml, ctx) {
   const shapes = textShapes(xml);
   // «01», «2», «03.» сияқты реттік нөмір белгілері шаблонда қалады (өзгертілмейді)
   // (тек ≤2 таңбалы реттік нөмір: «180», «2024» сияқты сандар — мазмұн, ауыстырылады)
-  let content = shapes.filter((s) => !/^0?\d{1,2}[.)]?$/.test((s.text || '').trim()));
+  // «“», «"», «»», «—» сияқты тек тыныс белгісі/таңба қораптары — безендіру (дәйексөз белгісі): мәтін де, бас әріп те емес
+  let content = shapes.filter((s) => !/^0?\d{1,2}[.)]?$/.test((s.text || '').trim()) && !/^[\p{P}\p{S}\s]+$/u.test(s.text || ''));
 
   // Сәндік БАС ӘРІПТЕР: 1 таңба (≥60pt) немесе 2 таңба (≥200pt)
   const initials = content.filter((s) => { const n = s.text.replace(/\s/g, '').length; const z = szOf(s.block); return (n <= 1 && z >= 6000) || (n <= 2 && z >= 20000); })

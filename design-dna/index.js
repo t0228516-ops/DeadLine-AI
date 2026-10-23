@@ -5,7 +5,7 @@
  */
 const { extractDna, dnaToTheme, readZip, parseTheme, parseClrMap } = require('./pptxDna');
 const { buildSkin } = require('./skin');
-const { analyzeStructure, MAX_REFERENCE_SLIDES } = require('./structure');
+const { analyzeStructure, MAX_REFERENCE_SLIDES, sldSzMatch } = require('./structure');
 const { extractDecor } = require('./decor');
 
 const ROLE_KK = {
@@ -22,7 +22,7 @@ const archName = (id) => /^cards-(\d)/.test(id) ? `карточкалар (${id.
 function analyzeReference(buf) {
   const files = readZip(buf);
   const pres = files.get('ppt/presentation.xml') || '';
-  const sz = pres.match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const sz = sldSzMatch(pres);
   const W = sz ? +sz[1] : 12192000; const H = sz ? +sz[2] : 6858000;
   const st = analyzeStructure(files, W, H);
   let dna = null;

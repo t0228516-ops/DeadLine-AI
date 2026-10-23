@@ -12,13 +12,13 @@
  */
 const { pngStats } = require('./png');
 const { readZipAll, writeZipAll } = require('../templateFill');
-const { orderedSlides, relsMap, resolvePath } = require('../../../design-dna/structure');
+const { orderedSlides, relsMap, resolvePath, sldSzMatch } = require('../../../design-dna/structure');
 
 const relsPathOf = (p) => p.replace(/([^/]+)$/, '_rels/$1.rels');
 const MIN_AREA = Number(process.env.LIBRARY_PHOTO_MIN_AREA) || 0.04;
 
 function slideSize(files) {
-  const m = (files.get('ppt/presentation.xml') || '').match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const m = sldSzMatch(files.get('ppt/presentation.xml'));
   return m ? { W: +m[1], H: +m[2] } : { W: 12192000, H: 6858000 };
 }
 
@@ -148,6 +148,44 @@ function replacePhotos(buf, list) {
 }
 
 /**
+ * Суреттің пиксель сипаты (Chromium canvas, 64×64): фото ме, әлде текстура/иллюстрация ма.
+ *   lumStd  — жарықтық ауытқуы (қағаз, бір түсті фон — өте аз)
+ *   top8    — ең жиі 8 түс (4 бит/арна) қанша пиксельді алады (жалпақ иллюстрация, карта, әшекей — көп)
+ *   opaque  — мөлдір емес пиксель үлесі;  sat — орташа қанықтық (ақ-қара фото ≈ 0)
+ */
+async function imageStats(page, bytes) {
+  const mime = Buffer.from(bytes).readUInt32BE(0) === 0x89504e47 ? 'image/png' : 'image/jpeg';
+  return page.evaluate(async (src) => {
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('img')); i.src = src; });
+    const N = 64; const c = document.createElement('canvas'); c.width = N; c.height = N; const g = c.getContext('2d');
+    g.drawImage(im, 0, 0, N, N);
+    const p = g.getImageData(0, 0, N, N).data; const hist = new Map(); let n = 0, s = 0, s2 = 0, sat = 0;
+    for (let i = 0; i < p.length; i += 4) {
+      if (p[i + 3] < 200) continue; n++;
+      const y = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]; s += y; s2 += y * y;
+      const mx = Math.max(p[i], p[i + 1], p[i + 2]); sat += mx ? (mx - Math.min(p[i], p[i + 1], p[i + 2])) / mx : 0;
+      const k = ((p[i] >> 4) << 8) | ((p[i + 1] >> 4) << 4) | (p[i + 2] >> 4); hist.set(k, (hist.get(k) || 0) + 1);
+    }
+    if (!n) return { opaque: 0, lumStd: 0, top8: 1, colors: 0, sat: 0 };
+    const top = [...hist.values()].sort((a, b) => b - a).slice(0, 8).reduce((a, b) => a + b, 0);
+    const m = s / n;
+    return { opaque: +(n / (N * N)).toFixed(2), lumStd: +Math.sqrt(Math.max(0, s2 / n - m * m)).toFixed(1), top8: +(top / n).toFixed(2), colors: hist.size, sat: +(sat / n).toFixed(2) };
+  }, `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`);
+}
+
+/**
+ * Ауыстыруға болатын фото ма (imageStats бойынша)? Текстура (қағаз, бір түсті фон), жалпақ иллюстрация (карта, сызба),
+ * мөлдір фонды әшекей (кітап, гүл суреті) — жоқ. Ақ-қара фотоның түсі аз болады, сондықтан түс саны тек түрлі-түстіге қаралады.
+ */
+function looksLikePhoto(st) {
+  if (!st) return false;
+  if (st.opaque < 0.88) return false;
+  if (st.lumStd < 15) return false;
+  if (st.sat > 0.08 && st.colors <= 35 && st.lumStd < 40) return false;
+  return true;
+}
+
+/**
  * Жаңа фотоны түпнұсқа сурет орнына салу (Chromium canvas): өлшем сол, «cover» кесу басты нысан бойынша,
  * түпнұсқаның мөлдір пішіні (альфа) сақталады. page — ашық puppeteer беті.
  * @returns {Promise<Buffer|null>} PNG (альфасы бар болса) не JPEG
@@ -183,4 +221,4 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+module.exports = { looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };

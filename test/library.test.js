@@ -114,3 +114,30 @@ test('prepareDeck: downloads once, caches on disk, carves without credits and ke
   await L.prepareDeck({ entry, slideCount: 6, http });
   assert.strictEqual(calls, 1, 'екінші рет дискіден');
 });
+
+test('credits link: the last slide links to slidescarnival.com (a condition of the permission), once', () => {
+  const deck = carveDeck(FIX, [0, 1]);
+  const out = L.linkCredits(L.linkCredits(appendSlideFrom(deck, FIX, 9), -1), -1);
+  const files = readZipAll(out);
+  const sp = orderedSlides(files).slice(-1)[0];
+  const rels = files.get(sp.replace(/([^/]+)$/, '_rels/$1.rels'));
+  const link = Object.entries(relsMap(rels)).filter(([, r]) => /slidescarnival\.com/.test(r.target));
+  assert.strictEqual(link.length, 1, 'бір сілтеме');
+  const xml = files.get(sp);
+  assert.strictEqual((xml.match(/www\.slidescarnival\.com/g) || []).length, 1, 'көрінетін мекенжай бір рет');
+  assert.ok(xml.includes(`r:id="${link[0][0]}"`));
+  assert.strictEqual(orderedSlides(files).length, 3, 'басқа слайдтар өзгермейді');
+});
+
+test('normalizeGroups: scaled groups get real child sizes, nested groups too; same geometry on the slide', () => {
+  const { normalizeGroups } = require('../products/presentation/library/carve');
+  const grp = (off, ext, ch, chx, body) => `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr><a:xfrm><a:off x="${off[0]}" y="${off[1]}"/><a:ext cx="${ext[0]}" cy="${ext[1]}"/><a:chOff x="${ch[0]}" y="${ch[1]}"/><a:chExt cx="${chx[0]}" cy="${chx[1]}"/></a:xfrm></p:grpSpPr>${body}</p:grpSp>`;
+  const sp = (x, y, w, h) => `<p:sp><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm></p:spPr></p:sp>`;
+  const xml = grp([1000, 2000], [500, 500], [0, 0], [1000, 1000], sp(200, 400, 600, 200) + grp([0, 0], [1000, 1000], [0, 0], [2000, 2000], sp(1000, 1000, 1000, 1000)));
+  const out = normalizeGroups(xml);
+  assert.ok(out.includes('<a:off x="1100" y="2200"/><a:ext cx="300" cy="100"/>'), 'бірінші деңгей');
+  assert.ok(out.includes('<a:off x="1250" y="2250"/><a:ext cx="250" cy="250"/>'), 'ішкі топ');
+  assert.strictEqual((out.match(/<a:chOff x="1000" y="2000"\/><a:chExt cx="500" cy="500"\/>/g) || []).length, 2, 'топтар масштабсыз');
+  const plain = grp([10, 10], [100, 100], [10, 10], [100, 100], sp(20, 20, 30, 30));
+  assert.strictEqual(normalizeGroups(plain), plain, 'масштабсыз топ өзгермейді');
+});

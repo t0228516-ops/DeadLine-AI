@@ -12,7 +12,7 @@
  * өлшеп, қорғайды. LLM құласа/қате берсе — слайд детерминді қозғалтқышпен толтырылады.
  */
 
-const { orderedSlides, xfrmOf } = require('../../design-dna/structure');
+const { orderedSlides, xfrmOf, sldSzMatch } = require('../../design-dna/structure');
 const T = require('./templateFill');
 const L = require('./templateLayout');
 
@@ -54,7 +54,7 @@ function describeSlide(xml, W, H) {
 
 function describeTemplate(templateBuf) {
   const files = T.readZipAll(templateBuf);
-  const m = (files.get('ppt/presentation.xml') || '').match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const m = sldSzMatch((files.get('ppt/presentation.xml') || ''));
   const W = m ? +m[1] : 12192000, H = m ? +m[2] : 6858000;
   return { W, H, slideIn: { w: inch(W), h: inch(H) }, slides: orderedSlides(files).map((sp) => describeSlide(files.get(sp) || '', W, H)) };
 }

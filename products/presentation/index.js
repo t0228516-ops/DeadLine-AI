@@ -204,42 +204,51 @@ async function fetchImageWithFallback(query, topic, used, deckQueries = [], opts
  */
 async function swapLibraryPhotos(buf, slides, ctx) {
   const P = require('./library/photos');
-  if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let slots;
   try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
-  const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
-  const perSlide = new Map();
-  slots = slots.sort((a, b) => b.area - a.area).filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+  const keep = new Set(ctx.keepMedia || []);
+  slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
   if (!slots.length) return buf;
-  const used = new Set();
-  const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
-  const found = await mapLimit(slots, 3, async (slot) => {
-    const slide = slides[slot.slide] || {};
-    const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
-    const query = isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
-    if (!query) return null;
-    const text = [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
-      .map((x) => (typeof x === 'string' ? x : (x && (x.label || x.text)) || '')).filter(Boolean).join(' · ');
-    const slideCtx = { topic: ctx.topic, title: slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
-    try {
-      const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 });
-      if (vision) {
-        const got = await fetchPhotoVision(slide, { query, topic: ctx.topic, topicTitle: ctx.topic, text, background: slideCtx.background,
-          used, avoid, free: !!ctx.free, vision, genBudget: { left: 0 }, budget: { left: Number(process.env.IMAGE_SEARCHES_PER_PHOTO) || 5 } });
-        if (!got.fallback) return got.dataUri ? { ...slot, dataUri: got.dataUri, focus: got.focus || '' } : null;
-      }
-      const dataUri = await fetchImageWithFallback(query, ctx.topic, used, [], { free: !!ctx.free, judge: makePhotoJudge(slideCtx) });
-      return dataUri ? { ...slot, dataUri, focus: '' } : null;
-    } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
-  });
-  const hits = found.filter(Boolean);
-  if (!hits.length) { console.log(`[Library] photos: 0/${slots.length} found — template photos kept`); return buf; }
+  if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let browser = null;
   try {
     const { readZipAll } = require('./templateFill');
     const files = readZipAll(buf);
     browser = await require('./renderer').launchBrowser(require('puppeteer'));
     const page = await browser.newPage();
+    // текстура, карта, әшекей — фото емес, шаблонның өз безендіруі қалады
+    const verdict = new Map();
+    for (const s of slots) {
+      if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
+    }
+    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
+    const perSlide = new Map();
+    slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
+      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+    if (!slots.length) { console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
+    const used = new Set();
+    const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
+    const found = await mapLimit(slots, 3, async (slot) => {
+      const slide = slides[slot.slide] || {};
+      const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
+      const query = isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
+      if (!query) return null;
+      const text = [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
+        .map((x) => (typeof x === 'string' ? x : (x && (x.label || x.text)) || '')).filter(Boolean).join(' · ');
+      const slideCtx = { topic: ctx.topic, title: slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
+      try {
+        const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 });
+        if (vision) {
+          const got = await fetchPhotoVision(slide, { query, topic: ctx.topic, topicTitle: ctx.topic, text, background: slideCtx.background,
+            used, avoid, free: !!ctx.free, vision, genBudget: { left: 0 }, budget: { left: Number(process.env.IMAGE_SEARCHES_PER_PHOTO) || 5 } });
+          if (!got.fallback) return got.dataUri ? { ...slot, dataUri: got.dataUri, focus: got.focus || '' } : null;
+        }
+        const dataUri = await fetchImageWithFallback(query, ctx.topic, used, [], { free: !!ctx.free, judge: makePhotoJudge(slideCtx) });
+        return dataUri ? { ...slot, dataUri, focus: '' } : null;
+      } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
+    });
+    const hits = found.filter(Boolean);
+    if (!hits.length) { console.log(`[Library] photos: 0/${slots.length} found — template photos kept`); return buf; }
     const list = [];
     for (const h of hits) {
       const bytes = await P.composite(page, files.get(h.media), h.media, h.dataUri, h.focus).catch((e) => { console.warn(`[Library] composite: ${e.message}`); return null; });
@@ -677,7 +686,7 @@ async function generatePresentation(userInput, options = {}) {
       // Кітапхана шаблоны: стоктық фотолар → тақырыпқа сай фото; түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады
       if (options.library && options.library.creditsBuf) {
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
-          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress,
+          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
         });
         fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
         console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);

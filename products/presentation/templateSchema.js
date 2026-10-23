@@ -21,7 +21,7 @@
 const T = require('./templateFill');
 const QA = require('./templateCheck');
 const L = require('./templateLayout');
-const { orderedSlides } = require('../../design-dna/structure');
+const { orderedSlides, sldSzMatch } = require('../../design-dna/structure');
 const { embeddedMetrics } = require('./embeddedMetrics');
 const { templateFontStyles, styleOf } = require('./fontStyle');
 const { materializePlaceholders } = require('./phGeometry');
@@ -73,7 +73,7 @@ function nearBy(a, b) { // вертикаль ара (EMU): b a-ның асты�
  */
 function analyzeTemplate(template) {
   const files = Buffer.isBuffer(template) ? T.readZipAll(template) : template;
-  const m = (files.get('ppt/presentation.xml') || '').match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const m = sldSzMatch((files.get('ppt/presentation.xml') || ''));
   const W = m ? +m[1] : 12192000; const H = m ? +m[2] : 6858000;
   const metrics = embeddedMetrics(files);
   const styles = templateFontStyles(files, metrics);
