@@ -9,7 +9,7 @@ const M = require('../core/designMemory');
 
 test('merge: newest first, no duplicates, bounded; bad JSON → empty memory', () => {
   let m = M.parse('not json');
-  assert.deepStrictEqual(m, { systems: [], moods: [], photos: [], comps: [] });
+  assert.deepStrictEqual(m, { systems: [], moods: [], photos: [], comps: [], libs: [] });
   m = M.merge(m, { system: 'journal', mood: 'ivory' });
   m = M.merge(JSON.stringify(m), { system: 'swiss', mood: 'cloud', photos: ['wm:a.jpg', 'px:1'] });
   m = M.merge(m, { system: 'journal', mood: 'midnight', photos: ['px:1', 'fl:9'] });
@@ -28,12 +28,12 @@ test('json db: memory survives per student and feeds the next deck\'s choice', a
   const db = require('../storage/jsonDb');
   await db.initDB();
   await db.registerUser('77', null, null);
-  assert.deepStrictEqual(await db.getDesignMemory('77'), { systems: [], moods: [], photos: [], comps: [] });
+  assert.deepStrictEqual(await db.getDesignMemory('77'), { systems: [], moods: [], photos: [], comps: [], libs: [] });
   await db.pushDesignMemory('77', { system: 'academy', mood: 'mint' });
   await db.pushDesignMemory('77', { photos: ['wm:x.jpg'] });
   const mem = await db.getDesignMemory('77');
-  assert.deepStrictEqual(mem, { systems: ['academy'], moods: ['mint'], photos: ['wm:x.jpg'], comps: [] });
-  assert.deepStrictEqual(await db.getDesignMemory('nobody'), { systems: [], moods: [], photos: [], comps: [] });
+  assert.deepStrictEqual(mem, { systems: ['academy'], moods: ['mint'], photos: ['wm:x.jpg'], comps: [], libs: [] });
+  assert.deepStrictEqual(await db.getDesignMemory('nobody'), { systems: [], moods: [], photos: [], comps: [], libs: [] });
 
   const { applyDeckTheme } = require('../products/presentation/deckPolish');
   const avoid = M.avoidOptions(mem).designAvoid;
@@ -91,4 +91,12 @@ test('composition variants: same content + different seed → different inner lo
   const m = C.mirrorHtml('<div style="position:absolute;left:100px;top:10px;width:300px">x</div><div style="position:absolute;right:0;width:5px"></div>');
   assert.match(m, /left:1520px/);
   assert.match(m, /right:0;width:5px/);
+});
+
+test('library templates: the newest goes first and feeds the next choice as recentLibs', () => {
+  const M = require('../core/designMemory');
+  let m = M.merge(null, { lib: 'sc02659' });
+  m = M.merge(m, { lib: 'sc00401' });
+  assert.deepStrictEqual(m.libs, ['sc00401', 'sc02659']);
+  assert.deepStrictEqual(M.avoidOptions(m).recentLibs, ['sc00401', 'sc02659']);
 });

@@ -239,7 +239,8 @@ async function generatePresentation(userInput, options = {}) {
   const LANG_BY_CODE = { kk: 'Kazakh', ru: 'Russian', en: 'English', kazakh: 'Kazakh', russian: 'Russian', english: 'English' };
   // Template режимі: аударудың керегі жоқ — тіл тек тақырып мәтінінде нақты жазылса ғана беріледі,
   // әйтпесе модель тақырыппен/материалмен бірдей тілде жазады.
-  const language = mode === 'template'
+  // Кітапхана шаблоны (options.library) — тілді студент таңдайды, шаблон тек дизайн береді
+  const language = mode === 'template' && !options.library
     ? (parsed.language || null)
     : (LANG_BY_CODE[String(options.language || '').toLowerCase()] || parsed.language);
 
@@ -616,6 +617,11 @@ async function generatePresentation(userInput, options = {}) {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
       const qaReport = [];
       fs.writeFileSync(pptxPath, fillTemplatePptx(referencePptxBuf, slides, { language, layout, slotFill, qaReport }));
+      // Кітапхана шаблоны: түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады — рұқсаттың шарты
+      if (options.library && options.library.creditsBuf) {
+        fs.writeFileSync(pptxPath, require('./library').appendCredits(fs.readFileSync(pptxPath), options.library));
+        console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);
+      }
       // соңғы тексерушінің нәтижесі үйрену жүйесіне: қай ақау қанша, нешеуі түзелді
       const qa = qaReport.flatMap((r) => r.issues);
       const unfixed = qa.filter((q) => !q.fixed).length;
@@ -1077,7 +1083,8 @@ async function generatePresentation(userInput, options = {}) {
   setActiveCostTracker(null);
   return {
     // Үйрену жүйесі үшін толтыру нәтижесі (шаблонның өзін server.js оқиды — тек клиент келіскенде)
-    templateLearn: isTemplateFill ? { fit: fitInfo, layoutPlanned } : null,
+    templateLearn: isTemplateFill && !options.library ? { fit: fitInfo, layoutPlanned } : null,
+    libraryId: options.library ? options.library.id : null,
     requirementsReport,
     templateReport,
     mode,
