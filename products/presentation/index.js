@@ -197,6 +197,63 @@ async function fetchImageWithFallback(query, topic, used, deckQueries = [], opts
   return null;
 }
 
+/**
+ * Кітапхана шаблонының стоктық фотоларын слайдтың өз тақырыбына сай фотомен ауыстыру (library/photos.js).
+ * Әр фото орнына слайдтың imageQuery-і бойынша біздің фото жүйесі іздейді (vision таңдау, болмаса мәтіндік тексеру);
+ * табылмаса — шаблонның өз фотосы қалады. Ешқашан лақтырмайды.
+ */
+async function swapLibraryPhotos(buf, slides, ctx) {
+  const P = require('./library/photos');
+  if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
+  let slots;
+  try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
+  const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
+  const perSlide = new Map();
+  slots = slots.sort((a, b) => b.area - a.area).filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+  if (!slots.length) return buf;
+  const used = new Set();
+  const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
+  const found = await mapLimit(slots, 3, async (slot) => {
+    const slide = slides[slot.slide] || {};
+    const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
+    const query = isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
+    if (!query) return null;
+    const text = [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
+      .map((x) => (typeof x === 'string' ? x : (x && (x.label || x.text)) || '')).filter(Boolean).join(' · ');
+    const slideCtx = { topic: ctx.topic, title: slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
+    try {
+      const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 });
+      if (vision) {
+        const got = await fetchPhotoVision(slide, { query, topic: ctx.topic, topicTitle: ctx.topic, text, background: slideCtx.background,
+          used, avoid, free: !!ctx.free, vision, genBudget: { left: 0 }, budget: { left: Number(process.env.IMAGE_SEARCHES_PER_PHOTO) || 5 } });
+        if (!got.fallback) return got.dataUri ? { ...slot, dataUri: got.dataUri, focus: got.focus || '' } : null;
+      }
+      const dataUri = await fetchImageWithFallback(query, ctx.topic, used, [], { free: !!ctx.free, judge: makePhotoJudge(slideCtx) });
+      return dataUri ? { ...slot, dataUri, focus: '' } : null;
+    } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
+  });
+  const hits = found.filter(Boolean);
+  if (!hits.length) { console.log(`[Library] photos: 0/${slots.length} found — template photos kept`); return buf; }
+  let browser = null;
+  try {
+    const { readZipAll } = require('./templateFill');
+    const files = readZipAll(buf);
+    browser = await require('./renderer').launchBrowser(require('puppeteer'));
+    const page = await browser.newPage();
+    const list = [];
+    for (const h of hits) {
+      const bytes = await P.composite(page, files.get(h.media), h.media, h.dataUri, h.focus).catch((e) => { console.warn(`[Library] composite: ${e.message}`); return null; });
+      if (bytes) list.push({ slide: h.slide, rid: h.rid, bytes });
+    }
+    const out = P.replacePhotos(buf, list);
+    console.log(`[Library] photos: ${out.replaced}/${slots.length} replaced with on-topic photos`);
+    return out.buf;
+  } catch (e) {
+    console.warn(`[Library] photo swap failed (template photos kept): ${e.message}`);
+    return buf;
+  } finally { if (browser) await browser.close().catch(() => {}); }
+}
+
 // Бір уақытта ең көбі N тапсырма (Unsplash-ты және желіні шамадан тыс жүктемеу үшін)
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
@@ -617,9 +674,12 @@ async function generatePresentation(userInput, options = {}) {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
       const qaReport = [];
       fs.writeFileSync(pptxPath, fillTemplatePptx(referencePptxBuf, slides, { language, layout, slotFill, qaReport }));
-      // Кітапхана шаблоны: түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады — рұқсаттың шарты
+      // Кітапхана шаблоны: стоктық фотолар → тақырыпқа сай фото; түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады
       if (options.library && options.library.creditsBuf) {
-        fs.writeFileSync(pptxPath, require('./library').appendCredits(fs.readFileSync(pptxPath), options.library));
+        const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
+          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress,
+        });
+        fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
         console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);
       }
       // соңғы тексерушінің нәтижесі үйрену жүйесіне: қай ақау қанша, нешеуі түзелді

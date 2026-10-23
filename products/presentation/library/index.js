@@ -115,7 +115,7 @@ async function prepareDeck(o = {}) {
   }
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i)); // Credits-сіз нұсқа — толтыруға
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
-  return { id: t.id, style: t.style, slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length };
+  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length };
 }
 
 /** Толтырылған колодаға түпнұсқа Credits слайдын өзгеріссіз қосу (атрибуция — рұқсаттың міндетті шарты) */
