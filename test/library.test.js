@@ -154,3 +154,31 @@ test('subjects: templates with subject-bound decor appear only for that subject,
   for (let i = 0; i < 300; i++) if (L.chooseTemplate({ topic: 'Күн жүйесінің планеталары', rng }).id === 'sc01064') hits++;
   assert.ok(hits > 100, `ғарыш тақырыбына ғарыш шаблоны жиі (${hits}/300)`);
 });
+
+test('credits link: only the SlidesCarnival run is linked, before extLst; neighbours untouched', () => {
+  const deck = carveDeck(FIX, [0]);
+  const files = readZipAll(deck);
+  const sp = orderedSlides(files)[0];
+  const runs = '<a:r><a:rPr lang="en-US"/><a:t>Thanks to</a:t></a:r><a:r><a:rPr lang="en-US" b="1"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:extLst><a:ext uri="{X}"/></a:extLst></a:rPr><a:t>SlidesCarnival</a:t></a:r>';
+  files.set(sp, files.get(sp).replace('</p:spTree>', `<p:sp><p:nvSpPr><p:cNvPr id="9" name="c"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:p>${runs}</a:p></p:txBody></p:sp></p:spTree>`));
+  const { writeZipAll, xmlProblem } = require('../products/presentation/templateFill');
+  const out = readZipAll(L.linkCredits(writeZipAll(files), 0));
+  const xml = out.get(sp);
+  assert.strictEqual(xmlProblem(xml), null);
+  assert.ok(xml.includes('<a:r><a:rPr lang="en-US"/><a:t>Thanks to</a:t></a:r>'), 'көрші жол өзгермеді');
+  assert.ok(/<a:hlinkClick r:id="rIdDlScLink"\/><a:extLst>/.test(xml), 'hlinkClick extLst алдында');
+});
+
+test('prepareDeck: an explicitly chosen template that is too heavy is shortened, not swapped', async () => {
+  const http = { get: async () => ({ data: FIX }) };
+  const heavy = { id: 'fxH', slug: 'h', style: 't', groups: ['general'], cover: 1, agenda: 2, section: [], text: [3, 4, 5], stats: [6], quote: [7], closing: 9, credits: 10 };
+  const old = process.env.LIBRARY_MAX_MB;
+  process.env.LIBRARY_MAX_MB = '0.0001';
+  delete require.cache[require.resolve('../products/presentation/library')];
+  const L2 = require('../products/presentation/library');
+  const fixed = await L2.prepareDeck({ entry: heavy, slideCount: 12, http });
+  assert.strictEqual(fixed.id, 'fxH');
+  assert.ok(fixed.slideCount < 12);
+  if (old == null) delete process.env.LIBRARY_MAX_MB; else process.env.LIBRARY_MAX_MB = old;
+  delete require.cache[require.resolve('../products/presentation/library')];
+});

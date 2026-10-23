@@ -1184,4 +1184,4 @@ function compIdsOf(file) {
   try { return [...new Set([...fs.readFileSync(file, 'utf8').matchAll(/data-layout="cx-([a-z0-9-]+)"/g)].map((m) => m[1]))]; } catch { return []; }
 }
 
-module.exports = { generatePresentation, _fetchPhotoVision: fetchPhotoVision };
+module.exports = { generatePresentation, _fetchPhotoVision: fetchPhotoVision, _swapLibraryPhotos: swapLibraryPhotos };

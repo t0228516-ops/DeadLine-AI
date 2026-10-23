@@ -127,9 +127,11 @@ async function fetchTemplate(t, o = {}) {
  * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object}} o
  */
 async function prepareDeck(o = {}) {
-  const t = o.entry || (o.id && byId.get(o.id)) || chooseTemplate(o);
+  const fixed = o.entry || (o.id && byId.get(o.id));
+  const t = fixed || chooseTemplate(o);
   const src = await fetchTemplate(t, o);
-  let n = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
+  const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
+  let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
   // файл тым үлкен болса (ауыр фон суреттері) слайд азаяды
   for (let tries = 0; tries < 4; tries++) {
@@ -137,6 +139,11 @@ async function prepareDeck(o = {}) {
     creditsBuf = carveDeck(src, picks.concat([t.credits - 1]));
     if (creditsBuf.length <= MAX_DECK_BYTES || n <= 5) break;
     n = Math.max(5, n - 3);
+  }
+  // ауыр шаблон сұралған слайд санын бере алмаса — студент аз слайд алмасын, басқа шаблон таңдалады
+  if (picks.length < want && !fixed && (o.tries || 0) < 3) {
+    console.log(`[Library] ${t.id}: ${want} slides would exceed ${(MAX_DECK_BYTES / 1048576).toFixed(0)}MB — another template`);
+    return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
   }
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i)); // Credits-сіз нұсқа — толтыруға
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
@@ -163,11 +170,14 @@ function linkCredits(buf, idx) {
   const rid = 'rIdDlScLink';
   if (!rels.includes(`Id="${rid}"`)) rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="${HLINK_TYPE}" Target="${SITE_URL}" TargetMode="External"/></Relationships>`);
   let xml = files.get(sp);
-  // бар «SlidesCarnival» сөзі сілтемеге айналады
-  xml = xml.replace(/<a:r>(<a:rPr\b[^>]*?)(\/>|>([\s\S]*?)<\/a:rPr>)(<a:t>[^<]*Slides ?Carnival[^<]*<\/a:t><\/a:r>)/gi, (m, open, close, inner, rest) => {
-    if (/hlinkClick/.test(inner || '')) return m;
-    return `<a:r>${open}>${inner || ''}<a:hlinkClick r:id="${rid}"/></a:rPr>${rest}`;
-  }).replace(/<a:r>(<a:t>[^<]*Slides ?Carnival[^<]*<\/a:t><\/a:r>)/gi, `<a:r><a:rPr lang="en-US"><a:hlinkClick r:id="${rid}"/></a:rPr>$1`);
+  // бар «SlidesCarnival» сөзі сілтемеге айналады (әр <a:r> бөлек қаралады — көрші жолдарға тимейді)
+  xml = xml.replace(/<a:r>(?:(?!<\/a:r>)[\s\S])*?<\/a:r>/g, (run) => {
+    if (!/<a:t>[^<]*Slides ?Carnival/i.test(run) || /hlinkClick/.test(run)) return run;
+    const link = `<a:hlinkClick r:id="${rid}"/>`;
+    if (/<a:rPr\b[^>]*\/>/.test(run.slice(0, run.indexOf('<a:t>')))) return run.replace(/<a:rPr\b([^>]*?)\/>/, `<a:rPr$1>${link}</a:rPr>`);
+    if (/<a:rPr\b/.test(run)) return run.replace(/(<a:hlinkMouseOver\b|<a:rtl\b|<a:extLst>|<\/a:rPr>)/, `${link}$1`); // схема реті: hlinkClick — extLst алдында
+    return run.replace('<a:r>', `<a:r><a:rPr lang="en-US">${link}</a:rPr>`);
+  });
   if (!/www\.slidescarnival\.com/i.test(xml)) {
     const { W, H } = require('./photos').slideSize(files);
     const color = (xml.match(/<a:rPr\b[^>]*>\s*<a:solidFill>\s*<a:srgbClr val="([0-9A-Fa-f]{6})"/) || [])[1] || '808080';
