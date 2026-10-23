@@ -27,6 +27,25 @@ const GROUP_RE = {
   philosophy: /философ|ойшыл|этика|психолог|мәдениет|өнер|әдебиет|философ|психолог|этик|культур|искусств|литератур|philosoph|ethic|psycholog|culture|art\b|literature/i,
 };
 
+// Пән: әшекейі пәнге байланған шаблон (subjects) тек сол пәндегі тақырыпқа таңдалады — әшекейлер сақталады, бірақ орынсыз шықпайды
+const L = '(?<!\\p{L})';   // сөз басы (кирилл үшін \\b жұмыс істемейді)
+const SUBJECT_RE = {
+  medicine: new RegExp(`${L}(медицин|дәрігер|ауру|емдеу|денсаулық|вирус|вакцин|хирург|фармац|врач|болезн|лечен|здоров|medic|health|disease|doctor|vaccin|virus|surger)`, 'iu'),
+  biology: new RegExp(`${L}(биолог|жасуша|өсімдік|жануар|генетик|ағза|ботаник|зоолог|клетк|растен|животн|генет|организм|biolog|cell|plant|animal|gene|organism|botan|zoolog)`, 'iu'),
+  space: new RegExp(`${L}(ғарыш|планета|жұлдыз|астроном|комета|галактик|күн жүйесі|космос|планет|звезд|галакт|space|planet|star|astronom|galax|comet|cosmos)`, 'iu'),
+  ecology: new RegExp(`${L}(эколог|қоршаған орта|ластану|климат|табиғат|қоқыс|экожүйе|окружающ|загрязн|природ|ecolog|environment|pollution|climate|nature|waste)`, 'iu'),
+  it: new RegExp(`${L}(ақпараттық|компьютер|бағдарлама|интернет|цифрлы|жасанды интеллект|робот|киберқауіпсіз|информац|программ|цифров|искусственн|кибер|computer|software|programming|internet|digital|artificial intelligence|robot|cyber)`, 'iu'),
+  psychology: new RegExp(`${L}(психолог|эмоция|стресс|тұлға|мінез-құлық|эмоци|личност|psycholog|emotion|stress|mental|personality)`, 'iu'),
+  literature: new RegExp(`${L}(әдебиет|ақын|жазушы|роман|өлең|поэма|шығарма|литератур|поэт|писател|стихотвор|literatur|poet|novel|poem|writer)`, 'iu'),
+  geography: new RegExp(`${L}(географ|материк|мұхит|урбаниз|қала құрылыс|океан|geograph|continent|ocean|urban)`, 'iu'),
+};
+
+/** Тақырыптың пәндері (бірнеше болуы мүмкін, жоқ болса — бос) */
+function topicSubjects(topic) {
+  const t = String(topic || '');
+  return Object.keys(SUBJECT_RE).filter((k) => SUBJECT_RE[k].test(t));
+}
+
 const byId = new Map(CATALOG.templates.map((t) => [t.id, t]));
 
 /** Тақырыптың топтары (бірнешеуі болуы мүмкін); ешқайсысы сай келмесе — ['general'] */
@@ -37,16 +56,22 @@ function topicGroups(topic) {
 }
 
 /**
- * Шаблон таңдау: тақырып тобына сай, студенттің соңғы кітапхана шаблондарынан (avoid) өзгеше.
+ * Шаблон таңдау: тақырып тобына сай (пәнге байланған шаблон — тек сол пәнге), студенттің соңғы кітапхана шаблондарынан (avoid) өзгеше.
  * @param {{topic?:string, avoid?:string[], rng?:()=>number}} o
  */
 function chooseTemplate(o = {}) {
   const rng = o.rng || Math.random;
   const groups = topicGroups(o.topic);
+  const subjects = topicSubjects(o.topic);
   const avoid = new Set(o.avoid || []);
-  const fit = CATALOG.templates.filter((t) => t.groups.some((g) => groups.includes(g)));
-  const pool = (fit.length ? fit : CATALOG.templates.filter((t) => t.groups.includes('general')));
+  // пәнге байланған шаблон тек сол пәнге; қалғаны — тақырып тобы бойынша
+  const usable = CATALOG.templates.filter((t) => !t.subjects || t.subjects.some((x) => subjects.includes(x)));
+  const fit = usable.filter((t) => (t.subjects ? true : t.groups.some((g) => groups.includes(g))));
+  const pool = (fit.length ? fit : usable.filter((t) => t.groups.includes('general')));
   const fresh = pool.filter((t) => !avoid.has(t.id));
+  // пәні дәл сай шаблон (әшекейі тақырыпқа қатысты) — жартысында бірінші кезекте
+  const exact = fresh.filter((t) => t.subjects);
+  if (exact.length && rng() < (Number(process.env.LIBRARY_SUBJECT_SHARE) || 0.5)) return exact[Math.floor(rng() * exact.length) % exact.length];
   const list = fresh.length ? fresh : pool;
   return list[Math.floor(rng() * list.length) % list.length];
 }
@@ -176,4 +201,4 @@ function eligible(o = {}, env = process.env, rng = Math.random) {
   return rng() < share;
 }
 
-module.exports = { CATALOG, linkCredits, topicGroups, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
+module.exports = { CATALOG, linkCredits, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };

@@ -141,3 +141,16 @@ test('normalizeGroups: scaled groups get real child sizes, nested groups too; sa
   const plain = grp([10, 10], [100, 100], [10, 10], [100, 100], sp(20, 20, 30, 30));
   assert.strictEqual(normalizeGroups(plain), plain, 'масштабсыз топ өзгермейді');
 });
+
+test('subjects: templates with subject-bound decor appear only for that subject, and often there', () => {
+  assert.deepStrictEqual(L.topicSubjects('Жүрек ауруларының алдын алу'), ['medicine']);
+  assert.deepStrictEqual(L.topicSubjects('Дәріс: экономика негіздері'), [], '«дәріс» — дәрі емес');
+  assert.deepStrictEqual(L.topicSubjects('Тауар және баға'), []);
+  const bound = new Set(L.CATALOG.templates.filter((t) => t.subjects).map((t) => t.id));
+  assert.ok(bound.size >= 5);
+  let r = 0; const rng = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < 300; i++) assert.ok(!bound.has(L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', rng }).id), 'тарихқа дәрігер/ғарыш шаблоны жоқ');
+  let hits = 0;
+  for (let i = 0; i < 300; i++) if (L.chooseTemplate({ topic: 'Күн жүйесінің планеталары', rng }).id === 'sc01064') hits++;
+  assert.ok(hits > 100, `ғарыш тақырыбына ғарыш шаблоны жиі (${hits}/300)`);
+});
