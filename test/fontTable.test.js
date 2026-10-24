@@ -51,3 +51,14 @@ test('fitLines with real metrics: the Times guess overflows a Merriweather box, 
   assert.ok(real.ok && realH(real) <= 100 * 1.06, `real fit ${realH(real)}pt`);
   assert.ok(guess.usedH <= 100 * 1.06 && realH(guess) > 100 * 1.06, `guess thought ${guess.usedH}pt, really ${realH(guess)}pt — overflows`);
 });
+
+test('a title inside a group with its cards cannot grow over the cards', () => {
+  const L = require('../products/presentation/templateLayout');
+  const E = 12700;
+  const sp = (id, x, y, w, h, t) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x * E}" y="${y * E}"/><a:ext cx="${w * E}" cy="${h * E}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const title = sp(3, 371, 31, 328, 109, 'Title');
+  const grp = `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="2" name="g"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="${371 * E}" y="${31 * E}"/><a:ext cx="${329 * E}" cy="${341 * E}"/><a:chOff x="${371 * E}" y="${31 * E}"/><a:chExt cx="${329 * E}" cy="${341 * E}"/></a:xfrm></p:grpSpPr>${title}${sp(4, 371, 170, 125, 43, 'Card')}${sp(5, 561, 170, 125, 43, 'Card 2')}</p:grpSp>`;
+  const xml = `<p:sld><p:cSld><p:spTree>${grp}</p:spTree></p:cSld></p:sld>`;
+  const s = L.surround(xml, title, 12192000, 6858000);
+  assert.ok(s.room / E < 30, `room ${s.room / E}pt stops at the cards`);
+});

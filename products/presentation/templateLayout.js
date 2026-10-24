@@ -48,6 +48,19 @@ function topItems(xml) {
   return items;
 }
 
+/**
+ * Топтың ішкі элементтері (слайд координатасымен) — тек топ «қалыпты» болса (chOff/chExt = off/ext, carve.normalizeGroups):
+ * сонда бала координатасы слайд координатасымен бірдей, оны жылжыту да дұрыс. Әйтпесе null.
+ */
+function groupChildren(groupBlock) {
+  const own = (groupBlock.match(/<p:grpSpPr[\s\S]*?<\/p:grpSpPr>/) || [])[0] || '';
+  const m = own.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>\s*<a:chOff x="(-?\d+)" y="(-?\d+)"\/>\s*<a:chExt cx="(\d+)" cy="(\d+)"\/>/);
+  if (!m || m[1] !== m[5] || m[2] !== m[6] || m[3] !== m[7] || m[4] !== m[8]) return null;
+  const at = groupBlock.indexOf(own) + own.length;
+  const inner = groupBlock.slice(at, groupBlock.lastIndexOf('</p:grpSp>'));
+  return topItems('<p:spTree>' + inner + '</p:spTree>');
+}
+
 const sameBox = (a, b) => a && b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
 /** Фон / өте үлкен пішін — оған тимейміз және кедергі деп санамаймыз. */
@@ -104,6 +117,11 @@ function surround(xml, block, W, H, items, vExtra) {
   items = items || topItems(xml);
   const b = xfrmOf(block);
   if (!b) return { room: 0, container: null, blockers: [], right: 0, box: null };
+  // Қорап топтың ІШІНДЕ болса (тақырып + карточкалар бір топта): топ — «контейнер» емес, оның басқа мүшелері — көршілер.
+  // Әйтпесе тақырып топтың төменгі шетіне дейін өсіп, карточкалардың үстіне түседі.
+  const host = items.find((it) => it.tag === 'p:grpSp' && it.block !== block && it.block.includes(block));
+  const kids = host && groupChildren(host.block);
+  if (kids) return surround(xml, block, W, H, items.filter((it) => it !== host).concat(kids), vExtra);
   const bottom = b.y + b.h;
   let limit = H - 457200;
   let container = null;
