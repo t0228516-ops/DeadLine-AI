@@ -346,7 +346,10 @@ function fitLines(lines, o) {
   }
   const szOut = Math.round(hit.sz * 100);
   const lnPts = (!ln || ln.kind === 'spcPts') ? Math.round(hit.m.ratio * hit.sz * 100) : null;
-  return { lines: arr, sz: szOut, lnPts, usedH: hit.m.total, ok: !!hit.m.ok, shortened: arr.some((l, i) => l !== lines[i]) };
+  // пайыздық қатар аралығы (spcPct): өлшеу көп қатарлы мәтінде аралықты 1.25-ке дейін қысқартады — файлға да сол жазылады,
+  // әйтпесе шаблонның 171% аралығы қалып, мәтін есептелгеннен биік шығады (көршіге/қорап шетінен асады)
+  const lnPct = ln && ln.kind === 'spcPct' && hit.m.ratio < origRatio - 0.01 ? Math.round((hit.m.ratio / 1.2) * 100000) : null;
+  return { lines: arr, sz: szOut, lnPts, lnPct, usedH: hit.m.total, ok: !!hit.m.ok, shortened: arr.some((l, i) => l !== lines[i]) };
 }
 
 /**
@@ -473,6 +476,9 @@ function replaceShapeText(block, lines, ctx) {
       const o100 = +((rPr.match(/ sz="(\d+)"/) || [])[1]) || 0;
       if (o100 && / spc="-?\d+"/.test(rPr)) rPr = rPr.replace(/ spc="(-?\d+)"/, (m, v) => ` spc="${Math.round(+v * fit.sz / o100)}"`);
       rPr = / sz="\d+"/.test(rPr) ? rPr.replace(/ sz="\d+"/, ` sz="${fit.sz}"`) : rPr;
+      if (fit.lnPct && pPr && /<a:lnSpc>\s*<a:spcPct/.test(pPr)) {
+        pPr = pPr.replace(/(<a:lnSpc>\s*<a:spcPct val=")-?\d+(")/, `$1${fit.lnPct}$2`);
+      }
       if (fit.lnPts && pPr && /<a:lnSpc>\s*<a:spcPts/.test(pPr)) {
         pPr = pPr.replace(/(<a:lnSpc>\s*<a:spcPts val=")-?\d+(")/, `$1${fit.lnPts}$2`);
       }
@@ -1176,6 +1182,41 @@ function auditTemplateFill(templateBuf, slides) {
 }
 
 /**
+ * Бір тізімнің тармақтары (шаблонда мәтіні, кеглі, қорап өлшемі бірдей ≥2 пішін — «Write an agenda here.» ×4)
+ * толтырудан кейін бір кегльмен шығады: ең кішісі. Әйтпесе мазмұн тізімі 14 / 11.5 / 10.5pt болып шашырайды.
+ */
+function unifySiblings(origXml, filledXml) {
+  const shapes = (x) => [...String(x).matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
+  const idOf = (b) => (b.match(/<p:cNvPr id="(\d+)"/) || [])[1];
+  const groups = new Map();
+  for (const b of shapes(origXml)) {
+    const t = [...b.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('').trim();
+    const sz = (b.match(/<a:rPr[^>]* sz="(\d+)"/) || [])[1];
+    const ext = (b.match(/<a:ext cx="(\d+)" cy="(\d+)"/) || []).slice(1).map((v) => Math.round(v / 25400)).join('x');
+    if (!t || !sz || !ext) continue;
+    const k = `${t}|${sz}|${ext}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(idOf(b));
+  }
+  let out = filledXml;
+  const now = new Map(shapes(filledXml).map((b) => [idOf(b), b]));
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    const blocks = ids.map((id) => now.get(id)).filter(Boolean);
+    const szs = blocks.map((b) => +((b.match(/<a:rPr[^>]* sz="(\d+)"/) || [])[1] || 0)).filter(Boolean);
+    if (szs.length < 2) continue;
+    const min = Math.min(...szs);
+    for (const b of blocks) {
+      const cur = +((b.match(/<a:rPr[^>]* sz="(\d+)"/) || [])[1] || 0);
+      if (!cur || cur === min) continue;
+      const nb = b.replace(/(<a:rPr[^>]* sz=")(\d+)(")/g, (m, a, v, c) => a + Math.round(+v * min / cur) + c);
+      out = out.replace(b, () => nb);
+    }
+  }
+  return out;
+}
+
+/**
  * Шаблон PPTX-тің мәтінін slides-тағы жаңа мәтінмен ауыстырады.
  * @param {Buffer} templateBuf — пайдаланушының .pptx файлы
  * @param {Array} slides — жаңа контент (title/subtitle/bullets/stats)
@@ -1203,6 +1244,7 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
     // placeholder-лердің мұраланған орны/кеглі слайдқа нақты жазылады — сыйғызу мен тексеру олармен де жұмыс істейді
     const hid = QA.hideDeco(L.clipToPanels(materializePlaceholders(files, sp, xml), W, H), ids);
     let filled = dedupeAttrs(hid.restore(fillSlide(hid.xml, list[i] || (opts.slotFill && opts.slotFill[i] ? {} : null), { W, H, badFonts, metrics, fontStyles, layoutPlan: opts.layout && opts.layout[i], slotFill: opts.slotFill && opts.slotFill[i] })));
+    filled = unifySiblings(hid.xml, filled);
     // Соңғы тексеруші: мәтін ↔ мәтін/таблетка/сурет қабаттасуы, сөз бөлінуі, слайдтан шығу → жылжыту/кішірейту
     if (opts.qa !== false && process.env.TEMPLATE_QA !== '0') try {
       const cl0 = classify(hid.xml, { W, H });

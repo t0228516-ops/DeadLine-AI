@@ -213,6 +213,8 @@ function analyzeTemplate(template) {
       // бір жолға арналған тақырып/сәндік сөз: LLM-ге БІР жолдың сыйымдылығы (кегль ~80%-ға дейін кішірейе алады)
       const oneLineChars = Math.max(4, Math.floor((f.box.w / 12700 - 14) / (f.sz * 0.8 * (f.style.cls === 'serif' || f.style.cls === 'script' ? 0.5 : 0.56) * 1.04)));
       if ((r.role === 'title' || r.role === 'accent') && f.oneLine) f.cap = Math.min(f.cap, oneLineChars);
+      // үлкен сан бір жолда тұрады («1465», «>500», «XV ғ.») — екі жолға түссе астындағы түсіндірмеге шығады
+      if (r.role === 'stat' && r.part === 'value') f.cap = Math.min(f.cap, oneLineChars, 14);
       const min = (r.role === 'body' || (r.role === 'card' && r.part === 'body')) && f.cap >= 60 ? Math.round(Math.min(f.cap, 320) * 0.45) : 0;
       const max = r.role === 'title' && big ? f.cap : f.cap;
       slots.push({ key: r.key, id: f.id, role: r.role, part: r.part || null, deck: !!r.deck, max: Math.min(max, 320), min, orig: f.text, sz: f.sz, script: f.style.cls === 'script', oneLine: f.oneLine });
