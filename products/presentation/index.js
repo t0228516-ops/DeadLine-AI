@@ -197,6 +197,72 @@ async function fetchImageWithFallback(query, topic, used, deckQueries = [], opts
   return null;
 }
 
+/**
+ * Кітапхана шаблонының стоктық фотоларын слайдтың өз тақырыбына сай фотомен ауыстыру (library/photos.js).
+ * Әр фото орнына слайдтың imageQuery-і бойынша біздің фото жүйесі іздейді (vision таңдау, болмаса мәтіндік тексеру);
+ * табылмаса — шаблонның өз фотосы қалады. Ешқашан лақтырмайды.
+ */
+async function swapLibraryPhotos(buf, slides, ctx) {
+  const P = require('./library/photos');
+  let slots;
+  try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
+  const keep = new Set(ctx.keepMedia || []);
+  slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
+  if (!slots.length) return buf;
+  if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
+  let browser = null;
+  try {
+    const { readZipAll } = require('./templateFill');
+    const files = readZipAll(buf);
+    browser = await require('./renderer').launchBrowser(require('puppeteer'));
+    const page = await browser.newPage();
+    // текстура, карта, әшекей — фото емес, шаблонның өз безендіруі қалады
+    const verdict = new Map();
+    for (const s of slots) {
+      if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
+    }
+    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
+    const perSlide = new Map();
+    slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
+      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+    if (!slots.length) { console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
+    const used = new Set();
+    const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
+    const found = await mapLimit(slots, 3, async (slot) => {
+      const slide = slides[slot.slide] || {};
+      const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
+      const query = isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
+      if (!query) return null;
+      const text = [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
+        .map((x) => (typeof x === 'string' ? x : (x && (x.label || x.text)) || '')).filter(Boolean).join(' · ');
+      const slideCtx = { topic: ctx.topic, title: slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
+      try {
+        const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 });
+        if (vision) {
+          const got = await fetchPhotoVision(slide, { query, topic: ctx.topic, topicTitle: ctx.topic, text, background: slideCtx.background,
+            used, avoid, free: !!ctx.free, vision, genBudget: { left: 0 }, budget: { left: Number(process.env.IMAGE_SEARCHES_PER_PHOTO) || 5 } });
+          if (!got.fallback) return got.dataUri ? { ...slot, dataUri: got.dataUri, focus: got.focus || '' } : null;
+        }
+        const dataUri = await fetchImageWithFallback(query, ctx.topic, used, [], { free: !!ctx.free, judge: makePhotoJudge(slideCtx) });
+        return dataUri ? { ...slot, dataUri, focus: '' } : null;
+      } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
+    });
+    const hits = found.filter(Boolean);
+    if (!hits.length) { console.log(`[Library] photos: 0/${slots.length} found — template photos kept`); return buf; }
+    const list = [];
+    for (const h of hits) {
+      const bytes = await P.composite(page, files.get(h.media), h.media, h.dataUri, h.focus).catch((e) => { console.warn(`[Library] composite: ${e.message}`); return null; });
+      if (bytes) list.push({ slide: h.slide, rid: h.rid, bytes });
+    }
+    const out = P.replacePhotos(buf, list);
+    console.log(`[Library] photos: ${out.replaced}/${slots.length} replaced with on-topic photos`);
+    return out.buf;
+  } catch (e) {
+    console.warn(`[Library] photo swap failed (template photos kept): ${e.message}`);
+    return buf;
+  } finally { if (browser) await browser.close().catch(() => {}); }
+}
+
 // Бір уақытта ең көбі N тапсырма (Unsplash-ты және желіні шамадан тыс жүктемеу үшін)
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);
@@ -239,7 +305,8 @@ async function generatePresentation(userInput, options = {}) {
   const LANG_BY_CODE = { kk: 'Kazakh', ru: 'Russian', en: 'English', kazakh: 'Kazakh', russian: 'Russian', english: 'English' };
   // Template режимі: аударудың керегі жоқ — тіл тек тақырып мәтінінде нақты жазылса ғана беріледі,
   // әйтпесе модель тақырыппен/материалмен бірдей тілде жазады.
-  const language = mode === 'template'
+  // Кітапхана шаблоны (options.library) — тілді студент таңдайды, шаблон тек дизайн береді
+  const language = mode === 'template' && !options.library
     ? (parsed.language || null)
     : (LANG_BY_CODE[String(options.language || '').toLowerCase()] || parsed.language);
 
@@ -349,7 +416,12 @@ async function generatePresentation(userInput, options = {}) {
 
   // Template → Content: кәсіби әңгіме желісі ТАҚЫРЫПТАН құрылады (шаблонның мәтіні/бөлім атаулары қолданылмайды)
   let storyOutline = null;
-  if (slotPlan) {
+  // Кітапхана шаблоны мазмұнға қарай жиналған болса — сол жоспар әңгіме желісі болады (қосымша LLM шақыруы жоқ)
+  const libOutline = options.library && options.library.outline;
+  if (slotPlan && libOutline && libOutline.slideTopics.length === slotPlan.length) {
+    storyOutline = libOutline;
+    console.log(`[Pipeline] id=${genId} Library storyline (content-first): «${storyOutline.title}» — ${storyOutline.slideTopics.length} слайд`);
+  } else if (slotPlan) {
     await onProgress('content', 'Презентация құрылымы жоспарлануда...');
     storyOutline = await planStoryline({
       topic, brief: briefBase.slice(0, 12000), language, plan: slotPlan, outline: refAnalysis && refAnalysis.outline,
@@ -616,6 +688,16 @@ async function generatePresentation(userInput, options = {}) {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
       const qaReport = [];
       fs.writeFileSync(pptxPath, fillTemplatePptx(referencePptxBuf, slides, { language, layout, slotFill, qaReport }));
+      // Кітапхана шаблоны: стоктық фотолар → тақырыпқа сай фото; түпнұсқа Credits слайды (авторға сілтеме) соңына өзгеріссіз қосылады
+      if (options.library && options.library.creditsBuf) {
+        // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
+        try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
+        const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
+          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
+        });
+        fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
+        console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);
+      }
       // соңғы тексерушінің нәтижесі үйрену жүйесіне: қай ақау қанша, нешеуі түзелді
       const qa = qaReport.flatMap((r) => r.issues);
       const unfixed = qa.filter((q) => !q.fixed).length;
@@ -1077,7 +1159,8 @@ async function generatePresentation(userInput, options = {}) {
   setActiveCostTracker(null);
   return {
     // Үйрену жүйесі үшін толтыру нәтижесі (шаблонның өзін server.js оқиды — тек клиент келіскенде)
-    templateLearn: isTemplateFill ? { fit: fitInfo, layoutPlanned } : null,
+    templateLearn: isTemplateFill && !options.library ? { fit: fitInfo, layoutPlanned } : null,
+    libraryId: options.library ? options.library.id : null,
     requirementsReport,
     templateReport,
     mode,
@@ -1108,4 +1191,4 @@ function compIdsOf(file) {
   try { return [...new Set([...fs.readFileSync(file, 'utf8').matchAll(/data-layout="cx-([a-z0-9-]+)"/g)].map((m) => m[1]))]; } catch { return []; }
 }
 
-module.exports = { generatePresentation, _fetchPhotoVision: fetchPhotoVision };
+module.exports = { generatePresentation, _fetchPhotoVision: fetchPhotoVision, _swapLibraryPhotos: swapLibraryPhotos };

@@ -7,6 +7,16 @@
 
 const MAX_REFERENCE_SLIDES = Number(process.env.MAX_REFERENCE_SLIDES) || 25;
 
+/**
+ * <p:sldSz> өлшемі → [тег, cx, cy] не null. Атрибут реті файлға қарай әртүрлі (Canva экспорты: cy алдымен),
+ * сондықтан әрқайсысы бөлек оқылады.
+ */
+function sldSzMatch(presXml) {
+  const tag = (String(presXml || '').match(/<p:sldSz\b[^>]*>/) || [])[0];
+  const cx = tag && tag.match(/\bcx="(\d+)"/); const cy = tag && tag.match(/\bcy="(\d+)"/);
+  return cx && cy ? [tag, cx[1], cy[1]] : null;
+}
+
 const ROLE_RE = [
   ['thanks', /рахмет|спасибо|thank\s*you|назар\s*аудар|внимание/i],
   ['references', /әдебиет|пайдаланылған|дереккөз|источник|литератур|список|references|bibliograph|sources/i],
@@ -296,4 +306,4 @@ function analyzeStructure(files, W, H) {
   };
 }
 
-module.exports = { analyzeStructure, orderedSlides, MAX_REFERENCE_SLIDES, ROLE_RE, relsMap, resolvePath, tagBlocks, xfrmOf, elementsOf, slideTitle };
+module.exports = { sldSzMatch, analyzeStructure, orderedSlides, MAX_REFERENCE_SLIDES, ROLE_RE, relsMap, resolvePath, tagBlocks, xfrmOf, elementsOf, slideTitle };

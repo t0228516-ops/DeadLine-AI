@@ -4,14 +4,14 @@
  * Келесі презентация осыларды ҚАЙТАЛАМАЙДЫ («тағы сол бот» деп танылмасын, бір сурет екі рет шықпасын).
  * Базада users.design_memory (JSON мәтін) ретінде сақталады; бұл файл — екі базаға ортақ таза функциялар.
  */
-const KEEP = { systems: 4, moods: 6, photos: 120, comps: 24 };
+const KEEP = { systems: 4, moods: 6, photos: 120, comps: 24, libs: 6 };
 
 function parse(raw) {
   let m = raw;
   if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch { m = null; } }
   m = m && typeof m === 'object' ? m : {};
   const arr = (v, n) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x).slice(0, n) : []);
-  return { systems: arr(m.systems, KEEP.systems), moods: arr(m.moods, KEEP.moods), photos: arr(m.photos, KEEP.photos), comps: arr(m.comps, KEEP.comps) };
+  return { systems: arr(m.systems, KEEP.systems), moods: arr(m.moods, KEEP.moods), photos: arr(m.photos, KEEP.photos), comps: arr(m.comps, KEEP.comps), libs: arr(m.libs, KEEP.libs) };
 }
 
 /** Жаңа презентацияның дизайнын/суреттерін жадтың БАСЫНА қосады (ең жаңасы бірінші), қайталанбайды */
@@ -27,13 +27,15 @@ function merge(prev, add = {}) {
     photos: add.photos ? front(m.photos, add.photos, KEEP.photos) : m.photos,
     // композициялар (compositions/): соңғы колодаларда болғандары келесіде алдымен таңдалмайды
     comps: add.comps ? front(m.comps, add.comps, KEEP.comps) : m.comps,
+    // кітапхана шаблондары (library/): студенттің соңғыларынан басқасы таңдалады
+    libs: add.lib ? front(m.libs, [add.lib], KEEP.libs) : m.libs,
   };
 }
 
 /** generatePresentation опциялары: { designAvoid: {systems, moods}, photoAvoid: [...], recentComps: [...] } */
 function avoidOptions(raw) {
   const m = parse(raw);
-  return { designAvoid: { systems: m.systems, moods: m.moods }, photoAvoid: m.photos, recentComps: m.comps };
+  return { designAvoid: { systems: m.systems, moods: m.moods }, photoAvoid: m.photos, recentComps: m.comps, recentLibs: m.libs };
 }
 
 module.exports = { parse, merge, avoidOptions, KEEP };

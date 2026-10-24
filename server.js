@@ -24,6 +24,7 @@ const {
   getDesignMemory, pushDesignMemory,
 } = require('./db');
 const designMemory = require('./core/designMemory');
+const libraryCore = require('./products/presentation/library');
 const testerCore = require('./core/tester');
 const adminCalc = require('./core/admin');
 
@@ -959,13 +960,28 @@ async function executeJob(jobId) {
     }
     // Студенттің дизайн жады: соңғы жүйелер/палитралар/суреттер қайталанбайды (оқу сәтсіз → бос жад, генерация жалғасады)
     const memory = await getDesignMemory(chatId).catch(() => null);
-    const avoid = designMemory.avoidOptions(memory);
+    const { recentLibs, ...avoid } = designMemory.avoidOptions(memory);
+    // Шаблон кітапханасы (SlidesCarnival, рұқсатпен): студент өз шаблонын жүктемесе, бот кейде дайын шаблонды өзі таңдайды
+    let library = null;
+    if (!referencePptx && (job.payload?.mode || 'presentation') === 'presentation'
+      && libraryCore.eligible({ tester: !!job.payload?.tester, admin: isAdminId(chatId) })) {
+      try {
+        await updateJob(jobId, { phase: 'content', detail: 'Презентация құрылымы жоспарлануда...', progress: 12 }).catch(() => {});
+        library = await libraryCore.prepareDeck({
+          topic: job.payload?.topic || userInput, slideCount: job.payload?.slideCount, avoid: recentLibs,
+          brief: userInput, language: job.payload?.language,
+        });
+        referencePptx = library.deckBuf;
+        pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
+      } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
+    }
     const result = await generatePresentation(userInput, {
       ...avoid,
+      library,
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
-      mode: job.payload?.mode || 'presentation',
+      mode: library ? 'template' : (job.payload?.mode || 'presentation'),
       materialText: job.payload?.materialText || null,
       referencePptx,
       requirements: job.payload?.requirements || null,

@@ -1,4 +1,5 @@
 'use strict';
+const { sldSzMatch } = require('./structure');
 /**
  * Reference PPTX → "Design DNA".
  * PPTX — ішінде XML бар zip, сондықтан дизайнды vision-моделсіз, кодпен тікелей оқимыз (тегін, дәл):
@@ -169,7 +170,7 @@ function analyzeSlide(xml, ctx) {
 function extractDna(buf) {
   const files = readZip(buf);
   const pres = files.get('ppt/presentation.xml') || '';
-  const sz = pres.match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const sz = sldSzMatch(pres);
   const W = sz ? +sz[1] : 12192000;
   const H = sz ? +sz[2] : 6858000;
 

@@ -131,7 +131,8 @@ function slotProblem(s, text, language) {
   if (s.max && t.length > Math.ceil(s.max * 1.1)) return `${t.length} characters, limit ${s.max}`;
   if (s.min && t.length < s.min * 0.8) return `only ${t.length} characters, needs at least ${s.min}`;
   if (s.orig && t.toLowerCase() === String(s.orig).toLowerCase() && /[a-z]/i.test(s.orig) && wantsCyr(language)) return 'left the English template text';
-  if (s.role === 'stat' && s.part === 'value' && !/\d/.test(t) && !hasCyr(t)) return 'a figure must contain a number';
+  // сан қорабы — тек сан (жыл, %, саны; рим ғасыры): «часы», «Хандықтың құрылуы» сияқты сөз үлкен сан орнында тұрмайды
+  if (s.role === 'stat' && s.part === 'value' && !/\d|^[IVXLC]+\b/.test(t)) return 'a figure must contain a number';
   if (wantsCyr(language) && !hasCyr(t) && !(s.role === 'stat' && s.part === 'value') && /[a-z]{4,}/i.test(t) && !/^[A-Z][\w.+-]*(\s[A-Z0-9][\w.+-]*)*$/.test(t)) return 'not in the presentation language';
   return null;
 }

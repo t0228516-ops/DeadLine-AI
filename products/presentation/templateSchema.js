@@ -21,12 +21,13 @@
 const T = require('./templateFill');
 const QA = require('./templateCheck');
 const L = require('./templateLayout');
-const { orderedSlides } = require('../../design-dna/structure');
+const { orderedSlides, sldSzMatch } = require('../../design-dna/structure');
 const { embeddedMetrics } = require('./embeddedMetrics');
 const { templateFontStyles, styleOf } = require('./fontStyle');
 const { materializePlaceholders } = require('./phGeometry');
 
-const STAT_RE = /^[~≈<>+\-−]?\s*[$€£₸¥]?\s*\d[\d\s.,]*\s*(%|[kKmMbB]\b|млн|млрд|мың|x|×|\+)?(\s*\/\s*[^\d].{0,20})?$/u;
+// «95%», «$4.5M», «12 million», «2 out of 5», «3/4», «1,2 млн» — шаблондағы сан (стат мәні)
+const STAT_RE = /^[~≈<>+\-−]?\s*[$€£₸¥]?\s*\d[\d\s.,]*\s*(%|[kKmMbB]\b|million|billion|thousand|млн|млрд|трлн|тыс\.?|мың|x|×|\+)?(\s*(?:out of|of|из|ішінен)\s*\d[\d\s.,]*)?(\s*\/\s*[^\d].{0,20})?$/iu;
 const CREDIT_RE = /(presented|presentation|prepared|written|created|designed|made|submitted|produced|directed)\s*by|^\s*by\b|author|student|teacher|lecturer|supervisor|professor|instructor|advis|орындаған|тексерген|дайындаған|қабылдаған|жетекші|выполнил|проверил|студент|преподаватель|руководитель/i;
 const PERSON_RE = /^(?:[A-Z][a-z'’.-]+(?:\s+[A-Z][a-z'’.-]+){1,2}|[A-Z]{2,}(?:\s+[A-Z]{2,}){1,2}|[А-ЯЁӘҒҚҢӨҰҮҺІ][а-яёәғқңөұүһі]+(?:\s+[А-ЯЁӘҒҚҢӨҰҮҺІ][а-яёәғқңөұүһі.]+){1,2})$/u;
 const THANKS_RE = /thank|thanks|спасибо|рахмет|назарлар|questions?\b|q\s*&\s*a|the end|сұрақ/i;
@@ -50,7 +51,7 @@ function featuresOf(xml, W, H, styles) {
     if (!s.x) return null;                                                     // орны мүлде белгісіз (мұрасы да жоқ) — рөл берілмейді
     const text = decode(s.text).replace(/\s+/g, ' ').trim();
     const big = szPt(s.block) >= 30;
-    const cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H)) || 0);
+    const cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H), T.legibleFor(W)) || 0);
     const box = s.x;
     const face = faceOf(s.block);
     return {
@@ -73,7 +74,7 @@ function nearBy(a, b) { // вертикаль ара (EMU): b a-ның асты�
  */
 function analyzeTemplate(template) {
   const files = Buffer.isBuffer(template) ? T.readZipAll(template) : template;
-  const m = (files.get('ppt/presentation.xml') || '').match(/<p:sldSz cx="(\d+)" cy="(\d+)"/);
+  const m = sldSzMatch((files.get('ppt/presentation.xml') || ''));
   const W = m ? +m[1] : 12192000; const H = m ? +m[2] : 6858000;
   const metrics = embeddedMetrics(files);
   const styles = templateFontStyles(files, metrics);
@@ -212,7 +213,9 @@ function analyzeTemplate(template) {
       // бір жолға арналған тақырып/сәндік сөз: LLM-ге БІР жолдың сыйымдылығы (кегль ~80%-ға дейін кішірейе алады)
       const oneLineChars = Math.max(4, Math.floor((f.box.w / 12700 - 14) / (f.sz * 0.8 * (f.style.cls === 'serif' || f.style.cls === 'script' ? 0.5 : 0.56) * 1.04)));
       if ((r.role === 'title' || r.role === 'accent') && f.oneLine) f.cap = Math.min(f.cap, oneLineChars);
-      const min = (r.role === 'body' || (r.role === 'card' && r.part === 'body')) && f.cap >= 90 ? Math.round(Math.min(f.cap, 320) * 0.45) : 0;
+      // үлкен сан бір жолда тұрады («1465», «>500», «XV ғ.») — екі жолға түссе астындағы түсіндірмеге шығады
+      if (r.role === 'stat' && r.part === 'value') f.cap = Math.min(f.cap, oneLineChars, 14);
+      const min = (r.role === 'body' || (r.role === 'card' && r.part === 'body')) && f.cap >= 60 ? Math.round(Math.min(f.cap, 320) * 0.45) : 0;
       const max = r.role === 'title' && big ? f.cap : f.cap;
       slots.push({ key: r.key, id: f.id, role: r.role, part: r.part || null, deck: !!r.deck, max: Math.min(max, 320), min, orig: f.text, sz: f.sz, script: f.style.cls === 'script', oneLine: f.oneLine });
     }

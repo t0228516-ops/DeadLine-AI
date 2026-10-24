@@ -35,8 +35,11 @@ const plusLine = `⭐ *Plus:* ${PLUS.credits} презентация — *${PLUS
 const ADMIN_ID    = process.env.ADMIN_CHAT_ID;
 const AUTO_CONFIRM   = process.env.AUTO_CONFIRM !== '0';          // '0' қойса — толық қолмен режим
 const RECEIPT_MAX_AGE_MIN = parseInt(process.env.RECEIPT_MAX_AGE_MIN || '60', 10);
-// Админ батырма баспаса — осы секундтан кейін автоматты растау (әдепкі 3 мин)
+// Админ батырма баспаса — осы секундтан кейін автоматты растау (әдепкі 3 мин).
+// ӘДЕПКІДЕ ӨШІРУЛІ: бұрын кез келген сурет 3 минуттан кейін кредит алатын. Енді чекті DeepSeek көзбен оқиды,
+// оқи алмаса — шешім тек админде. Ескі тәртіпті қайтару: RECEIPT_TIMER_CREDIT=1.
 const AUTO_CONFIRM_TIMEOUT_SEC = parseInt(process.env.AUTO_CONFIRM_TIMEOUT_SEC || '180', 10);
+const RECEIPT_TIMER_CREDIT = process.env.RECEIPT_TIMER_CREDIT === '1';
 // МАҢЫЗДЫ: BOT_USERNAME env-де кейде "@ai_presentation_ybot" түрінде (@-мен)
 // қойылып қалуы мүмкін. Telegram deep-link форматы (t.me/<username>?start=...)
 // username-нің алдында @ КҮТПЕЙДІ — @-мен жіберілген сілтемені Telegram
@@ -47,6 +50,8 @@ const BOT_USERNAME = (process.env.BOT_USERNAME || 'DeadLine_prezbot').replace(/^
 const waitingForCount = new Set();
 // Күтудегі чектер: pendingId → { chatId, timer, adminMsgId }
 const pendingReceipts = new Map();
+// Өңделген (расталған/бас тартылған) күтудегі чектер: батырма қайта басылса — екінші рет кредит жоқ
+const handledPending = new Set();
 
 // ─── Негізгі менюдің батырмалары ───────────────────────────────────────────
 let WEBAPP_URL = process.env.WEBAPP_URL || '';
@@ -356,21 +361,57 @@ function showHelp(chatId) {
 // ─── Чекті автоматты оқу және растау ─────────────────────────────────────
 // Қайтарады: { handled: true } — пайдаланушыға жауап берілді (сәтті/бас тарту),
 //            { handled: false, reason } — админге қолмен жіберу керек.
-async function tryAutoConfirm(chatId, msg) {
-  // 1) PDF жүктеу (Telegram Bot API лимиті 20 МБ; чек кішкентай)
-  const size = msg.document.file_size || 0;
-  if (size > 5 * 1024 * 1024) return { handled: false, reason: 'too_big' };
+async function tryAutoConfirm(chatId, file) {
+  // 1) Файл жүктеу (Telegram Bot API лимиті 20 МБ; чек кішкентай)
+  if ((file.size || 0) > 5 * 1024 * 1024) return { handled: false, reason: 'too_big' };
 
-  const link = await bot.getFileLink(msg.document.file_id);
+  const link = await bot.getFileLink(file.fileId);
   const resp = await require('axios').get(link, { responseType: 'arraybuffer', timeout: 20000 });
   const buffer = Buffer.from(resp.data);
 
-  // 2) Мәтін + парсинг
-  const text = await extractPdfText(buffer);
-  if (!text || text.trim().length < 20) return { handled: false, reason: 'no_text_layer' };
-
-  const parsed = parseReceiptText(text);
-  if (!parsed.ok) return { handled: false, reason: 'unreadable' };
+  // 2) Мәтін + парсинг; мәтін қабаты жоқ PDF не скриншот/фото — DeepSeek көзбен оқиды (core/receiptVision.js)
+  let parsed = null;
+  if (file.kind === 'pdf') {
+    const text = await extractPdfText(buffer);
+    if (text && text.trim().length >= 20) parsed = parseReceiptText(text);
+  }
+  if (!parsed || !parsed.ok) {
+    // Мәтінсіз PDF (Kaspi чегі осындай — ішінде бір сурет) не скриншот/фото: DeepSeek көзбен оқиды.
+    // Скриншот/фото ЕШҚАШАН автоматты расталмайды (жалған суретті модель ажырата алмайды) — админге тексеру тізімімен.
+    // PDF — файл құрылымы Kaspi-дікіне дәл сай болса (core/receiptPdf.js) және оқылғаны сенімді болса ғана авто-растау.
+    const V = require('./core/receiptVision');
+    const img = file.kind === 'pdf' ? await V.pdfToPng(buffer) : buffer;
+    const seen = img ? await V.readReceiptImage({ data: img, mime: file.kind === 'pdf' ? 'image/png' : (file.mime || 'image/jpeg') }) : null;
+    const RP = require('./core/receiptPdf');
+    const prof = file.kind === 'pdf' ? RP.kaspiPdfProfile(buffer) : null;
+    // iPhone чегінде файл жасалған сәт бар: ол чектегі төлем уақытынан бұрын болса — чек жалған
+    if (prof && seen && seen.date && RP.createdOk(prof, seen.date) === false) {
+      prof.ok = false;
+      prof.reasons.push(`файл ${prof.created.toISOString().slice(0, 16).replace('T', ' ')} UTC жасалған — чектегі төлем уақытына сай емес`);
+    }
+    console.log(`[Receipt] ${chatId}: vision ${seen ? `ok=${seen.ok} conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}${prof ? ` pdf=${prof.ok ? prof.profile : 'FAIL: ' + prof.reasons.join('; ')}` : ''}`);
+    const reason = file.kind === 'pdf' ? (prof && !prof.ok ? 'pdf_not_kaspi' : 'no_text_layer') : 'image';
+    if (!seen) return { handled: false, reason };
+    if (!seen.isReceipt) return { handled: false, reason: 'vision_not_receipt', seen };
+    const adminChecks = async () => {
+      const user = await getUser(chatId);
+      const checks = V.reviewSeen(seen, {
+        expectedName: KASPI_NAME, maxAgeMin: RECEIPT_MAX_AGE_MIN,
+        pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: [PLUS],
+      });
+      if (prof) checks.unshift(prof.ok ? { ok: true, text: 'PDF құрылымы Kaspi чегіне сай' } : { ok: false, text: `PDF: ${prof.reasons.join('; ')}` });
+      if (seen.receiptNo) {
+        const { receiptExists } = require('./db');
+        checks.push(await receiptExists(seen.receiptNo).catch(() => false)
+          ? { ok: false, text: `№${seen.receiptNo} бұрын қолданылған` }
+          : { ok: true, text: `№${seen.receiptNo} жаңа` });
+      } else checks.push({ ok: null, text: 'Чек нөмірі оқылмады' });
+      return checks;
+    };
+    if (!(prof && prof.ok && seen.ok)) return { handled: false, reason: prof && prof.ok ? 'vision_unsure' : reason, seen, checks: await adminChecks() };
+    parsed = seen;
+    parsed.adminChecks = adminChecks;
+  }
 
   // 3) Қайталанған чек — бірден бас тарту (оқылған, бірақ қолданылған)
   const { receiptExists } = require('./db');
@@ -391,6 +432,8 @@ async function tryAutoConfirm(chatId, msg) {
   });
 
   if (!verdict.ok) {
+    // Көзбен оқылған чек: модель қате оқуы мүмкін — адал студентке нақақ бас тартпаймыз, шешім админде
+    if (parsed.source === 'vision') return { handled: false, reason: verdict.reason, seen: parsed, checks: await parsed.adminChecks() };
     // Анық жалған/қате себептер — пайдаланушыға айтамыз, админді мазаламаймыз
     const clear = {
       wrong_recipient: '❌ Төлем біздің Kaspi нөміріне жасалмаған. Дұрыс алушыға төлеп, жаңа чек жіберіңіз.',
@@ -429,29 +472,46 @@ async function tryAutoConfirm(chatId, msg) {
   if (ADMIN_ID) {
     bot.sendMessage(
       ADMIN_ID,
-      `🤖 Авто-растау: ${chatId} → +${verdict.credits} кредит (${parsed.amount}₸, чек №${parsed.receiptNo})`
+      `🤖 Авто-растау: ${chatId} → +${verdict.credits} кредит (${parsed.amount}₸, чек №${parsed.receiptNo})${parsed.source === 'vision' ? ' · Kaspi PDF (құрылымы тексерілді)' : ''}`
     ).catch(() => {});
   }
   return { handled: true };
 }
 
 // ─── Чекті растау (админ батырмасы / таймер / /confirm) ─────────────────
-async function confirmPendingReceipt(chatId, credits, source) {
-  // Сол пайдаланушының күтудегі таймерлерін өшіру
+/**
+ * Қолмен растау (админ батырмасы / таймер / /confirm).
+ * receiptNo белгілі болса (DeepSeek оқыған) — чек нөмірі деректер қорына жазылады (applyReceipt, атомарлы):
+ * сол чек қайта келсе (скриншот не PDF) — «бұрын қолданылған», екінші рет кредит берілмейді.
+ */
+async function confirmPendingReceipt(chatId, credits, source, receiptNo = null) {
+  // Сол пайдаланушының күтудегі чектері: таймерлері тоқтайды. ДӘЛ СОЛ чектің (нөмірі бірдей) қайталанған хабары
+  // «өңделді» деп белгіленеді — оның батырмасы екінші рет кредит бермейді. Басқа нөмірлі чек (бөлек төлем) күтуде қалады.
   for (const [pid, p] of pendingReceipts) {
-    if (String(p.chatId) === String(chatId)) {
-      clearTimeout(p.timer);
-      pendingReceipts.delete(pid);
-    }
+    if (String(p.chatId) !== String(chatId)) continue;
+    if (receiptNo && p.receiptNo && p.receiptNo !== receiptNo) continue;
+    clearTimeout(p.timer);
+    pendingReceipts.delete(pid);
+    if (receiptNo && p.receiptNo === receiptNo) handledPending.add(pid);
   }
 
   const before = await getUser(chatId);
-  const user = await addCredits(chatId, credits);
-  logEvent(chatId, 'paid').catch(() => {});
   // Қолмен растауда сома белгісіз — кредит санынан бағамен есептейміз (Plus / бірінші баға / әдепкі)
   const paid = credits === PLUS.credits ? PLUS.amount
     : (before.total === 0 && credits === 1 ? FIRST_PRICE : credits * PRICE);
-  const payRef = `m:${chatId}:${Date.now()}`;
+  let user;
+  if (receiptNo) {
+    const applied = await applyReceipt(chatId, receiptNo, paid, credits);
+    if (!applied.applied) {
+      if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⚠️ ${chatId}: чек №${receiptNo} бұрын қолданылған — кредит ҚОСЫЛМАДЫ.`).catch(() => {});
+      return null;
+    }
+    user = applied.user;
+  } else {
+    user = await addCredits(chatId, credits);
+  }
+  logEvent(chatId, 'paid').catch(() => {});
+  const payRef = receiptNo ? `r:${receiptNo}` : `m:${chatId}:${Date.now()}`;
   logPayment(chatId, paid, credits, payRef).catch((e) => console.warn('[Pay] log failed', e.message));
   await payPartnerCommission(chatId, paid, payRef);
 
@@ -479,6 +539,7 @@ async function rejectPendingReceipt(chatId, source) {
     if (String(p.chatId) === String(chatId)) {
       clearTimeout(p.timer);
       pendingReceipts.delete(pid);
+      handledPending.add(pid);
     }
   }
   await bot.sendMessage(
@@ -522,11 +583,16 @@ bot.on('callback_query', async (cq) => {
       const targetId = parts[1];
       const credits  = parseInt(parts[2], 10) || 1;
       const pendingId = parts[3];
-      if (pendingId && pendingReceipts.has(pendingId)) {
-        clearTimeout(pendingReceipts.get(pendingId).timer);
-        pendingReceipts.delete(pendingId);
+      // батырма екі рет басылса / сол пайдаланушының басқа чегі бұрын расталса — қайта кредит жоқ
+      if (pendingId && handledPending.has(pendingId)) return bot.answerCallbackQuery(cq.id, { text: 'Бұл чек бұрын өңделген', show_alert: true });
+      const entry = pendingId ? pendingReceipts.get(pendingId) : null;
+      if (pendingId) handledPending.add(pendingId);
+      if (entry) { clearTimeout(entry.timer); pendingReceipts.delete(pendingId); }
+      const done = await confirmPendingReceipt(targetId, credits, 'батырма', entry && entry.receiptNo);
+      if (!done) {
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: cq.message.chat.id, message_id: cq.message.message_id }).catch(() => {});
+        return bot.answerCallbackQuery(cq.id, { text: 'Чек бұрын қолданылған — кредит қосылмады', show_alert: true });
       }
-      await confirmPendingReceipt(targetId, credits, 'батырма');
       await bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
         chat_id: cq.message.chat.id,
         message_id: cq.message.message_id,
@@ -541,6 +607,8 @@ bot.on('callback_query', async (cq) => {
       const parts = data.split(':');
       const targetId = parts[1];
       const pendingId = parts[2];
+      if (pendingId && handledPending.has(pendingId)) return bot.answerCallbackQuery(cq.id, { text: 'Бұл чек бұрын өңделген', show_alert: true });
+      if (pendingId) handledPending.add(pendingId);
       if (pendingId && pendingReceipts.has(pendingId)) {
         clearTimeout(pendingReceipts.get(pendingId).timer);
         pendingReceipts.delete(pendingId);
@@ -802,23 +870,39 @@ bot.on('message', async (msg) => {
     );
   }
 
-  // Чек (PDF)
-  if (msg.document) {
-    const fileName = (msg.document.file_name || '').toLowerCase();
-    const isPdf    = fileName.endsWith('.pdf') || msg.document.mime_type === 'application/pdf';
+  // Чек: PDF, сурет-файл не фото (скриншот)
+  const isImageDoc = msg.document && /^image\//.test(msg.document.mime_type || '');
+  if (msg.document || (msg.photo && msg.photo.length)) {
+    const fileName = ((msg.document && msg.document.file_name) || '').toLowerCase();
+    const isPdf    = !!msg.document && (fileName.endsWith('.pdf') || msg.document.mime_type === 'application/pdf');
 
-    if (!isPdf) {
-      return bot.sendMessage(chatId, '📎 Kaspi чегін *PDF* түрінде жіберіңіз.', { parse_mode: 'Markdown' });
+    if (msg.document && !isPdf && !isImageDoc) {
+      return bot.sendMessage(chatId, '📎 Kaspi чегін *PDF* немесе скриншот түрінде жіберіңіз.', { parse_mode: 'Markdown' });
     }
+    const photo = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1] : null;   // ең үлкен өлшемі
+    const file = isPdf
+      ? { kind: 'pdf', fileId: msg.document.file_id, size: msg.document.file_size }
+      : photo ? { kind: 'image', fileId: photo.file_id, size: photo.file_size, mime: 'image/jpeg' }
+        : { kind: 'image', fileId: msg.document.file_id, size: msg.document.file_size, mime: msg.document.mime_type };
 
     const userName = escapeMarkdown([msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || 'Белгісіз');
 
-    // ── PDF парсинг (мүмкін болса) — сәтті болса бірден растайды ─────────
+    // ── Автоматты растау: мәтін не DeepSeek көзбен оқу; сәтті болса бірден растайды ─────────
+    let failReason = 'manual';
+    let seenByVision = null;
+    let checks = null;
     if (AUTO_CONFIRM) {
       try {
-        const result = await tryAutoConfirm(chatId, msg);
+        const result = await tryAutoConfirm(chatId, file);
         if (result.handled) return;
-        console.log(`[Receipt] ${chatId}: парсинг өтпеді (${result.reason}) → админ + таймер`);
+        failReason = result.reason;
+        seenByVision = result.seen || null;
+        checks = result.checks || null;
+        // фото/скриншот чек емес болса (кездейсоқ сурет) — студентке айтамыз, админді мазаламаймыз
+        if (file.kind === 'image' && failReason === 'vision_not_receipt') {
+          return bot.sendMessage(chatId, '🤔 Бұл Kaspi чегіне ұқсамайды. Төлем чегін *PDF* немесе толық скриншот түрінде жіберіңіз.', { parse_mode: 'Markdown' });
+        }
+        console.log(`[Receipt] ${chatId}: авто-растау өтпеді (${result.reason}) → админ${RECEIPT_TIMER_CREDIT ? ' + таймер' : ''}`);
       } catch (err) {
         console.error('[Receipt] parse error:', err.message);
       }
@@ -835,10 +919,37 @@ bot.on('message', async (msg) => {
 
     await bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
 
+    const why = {
+      image: '🖼 Скриншот/фото — тек қолмен растау',
+      pdf_not_kaspi: '⚠️ PDF Kaspi чегінің құрылымына сай емес (басқа бағдарламада жасалған/өңделген болуы мүмкін)',
+      vision_unsure: '❔ PDF түпнұсқа, бірақ DeepSeek чекті сенімді оқи алмады',
+      no_text_layer: '❔ PDF чегі оқылмады',
+      vision_not_receipt: '⚠️ DeepSeek: бұл Kaspi чегі емес сияқты',
+      bad_amount: '❔ Сома бағаға сай емес',
+      no_recipient: '❔ Алушы оқылмады',
+      wrong_recipient: '⚠️ Алушы басқа сияқты',
+      too_old: '⚠️ Чек 60 минуттан ескі сияқты',
+      future_date: '⚠️ Чектің уақыты дұрыс емес сияқты',
+      not_successful: '⚠️ «Сәтті» белгісі көрінбейді',
+    }[failReason] || '❔ Автоматты тексеру өтпеді';
+    // DeepSeek не оқыды + әр тармақтың тексерісі — админ чекпен бірден салыстырсын.
+    // Ескерту: сурет жалған болуы мүмкін — түпкі тексеріс Kaspi қосымшасындағы түсім.
+    const mark = (c) => (c.ok === true ? '✅' : c.ok === false ? '❌' : '❔');
+    const seenLine = checks
+      ? `\n\n🤖 DeepSeek оқығаны (сенім ${Math.round((seenByVision.confidence || 0) * 100)}%):\n`
+        + checks.map((c) => `${mark(c)} ${escapeMarkdown(c.text)}`).join('\n')
+        + '\n⚠️ Суретті жасау оңай — Kaspi-де түсімді өзіңіз тексеріңіз'
+      : seenByVision
+        ? `\n🤖 DeepSeek оқығаны: ${seenByVision.amount != null ? `${seenByVision.amount}₸` : '?'} · ${seenByVision.dateRaw || '?'} · ${escapeMarkdown(seenByVision.recipient || '?')}`
+        : '';
+    // сол чек нөмірі әлі шешілмеген басқа хабарда тұр ма (студент екі рет жіберген)
+    const receiptNo = (seenByVision && seenByVision.receiptNo) || null;
+    const dupPending = receiptNo && [...pendingReceipts.values()].some((p) => p.receiptNo === receiptNo);
+    const dupLine = dupPending ? `\n\n⚠️ Бұл чек (№${receiptNo}) жоғарыда күтіп тұр — ЕКІНШІ рет жіберілген. Біреуін ғана растаңыз.` : '';
     const adminMsg = await bot.sendMessage(
       ADMIN_ID,
-      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n\n` +
-      `⏱ ${timeoutMin} мин ішінде жауап бермесеңіз — *автоматты +1 кредит*.\n` +
+      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n${why} (\`${failReason}\`)${seenLine}${dupLine}\n\n` +
+      (RECEIPT_TIMER_CREDIT ? `⏱ ${timeoutMin} мин ішінде жауап бермесеңіз — *автоматты +1 кредит*.\n` : '👆 Чекті қарап, шешім қабылдаңыз (автоматты кредит жоқ).\n') +
       `Немесе: \`/confirm ${chatId} <сан>\``,
       {
         parse_mode: 'Markdown',
@@ -857,12 +968,13 @@ bot.on('message', async (msg) => {
       }
     );
 
-    // Таймер: админ баспаса — автоматты +1 кредит
-    const timer = setTimeout(async () => {
+    // Таймер (тек RECEIPT_TIMER_CREDIT=1): админ баспаса — автоматты +1 кредит
+    const timer = !RECEIPT_TIMER_CREDIT ? null : setTimeout(async () => {
       if (!pendingReceipts.has(pendingId)) return;
       pendingReceipts.delete(pendingId);
+      handledPending.add(pendingId);
       try {
-        await confirmPendingReceipt(chatId, 1, `таймер ${timeoutMin}мин`);
+        await confirmPendingReceipt(chatId, 1, `таймер ${timeoutMin}мин`, receiptNo);
         if (adminMsg && adminMsg.message_id) {
           bot.editMessageText(
             (adminMsg.text || '') + `\n\n🤖 Автоматты расталды (+1) — ${timeoutMin} мин өтті`,
@@ -877,11 +989,11 @@ bot.on('message', async (msg) => {
       }
     }, timeoutSec * 1000);
 
-    pendingReceipts.set(pendingId, { chatId, timer, adminMsgId: adminMsg.message_id });
+    pendingReceipts.set(pendingId, { chatId, timer, adminMsgId: adminMsg.message_id, receiptNo });
 
     return bot.sendMessage(
       chatId,
-      '📨 Чегіңіз қабылданды!\n\n⏳ Растау бірнеше минут ішінде болады.\nРасталған соң хабарлама аласыз.',
+      '📨 Чегіңіз қабылданды!\n\n⏳ Чекті админ тексеріп жатыр. Расталған соң хабарлама аласыз.',
       { parse_mode: 'Markdown' }
     );
   }

@@ -82,7 +82,7 @@ function mockLlm({ failSlides = false, english = false } = {}) {
       if (!cur || !km) continue;
       const desc = km[2];
       const v = /calligraphic/.test(desc) ? 'тарихы' : /main slide heading/.test(desc) ? 'Кино' : /card heading/.test(desc) ? 'Үнсіз кино' : /key figure/.test(desc) ? '1895' : /caption/.test(desc) ? 'Алғашқы сеанс'
-        : /card text|text block/.test(desc) ? 'Люмьер ағайындылары 1895 жылы Парижде алғашқы ақылы кино көрсетілімін өткізді, бұл жаңа өнердің басы болды.' : 'Кино тілі';
+        : /card text|text block/.test(desc) ? 'Люмьер ағайындылары 1895 жылы Парижде алғашқы ақылы кино көрсетілімін өткізді, бұл жаңа өнердің басы болды. Көрермендер қозғалған суретті алғаш рет үлкен экраннан көрді.' : 'Кино тілі';
       const max = +((desc.match(/(?:≤ |–)(\d+) characters/) || [])[1] || 999);
       const cut = (t) => { if (t.length <= max) return t; let o = ''; for (const w of t.split(' ')) { if ((o + ' ' + w).trim().length > max) break; o = (o + ' ' + w).trim(); } return o; };
       cur.slots[km[1]] = english && /main slide heading/.test(desc) ? 'The Cinematic' : cut(v);
