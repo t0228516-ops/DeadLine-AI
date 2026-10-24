@@ -50,6 +50,8 @@ const BOT_USERNAME = (process.env.BOT_USERNAME || 'DeadLine_prezbot').replace(/^
 const waitingForCount = new Set();
 // Күтудегі чектер: pendingId → { chatId, timer, adminMsgId }
 const pendingReceipts = new Map();
+// Өңделген (расталған/бас тартылған) күтудегі чектер: батырма қайта басылса — екінші рет кредит жоқ
+const handledPending = new Set();
 
 // ─── Негізгі менюдің батырмалары ───────────────────────────────────────────
 let WEBAPP_URL = process.env.WEBAPP_URL || '';
@@ -477,22 +479,39 @@ async function tryAutoConfirm(chatId, file) {
 }
 
 // ─── Чекті растау (админ батырмасы / таймер / /confirm) ─────────────────
-async function confirmPendingReceipt(chatId, credits, source) {
-  // Сол пайдаланушының күтудегі таймерлерін өшіру
+/**
+ * Қолмен растау (админ батырмасы / таймер / /confirm).
+ * receiptNo белгілі болса (DeepSeek оқыған) — чек нөмірі деректер қорына жазылады (applyReceipt, атомарлы):
+ * сол чек қайта келсе (скриншот не PDF) — «бұрын қолданылған», екінші рет кредит берілмейді.
+ */
+async function confirmPendingReceipt(chatId, credits, source, receiptNo = null) {
+  // Сол пайдаланушының күтудегі чектері: таймерлері тоқтайды. ДӘЛ СОЛ чектің (нөмірі бірдей) қайталанған хабары
+  // «өңделді» деп белгіленеді — оның батырмасы екінші рет кредит бермейді. Басқа нөмірлі чек (бөлек төлем) күтуде қалады.
   for (const [pid, p] of pendingReceipts) {
-    if (String(p.chatId) === String(chatId)) {
-      clearTimeout(p.timer);
-      pendingReceipts.delete(pid);
-    }
+    if (String(p.chatId) !== String(chatId)) continue;
+    if (receiptNo && p.receiptNo && p.receiptNo !== receiptNo) continue;
+    clearTimeout(p.timer);
+    pendingReceipts.delete(pid);
+    if (receiptNo && p.receiptNo === receiptNo) handledPending.add(pid);
   }
 
   const before = await getUser(chatId);
-  const user = await addCredits(chatId, credits);
-  logEvent(chatId, 'paid').catch(() => {});
   // Қолмен растауда сома белгісіз — кредит санынан бағамен есептейміз (Plus / бірінші баға / әдепкі)
   const paid = credits === PLUS.credits ? PLUS.amount
     : (before.total === 0 && credits === 1 ? FIRST_PRICE : credits * PRICE);
-  const payRef = `m:${chatId}:${Date.now()}`;
+  let user;
+  if (receiptNo) {
+    const applied = await applyReceipt(chatId, receiptNo, paid, credits);
+    if (!applied.applied) {
+      if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⚠️ ${chatId}: чек №${receiptNo} бұрын қолданылған — кредит ҚОСЫЛМАДЫ.`).catch(() => {});
+      return null;
+    }
+    user = applied.user;
+  } else {
+    user = await addCredits(chatId, credits);
+  }
+  logEvent(chatId, 'paid').catch(() => {});
+  const payRef = receiptNo ? `r:${receiptNo}` : `m:${chatId}:${Date.now()}`;
   logPayment(chatId, paid, credits, payRef).catch((e) => console.warn('[Pay] log failed', e.message));
   await payPartnerCommission(chatId, paid, payRef);
 
@@ -520,6 +539,7 @@ async function rejectPendingReceipt(chatId, source) {
     if (String(p.chatId) === String(chatId)) {
       clearTimeout(p.timer);
       pendingReceipts.delete(pid);
+      handledPending.add(pid);
     }
   }
   await bot.sendMessage(
@@ -563,11 +583,16 @@ bot.on('callback_query', async (cq) => {
       const targetId = parts[1];
       const credits  = parseInt(parts[2], 10) || 1;
       const pendingId = parts[3];
-      if (pendingId && pendingReceipts.has(pendingId)) {
-        clearTimeout(pendingReceipts.get(pendingId).timer);
-        pendingReceipts.delete(pendingId);
+      // батырма екі рет басылса / сол пайдаланушының басқа чегі бұрын расталса — қайта кредит жоқ
+      if (pendingId && handledPending.has(pendingId)) return bot.answerCallbackQuery(cq.id, { text: 'Бұл чек бұрын өңделген', show_alert: true });
+      const entry = pendingId ? pendingReceipts.get(pendingId) : null;
+      if (pendingId) handledPending.add(pendingId);
+      if (entry) { clearTimeout(entry.timer); pendingReceipts.delete(pendingId); }
+      const done = await confirmPendingReceipt(targetId, credits, 'батырма', entry && entry.receiptNo);
+      if (!done) {
+        await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: cq.message.chat.id, message_id: cq.message.message_id }).catch(() => {});
+        return bot.answerCallbackQuery(cq.id, { text: 'Чек бұрын қолданылған — кредит қосылмады', show_alert: true });
       }
-      await confirmPendingReceipt(targetId, credits, 'батырма');
       await bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
         chat_id: cq.message.chat.id,
         message_id: cq.message.message_id,
@@ -582,6 +607,8 @@ bot.on('callback_query', async (cq) => {
       const parts = data.split(':');
       const targetId = parts[1];
       const pendingId = parts[2];
+      if (pendingId && handledPending.has(pendingId)) return bot.answerCallbackQuery(cq.id, { text: 'Бұл чек бұрын өңделген', show_alert: true });
+      if (pendingId) handledPending.add(pendingId);
       if (pendingId && pendingReceipts.has(pendingId)) {
         clearTimeout(pendingReceipts.get(pendingId).timer);
         pendingReceipts.delete(pendingId);
@@ -915,9 +942,13 @@ bot.on('message', async (msg) => {
       : seenByVision
         ? `\n🤖 DeepSeek оқығаны: ${seenByVision.amount != null ? `${seenByVision.amount}₸` : '?'} · ${seenByVision.dateRaw || '?'} · ${escapeMarkdown(seenByVision.recipient || '?')}`
         : '';
+    // сол чек нөмірі әлі шешілмеген басқа хабарда тұр ма (студент екі рет жіберген)
+    const receiptNo = (seenByVision && seenByVision.receiptNo) || null;
+    const dupPending = receiptNo && [...pendingReceipts.values()].some((p) => p.receiptNo === receiptNo);
+    const dupLine = dupPending ? `\n\n⚠️ Бұл чек (№${receiptNo}) жоғарыда күтіп тұр — ЕКІНШІ рет жіберілген. Біреуін ғана растаңыз.` : '';
     const adminMsg = await bot.sendMessage(
       ADMIN_ID,
-      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n${why} (\`${failReason}\`)${seenLine}\n\n` +
+      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n${why} (\`${failReason}\`)${seenLine}${dupLine}\n\n` +
       (RECEIPT_TIMER_CREDIT ? `⏱ ${timeoutMin} мин ішінде жауап бермесеңіз — *автоматты +1 кредит*.\n` : '👆 Чекті қарап, шешім қабылдаңыз (автоматты кредит жоқ).\n') +
       `Немесе: \`/confirm ${chatId} <сан>\``,
       {
@@ -941,8 +972,9 @@ bot.on('message', async (msg) => {
     const timer = !RECEIPT_TIMER_CREDIT ? null : setTimeout(async () => {
       if (!pendingReceipts.has(pendingId)) return;
       pendingReceipts.delete(pendingId);
+      handledPending.add(pendingId);
       try {
-        await confirmPendingReceipt(chatId, 1, `таймер ${timeoutMin}мин`);
+        await confirmPendingReceipt(chatId, 1, `таймер ${timeoutMin}мин`, receiptNo);
         if (adminMsg && adminMsg.message_id) {
           bot.editMessageText(
             (adminMsg.text || '') + `\n\n🤖 Автоматты расталды (+1) — ${timeoutMin} мин өтті`,
@@ -957,7 +989,7 @@ bot.on('message', async (msg) => {
       }
     }, timeoutSec * 1000);
 
-    pendingReceipts.set(pendingId, { chatId, timer, adminMsgId: adminMsg.message_id });
+    pendingReceipts.set(pendingId, { chatId, timer, adminMsgId: adminMsg.message_id, receiptNo });
 
     return bot.sendMessage(
       chatId,
