@@ -374,27 +374,35 @@ async function tryAutoConfirm(chatId, file) {
     if (text && text.trim().length >= 20) parsed = parseReceiptText(text);
   }
   if (!parsed || !parsed.ok) {
-    // Мәтінсіз PDF не скриншот/фото — ЕШҚАШАН автоматты расталмайды (жалған суретті модель ажырата алмайды).
-    // DeepSeek тек оқиды да, админге тексеру тізімін береді; шешім — админде.
+    // Мәтінсіз PDF (Kaspi чегі осындай — ішінде бір сурет) не скриншот/фото: DeepSeek көзбен оқиды.
+    // Скриншот/фото ЕШҚАШАН автоматты расталмайды (жалған суретті модель ажырата алмайды) — админге тексеру тізімімен.
+    // PDF — файл құрылымы Kaspi-дікіне дәл сай болса (core/receiptPdf.js) және оқылғаны сенімді болса ғана авто-растау.
     const V = require('./core/receiptVision');
     const img = file.kind === 'pdf' ? await V.pdfToPng(buffer) : buffer;
     const seen = img ? await V.readReceiptImage({ data: img, mime: file.kind === 'pdf' ? 'image/png' : (file.mime || 'image/jpeg') }) : null;
-    console.log(`[Receipt] ${chatId}: vision ${seen ? `conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}`);
-    const reason = file.kind === 'pdf' ? 'no_text_layer' : 'image';
+    const prof = file.kind === 'pdf' ? require('./core/receiptPdf').kaspiPdfProfile(buffer) : null;
+    console.log(`[Receipt] ${chatId}: vision ${seen ? `ok=${seen.ok} conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}${prof ? ` pdf=${prof.ok ? prof.profile : 'FAIL: ' + prof.reasons.join('; ')}` : ''}`);
+    const reason = file.kind === 'pdf' ? (prof && !prof.ok ? 'pdf_not_kaspi' : 'no_text_layer') : 'image';
     if (!seen) return { handled: false, reason };
     if (!seen.isReceipt) return { handled: false, reason: 'vision_not_receipt', seen };
-    const user = await getUser(chatId);
-    const checks = V.reviewSeen(seen, {
-      expectedName: KASPI_NAME, maxAgeMin: RECEIPT_MAX_AGE_MIN,
-      pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: [PLUS],
-    });
-    if (seen.receiptNo) {
-      const { receiptExists } = require('./db');
-      checks.push(await receiptExists(seen.receiptNo).catch(() => false)
-        ? { ok: false, text: `№${seen.receiptNo} бұрын қолданылған` }
-        : { ok: true, text: `№${seen.receiptNo} жаңа` });
-    } else checks.push({ ok: null, text: 'Чек нөмірі оқылмады' });
-    return { handled: false, reason, seen, checks };
+    const adminChecks = async () => {
+      const user = await getUser(chatId);
+      const checks = V.reviewSeen(seen, {
+        expectedName: KASPI_NAME, maxAgeMin: RECEIPT_MAX_AGE_MIN,
+        pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: [PLUS],
+      });
+      if (prof) checks.unshift(prof.ok ? { ok: true, text: 'PDF құрылымы Kaspi чегіне сай' } : { ok: false, text: `PDF: ${prof.reasons.join('; ')}` });
+      if (seen.receiptNo) {
+        const { receiptExists } = require('./db');
+        checks.push(await receiptExists(seen.receiptNo).catch(() => false)
+          ? { ok: false, text: `№${seen.receiptNo} бұрын қолданылған` }
+          : { ok: true, text: `№${seen.receiptNo} жаңа` });
+      } else checks.push({ ok: null, text: 'Чек нөмірі оқылмады' });
+      return checks;
+    };
+    if (!(prof && prof.ok && seen.ok)) return { handled: false, reason: prof && prof.ok ? 'vision_unsure' : reason, seen, checks: await adminChecks() };
+    parsed = seen;
+    parsed.adminChecks = adminChecks;
   }
 
   // 3) Қайталанған чек — бірден бас тарту (оқылған, бірақ қолданылған)
@@ -416,6 +424,8 @@ async function tryAutoConfirm(chatId, file) {
   });
 
   if (!verdict.ok) {
+    // Көзбен оқылған чек: модель қате оқуы мүмкін — адал студентке нақақ бас тартпаймыз, шешім админде
+    if (parsed.source === 'vision') return { handled: false, reason: verdict.reason, seen: parsed, checks: await parsed.adminChecks() };
     // Анық жалған/қате себептер — пайдаланушыға айтамыз, админді мазаламаймыз
     const clear = {
       wrong_recipient: '❌ Төлем біздің Kaspi нөміріне жасалмаған. Дұрыс алушыға төлеп, жаңа чек жіберіңіз.',
@@ -454,7 +464,7 @@ async function tryAutoConfirm(chatId, file) {
   if (ADMIN_ID) {
     bot.sendMessage(
       ADMIN_ID,
-      `🤖 Авто-растау: ${chatId} → +${verdict.credits} кредит (${parsed.amount}₸, чек №${parsed.receiptNo})`
+      `🤖 Авто-растау: ${chatId} → +${verdict.credits} кредит (${parsed.amount}₸, чек №${parsed.receiptNo})${parsed.source === 'vision' ? ' · Kaspi PDF (құрылымы тексерілді)' : ''}`
     ).catch(() => {});
   }
   return { handled: true };
@@ -878,7 +888,9 @@ bot.on('message', async (msg) => {
 
     const why = {
       image: '🖼 Скриншот/фото — тек қолмен растау',
-      no_text_layer: '🖼 PDF ішінде сурет (мәтін жоқ) — тек қолмен растау',
+      pdf_not_kaspi: '⚠️ PDF Kaspi чегінің құрылымына сай емес (басқа бағдарламада жасалған/өңделген болуы мүмкін)',
+      vision_unsure: '❔ PDF түпнұсқа, бірақ DeepSeek чекті сенімді оқи алмады',
+      no_text_layer: '❔ PDF чегі оқылмады',
       vision_not_receipt: '⚠️ DeepSeek: бұл Kaspi чегі емес сияқты',
       bad_amount: '❔ Сома бағаға сай емес',
       no_recipient: '❔ Алушы оқылмады',
