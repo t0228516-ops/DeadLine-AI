@@ -35,8 +35,11 @@ const plusLine = `⭐ *Plus:* ${PLUS.credits} презентация — *${PLUS
 const ADMIN_ID    = process.env.ADMIN_CHAT_ID;
 const AUTO_CONFIRM   = process.env.AUTO_CONFIRM !== '0';          // '0' қойса — толық қолмен режим
 const RECEIPT_MAX_AGE_MIN = parseInt(process.env.RECEIPT_MAX_AGE_MIN || '60', 10);
-// Админ батырма баспаса — осы секундтан кейін автоматты растау (әдепкі 3 мин)
+// Админ батырма баспаса — осы секундтан кейін автоматты растау (әдепкі 3 мин).
+// ӘДЕПКІДЕ ӨШІРУЛІ: бұрын кез келген сурет 3 минуттан кейін кредит алатын. Енді чекті DeepSeek көзбен оқиды,
+// оқи алмаса — шешім тек админде. Ескі тәртіпті қайтару: RECEIPT_TIMER_CREDIT=1.
 const AUTO_CONFIRM_TIMEOUT_SEC = parseInt(process.env.AUTO_CONFIRM_TIMEOUT_SEC || '180', 10);
+const RECEIPT_TIMER_CREDIT = process.env.RECEIPT_TIMER_CREDIT === '1';
 // МАҢЫЗДЫ: BOT_USERNAME env-де кейде "@ai_presentation_ybot" түрінде (@-мен)
 // қойылып қалуы мүмкін. Telegram deep-link форматы (t.me/<username>?start=...)
 // username-нің алдында @ КҮТПЕЙДІ — @-мен жіберілген сілтемені Telegram
@@ -356,21 +359,31 @@ function showHelp(chatId) {
 // ─── Чекті автоматты оқу және растау ─────────────────────────────────────
 // Қайтарады: { handled: true } — пайдаланушыға жауап берілді (сәтті/бас тарту),
 //            { handled: false, reason } — админге қолмен жіберу керек.
-async function tryAutoConfirm(chatId, msg) {
-  // 1) PDF жүктеу (Telegram Bot API лимиті 20 МБ; чек кішкентай)
-  const size = msg.document.file_size || 0;
-  if (size > 5 * 1024 * 1024) return { handled: false, reason: 'too_big' };
+async function tryAutoConfirm(chatId, file) {
+  // 1) Файл жүктеу (Telegram Bot API лимиті 20 МБ; чек кішкентай)
+  if ((file.size || 0) > 5 * 1024 * 1024) return { handled: false, reason: 'too_big' };
 
-  const link = await bot.getFileLink(msg.document.file_id);
+  const link = await bot.getFileLink(file.fileId);
   const resp = await require('axios').get(link, { responseType: 'arraybuffer', timeout: 20000 });
   const buffer = Buffer.from(resp.data);
 
-  // 2) Мәтін + парсинг
-  const text = await extractPdfText(buffer);
-  if (!text || text.trim().length < 20) return { handled: false, reason: 'no_text_layer' };
-
-  const parsed = parseReceiptText(text);
-  if (!parsed.ok) return { handled: false, reason: 'unreadable' };
+  // 2) Мәтін + парсинг; мәтін қабаты жоқ PDF не скриншот/фото — DeepSeek көзбен оқиды (core/receiptVision.js)
+  let parsed = null;
+  if (file.kind === 'pdf') {
+    const text = await extractPdfText(buffer);
+    if (text && text.trim().length >= 20) parsed = parseReceiptText(text);
+  }
+  if (!parsed || !parsed.ok) {
+    const V = require('./core/receiptVision');
+    const img = file.kind === 'pdf' ? await V.pdfToPng(buffer) : buffer;
+    const seen = img ? await V.readReceiptImage({ data: img, mime: file.kind === 'pdf' ? 'image/png' : (file.mime || 'image/jpeg') }) : null;
+    console.log(`[Receipt] ${chatId}: vision ${seen ? `ok=${seen.ok} conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}`);
+    if (!seen) return { handled: false, reason: file.kind === 'pdf' ? 'no_text_layer' : 'image' };
+    if (seen.edited) return { handled: false, reason: 'vision_edited' };
+    if (!seen.isReceipt) return { handled: false, reason: 'vision_not_receipt' };
+    if (!seen.ok) return { handled: false, reason: 'vision_unsure' };
+    parsed = seen;
+  }
 
   // 3) Қайталанған чек — бірден бас тарту (оқылған, бірақ қолданылған)
   const { receiptExists } = require('./db');
@@ -802,23 +815,35 @@ bot.on('message', async (msg) => {
     );
   }
 
-  // Чек (PDF)
-  if (msg.document) {
-    const fileName = (msg.document.file_name || '').toLowerCase();
-    const isPdf    = fileName.endsWith('.pdf') || msg.document.mime_type === 'application/pdf';
+  // Чек: PDF, сурет-файл не фото (скриншот)
+  const isImageDoc = msg.document && /^image\//.test(msg.document.mime_type || '');
+  if (msg.document || (msg.photo && msg.photo.length)) {
+    const fileName = ((msg.document && msg.document.file_name) || '').toLowerCase();
+    const isPdf    = !!msg.document && (fileName.endsWith('.pdf') || msg.document.mime_type === 'application/pdf');
 
-    if (!isPdf) {
-      return bot.sendMessage(chatId, '📎 Kaspi чегін *PDF* түрінде жіберіңіз.', { parse_mode: 'Markdown' });
+    if (msg.document && !isPdf && !isImageDoc) {
+      return bot.sendMessage(chatId, '📎 Kaspi чегін *PDF* немесе скриншот түрінде жіберіңіз.', { parse_mode: 'Markdown' });
     }
+    const photo = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1] : null;   // ең үлкен өлшемі
+    const file = isPdf
+      ? { kind: 'pdf', fileId: msg.document.file_id, size: msg.document.file_size }
+      : photo ? { kind: 'image', fileId: photo.file_id, size: photo.file_size, mime: 'image/jpeg' }
+        : { kind: 'image', fileId: msg.document.file_id, size: msg.document.file_size, mime: msg.document.mime_type };
 
     const userName = escapeMarkdown([msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || 'Белгісіз');
 
-    // ── PDF парсинг (мүмкін болса) — сәтті болса бірден растайды ─────────
+    // ── Автоматты растау: мәтін не DeepSeek көзбен оқу; сәтті болса бірден растайды ─────────
+    let failReason = 'manual';
     if (AUTO_CONFIRM) {
       try {
-        const result = await tryAutoConfirm(chatId, msg);
+        const result = await tryAutoConfirm(chatId, file);
         if (result.handled) return;
-        console.log(`[Receipt] ${chatId}: парсинг өтпеді (${result.reason}) → админ + таймер`);
+        failReason = result.reason;
+        // фото/скриншот чек емес болса (кездейсоқ сурет) — студентке айтамыз, админді мазаламаймыз
+        if (file.kind === 'image' && failReason === 'vision_not_receipt') {
+          return bot.sendMessage(chatId, '🤔 Бұл Kaspi чегіне ұқсамайды. Төлем чегін *PDF* немесе толық скриншот түрінде жіберіңіз.', { parse_mode: 'Markdown' });
+        }
+        console.log(`[Receipt] ${chatId}: авто-растау өтпеді (${result.reason}) → админ${RECEIPT_TIMER_CREDIT ? ' + таймер' : ''}`);
       } catch (err) {
         console.error('[Receipt] parse error:', err.message);
       }
@@ -835,10 +860,17 @@ bot.on('message', async (msg) => {
 
     await bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
 
+    const why = {
+      vision_edited: '⚠️ DeepSeek: чекте *өңдеу белгілері* бар',
+      vision_not_receipt: '⚠️ DeepSeek: бұл Kaspi чегі емес сияқты',
+      vision_unsure: '❔ DeepSeek: чек анық оқылмады',
+      bad_amount: '❔ Сома бағаға сай емес',
+      no_recipient: '❔ Алушы оқылмады',
+    }[failReason] || '❔ Автоматты тексеру өтпеді';
     const adminMsg = await bot.sendMessage(
       ADMIN_ID,
-      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n\n` +
-      `⏱ ${timeoutMin} мин ішінде жауап бермесеңіз — *автоматты +1 кредит*.\n` +
+      `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n${why} (\`${failReason}\`)\n\n` +
+      (RECEIPT_TIMER_CREDIT ? `⏱ ${timeoutMin} мин ішінде жауап бермесеңіз — *автоматты +1 кредит*.\n` : '👆 Чекті қарап, шешім қабылдаңыз (автоматты кредит жоқ).\n') +
       `Немесе: \`/confirm ${chatId} <сан>\``,
       {
         parse_mode: 'Markdown',
@@ -857,8 +889,8 @@ bot.on('message', async (msg) => {
       }
     );
 
-    // Таймер: админ баспаса — автоматты +1 кредит
-    const timer = setTimeout(async () => {
+    // Таймер (тек RECEIPT_TIMER_CREDIT=1): админ баспаса — автоматты +1 кредит
+    const timer = !RECEIPT_TIMER_CREDIT ? null : setTimeout(async () => {
       if (!pendingReceipts.has(pendingId)) return;
       pendingReceipts.delete(pendingId);
       try {
@@ -881,7 +913,7 @@ bot.on('message', async (msg) => {
 
     return bot.sendMessage(
       chatId,
-      '📨 Чегіңіз қабылданды!\n\n⏳ Растау бірнеше минут ішінде болады.\nРасталған соң хабарлама аласыз.',
+      '📨 Чегіңіз қабылданды!\n\n⏳ Чекті админ тексеріп жатыр. Расталған соң хабарлама аласыз.',
       { parse_mode: 'Markdown' }
     );
   }
