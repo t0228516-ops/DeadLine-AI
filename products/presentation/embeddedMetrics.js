@@ -83,7 +83,45 @@ function parseFont(buf) {
   }
 }
 
-/** Ендірілген (regular) қаріптер: Map<typeface, { width(str, szPt, spcPt) }>. */
+/**
+ * Кітапхана кестесінен (libraryFontMetrics.js, Google Fonts) қаріп метрикасы: ендірілген файл MTX-сығылған
+ * болса (SlidesCarnival), оны оқи алмаймыз — бірақ сол қаріптің нақты ендері кестеде бар.
+ * @returns {{ width(str, szPt, spcPt, bold), kk:boolean, source:'table' } | null}
+ */
+let TABLE = null;
+function tableMetrics(face) {
+  if (!TABLE) {
+    const t = require('./libraryFontMetrics');
+    const idx = new Map();
+    let i = 0;
+    for (const ch of t.chars) idx.set(ch, i++);
+    TABLE = { idx, faces: t.faces };
+  }
+  const f = face && TABLE.faces[face];
+  if (!f) return null;
+  const avg = (arr) => arr[TABLE.idx.get('о')] > 0 ? arr[TABLE.idx.get('о')] : 520;
+  return {
+    kk: f.kk,
+    source: 'table',
+    width(str, szPt, spcPt = 0, bold = false) {
+      const arr = bold && f.b ? f.b : f.r;
+      const fb = avg(arr);
+      let u = 0; let n = 0;
+      for (const ch of String(str)) {
+        n++;
+        const k = TABLE.idx.get(ch);
+        const v = k == null ? -1 : arr[k];
+        u += v >= 0 ? v : fb;
+      }
+      return (u / 1000) * szPt * 1.02 + spcPt * n;                       // 2% қор (кернинг/рендер айырмасы)
+    },
+  };
+}
+
+/**
+ * Ендірілген (regular) қаріптер: Map<typeface, { width(str, szPt, spcPt) }>.
+ * Файлы оқылмаған (MTX) қаріп — кітапхана кестесінен (tableMetrics) толтырылады.
+ */
 function embeddedMetrics(files) {
   const out = new Map();
   const pres = files.get('ppt/presentation.xml');
@@ -101,7 +139,7 @@ function embeddedMetrics(files) {
     const data = tg && files.get(tg.startsWith('/') ? tg.slice(1) : 'ppt/' + tg.replace(/^\.?\//, ''));
     if (!face || !Buffer.isBuffer(data) || out.has(face)) continue;
     const f = parseFont(data);
-    if (!f) continue;
+    if (!f) { const tm = tableMetrics(face); if (tm) out.set(face, tm); continue; }
     const avgLow = f.adv(0x43e) || f.adv(0x6f) || f.upm * 0.5;      // «о» — белгісіз таңбаға орташа
     out.set(face, {
       width(str, szPt, spcPt = 0) {
@@ -114,4 +152,4 @@ function embeddedMetrics(files) {
   return out;
 }
 
-module.exports = { embeddedMetrics, parseFont, ttfOf };
+module.exports = { embeddedMetrics, tableMetrics, parseFont, ttfOf };

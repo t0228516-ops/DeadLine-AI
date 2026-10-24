@@ -20,7 +20,7 @@ const { makeZip } = require('../referat/zipmin');
 const { orderedSlides, tagBlocks, xfrmOf, sldSzMatch } = require('../../design-dna/structure');
 const L = require('./templateLayout');
 const QA = require('./templateCheck');
-const { embeddedMetrics } = require('./embeddedMetrics');
+const { embeddedMetrics, tableMetrics } = require('./embeddedMetrics');
 const { materializePlaceholders } = require('./phGeometry');
 const { slotKind } = require('./templateStory');
 
@@ -178,7 +178,10 @@ function uncoveredFonts(files) {
     const data = target && files.get('ppt/' + target.replace(/^\.?\//, ''));
     if (!face || !Buffer.isBuffer(data)) continue;
     const cm = cmapOf(data);
-    if (cm && KK_PROBE.some((c) => !cm.has(c))) bad.add(face);
+    if (cm) { if (KK_PROBE.some((c) => !cm.has(c))) bad.add(face); continue; }
+    // файл оқылмады (MTX-сығылған) — кітапхана кестесі қазақ әріптерінің бар-жоғын біледі
+    const tm = tableMetrics(face);
+    if (tm && !tm.kk) bad.add(face);
   }
   return bad;
 }
@@ -222,13 +225,14 @@ function textWidthPt(str, szPt, serif, bold, spcPt) {
 }
 
 /** Жолды енге қарай бөліп, қатар санын қайтарады (ұзын сөз бірнеше қатарға бөлінеді). */
-function countLines(str, szPt, widthPt, serif, bold, spcPt) {
+function countLines(str, szPt, widthPt, serif, bold, spcPt, wfn) {
   if (!str) return 1;
+  const tw = wfn || ((s, sz, spc) => textWidthPt(s, sz, serif, bold, spc));   // wfn — қаріптің нақты метрикасы (бар болса)
   const words = String(str).split(/\s+/).filter(Boolean);
-  const spW = textWidthPt(' ', szPt, serif, bold, spcPt);
+  const spW = tw(' ', szPt, spcPt);
   let lines = 1, cur = 0;
   for (const w of words) {
-    const ww = textWidthPt(w, szPt, serif, bold, spcPt);
+    const ww = tw(w, szPt, spcPt);
     if (ww > widthPt) {                       // сөздің өзі сыймайды
       lines += Math.ceil(ww / widthPt) - (cur === 0 ? 1 : 0);
       cur = ww % widthPt;
@@ -256,7 +260,10 @@ function fitLines(lines, o) {
   // Arial/Times емес қаріп (метрикасы белгісіз) — 6% қор
   // маркер шегінісі (marL): «• For Call» сияқты абзацта мәтін ені қораптан тар
   const marL = (+(((pPr || '').match(/ marL="(\d+)"/) || [])[1]) || 0) / 12700;
-  const wPt = Math.max(10, box.w / 12700 - insets.l - insets.r - marL) / (single ? DISPLAY_SAFETY : 1) / (o.unknownFace ? 1.06 : 1);
+  // o.widthFn — қаріптің нақты ендері (ендірілген файл не кітапхана кестесі); жоқ болса Arial/Times бағасы + 6% қор
+  const wfn = o.widthFn || null;
+  const tw = (s, sz, spc) => (wfn ? wfn(s, sz, spc) : textWidthPt(s, sz, serif, bold, spc));
+  const wPt = Math.max(10, box.w / 12700 - insets.l - insets.r - marL) / (single ? DISPLAY_SAFETY : 1) / (o.unknownFace && !wfn ? 1.06 : 1);
   // box.h — шаблон қорабының биіктігі; o.grow — оның ТӨМЕНІНДЕГІ бос орын (келесі пішінге/слайд шетіне дейін)
   // 6% рұқсат тек қорап өз орнында қалғанда; қорап төмен өссе (grow) — рұқсат жоқ, әйтпесе мәтін көршіге/жылжытылған элементке түседі
   const hPt = Math.max(8, (box.h + (o.grow || 0)) / 12700 - insets.t - insets.b) * (o.grow ? 1 : 1.06);
@@ -275,13 +282,13 @@ function fitLines(lines, o) {
     const scale = sz / orig;
     const spc = spcOrig * scale;                                            // кішірейгенде аралық та пропорционалды кішірейеді
     let total = 0, wrapped = false;
-    const counts = arr.map((l) => { const c = countLines(l, sz, wPt, serif, bold, spc); if (c > 1) wrapped = true; return c; });
+    const counts = arr.map((l) => { const c = countLines(l, sz, wPt, serif, bold, spc, wfn); if (c > 1) wrapped = true; return c; });
     // көп қатарлы мәтінде үлкен қатар аралығы (spcPts) қысқарады — шаблон бір қатарға арналған
     const ratio = wrapped ? Math.min(origRatio, 1.25) : origRatio;
     const lineH = ratio * sz;
     arr.forEach((l, i) => { total += counts[i] * lineH + (i ? gapOf(bef, sz) + gapOf(aft, sz) : 0); });
-    const oneWordOk = !single || arr.every((l) => textWidthPt(l, sz, serif, bold, spc) <= wPt);
-    const wordsOk = arr.every((l) => l.split(/\s+/).every((w) => textWidthPt(w, sz, serif, bold, spc) <= wPt * 0.94));   // сөз ортасынан үзілмейді (6% қор: рендерлер айырмасы)
+    const oneWordOk = !single || arr.every((l) => tw(l, sz, spc) <= wPt);
+    const wordsOk = arr.every((l) => l.split(/\s+/).every((w) => tw(w, sz, spc) <= wPt * 0.94));   // сөз ортасынан үзілмейді (6% қор: рендерлер айырмасы)
     return { total, lineH, ratio, ok: total <= hPt && oneWordOk && wordsOk, scale, wrapped, lines: counts.reduce((a, b) => a + b, 0) };
   };
 
@@ -298,7 +305,7 @@ function fitLines(lines, o) {
   // Түпнұсқа мәтін қанша қатар болса (тақырып ≤3, қалғаны ≤2), жаңа мәтін де сонша қатарға (тақырыпқа +1) сыйғызылады:
   // «Еуропа / 20 / ғасыр» сияқты 3 қатарлы алып тақырып орнына таза 2 қатар.
   let hit = null;
-  const origEst = (o.origTexts || []).reduce((n, t) => n + countLines(t, orig, wPt, serif, bold, spcOrig), 0);
+  const origEst = (o.origTexts || []).reduce((n, t) => n + countLines(t, orig, wPt, serif, bold, spcOrig, wfn), 0);
   // Тақырыпта біздің (кеңірек) өлшем түпнұсқаның қатар санын асыра санауы мүмкін — сондықтан ≥2 болса мақсат 2 қатар.
   const prefLines = isTitle ? (origEst === 1 ? 1 : 2) : (origEst && origEst <= 2 ? origEst : 0);
   if (prefLines && !single && !o.fontPt) {
@@ -416,6 +423,13 @@ function elemOf(xml, tag) {
   return end < 0 ? '' : xml.slice(m.index, end + close.length);
 }
 
+/** Қаріптің нақты ен функциясы: шаблонға ендірілген файл → кітапхана кестесі; Arial/Times өз бағасымен (null). */
+function widthFnFor(ctx, face, bold) {
+  if (!face || /^(arial|times new roman|liberation (sans|serif))$/i.test(face)) return null;
+  const em = (ctx && ctx.metrics && ctx.metrics.get && ctx.metrics.get(face)) || tableMetrics(face);
+  return em ? (s, sz, spc) => em.width(s, sz, spc || 0, bold) : null;
+}
+
 /** Бір пішіннің ішіндегі барлық абзацты lines жолдарымен ауыстырады (бірінші абзацтың форматтауын сақтап). */
 function replaceShapeText(block, lines, ctx) {
   const tx = txBodyOf(block);
@@ -439,6 +453,7 @@ function replaceShapeText(block, lines, ctx) {
     const fit = fitLines(list, {
       box: ctx.box, grow: ctx.grow || 0, pPr, rPr, bold: IS_BOLD.test(rPr) || BOLD_NAME.test(face), serif: isSerifFace(face), single: !!ctx.single,
       unknownFace: !!face && !/^(arial|times new roman|liberation (sans|serif))$/i.test(face),
+      widthFn: widthFnFor(ctx, face, IS_BOLD.test(rPr) || BOLD_NAME.test(face)),
       minScale: ctx.minScale, relax: !!ctx.relax, noShorten: !!ctx.noShorten, fontPt: ctx.fontPt,
       origTexts: paras.map((pp) => [...pp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('')).filter((t) => t.trim()),
       insets: { l: inset('lIns', 91440), r: inset('rIns', 91440), t: inset('tIns', 45720), b: inset('bIns', 45720) },
@@ -796,7 +811,7 @@ function packLogoRow(pairs, ext, setBlock) {
 function fillSlide(xml, slide, ctx) {
   if (!xml || !slide) return xml;
   const { title, body } = linesForSlide(slide);
-  const c = { badFonts: ctx && ctx.badFonts, fontStyles: ctx && ctx.fontStyles };
+  const c = { badFonts: ctx && ctx.badFonts, fontStyles: ctx && ctx.fontStyles, metrics: ctx && ctx.metrics };
   const cl = classify(xml, ctx);
   const { initials, pairs } = cl;
   let content = cl.content;
@@ -1015,6 +1030,7 @@ function faceOf(block) {
 }
 
 /** Қорапқа «жайлы» сыятын максимум таңба (кегль comfort*түпнұсқа, бірақ ≥ еден). */
+const CAP_SAMPLE = 'Қазақ хандығы XV ғасырда құрылып, көшпелі мемлекеттің дәстүрін жалғастырды. Экономика мен мәдениет дамыды.';
 function capacityChars(block, comfort, maxW, growEmu) {
   const tx = txBodyOf(block);
   const bx = boxOf(block);
@@ -1034,11 +1050,13 @@ function capacityChars(block, comfort, maxW, growEmu) {
   const ln = spacingOf(pPr, 'lnSpc');
   const origRatio = !ln ? 1.2 : ln.kind === 'spcPts' ? ln.val / 100 / orig : (ln.val / 100000) * 1.2;
   const ratio = Math.min(origRatio, 1.25);
-  const avg = (serif ? 0.5 : 0.56) * 1.04;
+  // орташа таңба ені: қаріптің нақты метрикасы бойынша (кең Merriweather/Montserrat — аз таңба), болмаса Arial/Times бағасы
+  const wfn = widthFnFor(null, faceOf(block), IS_BOLD.test(rPr));
+  const avg = wfn ? wfn(CAP_SAMPLE, 1, 0) / CAP_SAMPLE.length : (serif ? 0.5 : 0.56) * 1.04;
   const perLine = Math.max(1, Math.floor(wPt / (sz * avg)));
   let lines = Math.max(1, Math.floor(hPt / (ratio * sz)));
   const origTexts = tagBlocks(tx, 'a:p').map((pp) => [...pp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('')).filter((t) => t.trim());
-  const origEst = origTexts.reduce((n, t) => n + countLines(t, orig, wPt, serif, IS_BOLD.test(rPr)), 0);
+  const origEst = origTexts.reduce((n, t) => n + countLines(t, orig, wPt, serif, IS_BOLD.test(rPr), 0, wfn), 0);
   if (origEst && origEst <= (orig >= 30 ? 3 : 2)) lines = Math.min(lines, orig >= 30 ? origEst + 1 : origEst);   // түпнұсқадағы қатар санынан аспайды
   return Math.max(4, Math.floor(perLine * lines * 0.85));
 }
