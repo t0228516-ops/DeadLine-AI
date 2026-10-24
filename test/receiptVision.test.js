@@ -35,3 +35,15 @@ test('unsure, edited, not a receipt or no answer never auto-confirms', async () 
   assert.strictEqual(await readReceiptImage(img, { vision: async () => null }), null);
   assert.strictEqual(await readReceiptImage(img, { vision: async () => { throw new Error('net'); } }), null);
 });
+
+test('reviewSeen: each check is shown separately for the admin (time, recipient, success, amount, edits)', async () => {
+  const { reviewSeen } = require('../core/receiptVision');
+  const p = await readReceiptImage(img, { vision: async () => good });
+  const ok = reviewSeen(p, opts);
+  assert.ok(ok.every((c) => c.ok === true), JSON.stringify(ok));
+  assert.ok(ok.some((c) => /10 мин бұрын/.test(c.text)) && ok.some((c) => /2 кредит/.test(c.text)));
+  const bad = reviewSeen(await readReceiptImage(img, { vision: async () => ({ ...good, recipient: 'Ахметов Б.', datetime: '23.10.2026 06:30', amount: 777, successful: false, edited_signs: true }) }), opts);
+  assert.strictEqual(bad.filter((c) => c.ok === false).length, 5, JSON.stringify(bad));
+  const blank = reviewSeen(await readReceiptImage(img, { vision: async () => ({ is_kaspi_receipt: true, confidence: 0.3 }) }), opts);
+  assert.ok(blank.filter((c) => c.ok === null).length >= 3, JSON.stringify(blank));
+});

@@ -6,12 +6,14 @@
  *   readReceiptImage(img)     — DeepSeek vision → { ok, receiptNo, amount, date, recipient, successful, ... }
  *                               (parseReceiptText-пен бірдей пішін — сондықтан validateReceipt сол күйі қолданылады)
  *
- * Модель тек ОҚИДЫ; шешімді код қабылдайды: алушы, сома, уақыт (≤60 мин), «сәтті», чек нөмірінің қайталанбауы.
- * Модель сенімсіз болса, өңделген белгісі болса немесе қате болса — null/ok:false → чек админге барады.
+ *   reviewSeen(seen, opts)    — оқылғанды тексеру тізімі (уақыт, алушы, «сәтті», сома, өңдеу белгісі) → админге
+ *
+ * Сурет ЕШҚАШАН автоматты расталмайды: сынақта қолдан салынған жалған «чектерді» модель нағыз деп оқыды
+ * (сенім 90–95%). Сондықтан көзбен оқу тек админге көмек — шешімді әрқашан адам қабылдайды.
  */
 const fs = require('fs');
 const path = require('path');
-const { _internals: { parseAstanaDate } } = require('./receipt');
+const { validateReceipt, _internals: { parseAstanaDate, normName } } = require('./receipt');
 
 const PDFJS_DIR = path.join(path.dirname(require.resolve('pdf-parse/package.json')), 'lib', 'pdf.js', 'v2.0.550', 'build');
 
@@ -98,4 +100,33 @@ async function readReceiptImage(img, o = {}) {
   return out;
 }
 
-module.exports = { pdfToPng, readReceiptImage, PROMPT };
+/**
+ * Көзбен оқылған чекті ботпен бірдей ережемен тексеріп, әр тармақты бөлек көрсету (админ бір қарап шешсін).
+ * @returns {{ok:boolean|null, text:string}[]}  ok:null — оқылмады, анықтау мүмкін емес
+ */
+function reviewSeen(seen, o = {}) {
+  const now = o.now || new Date();
+  const maxAgeMin = o.maxAgeMin || 60;
+  const out = [];
+  if (seen.date) {
+    const age = Math.round((now.getTime() - seen.date.getTime()) / 60000);
+    out.push(age < -2 ? { ok: false, text: `Уақыты болашақта (${seen.dateRaw})` }
+      : age > maxAgeMin ? { ok: false, text: `Уақыты ${age} мин бұрын — ${maxAgeMin} минуттан ескі (${seen.dateRaw})` }
+        : { ok: true, text: `Уақыты ${Math.max(0, age)} мин бұрын (${seen.dateRaw})` });
+  } else out.push({ ok: null, text: 'Уақыты оқылмады' });
+  if (!seen.recipient) out.push({ ok: null, text: 'Алушы оқылмады' });
+  else out.push({ ok: !o.expectedName || normName(seen.recipient) === normName(o.expectedName), text: `Алушы: ${seen.recipient}` });
+  out.push(seen.successful ? { ok: true, text: '«Сәтті» деп тұр' } : { ok: false, text: '«Сәтті» белгісі көрінбейді' });
+  if (seen.amount == null) out.push({ ok: null, text: 'Сома оқылмады' });
+  else {
+    // сома → кредит: validateReceipt-тің баға ережесі (басқа тармақтарды әдейі өткіземіз)
+    const v = validateReceipt({ ok: true, successful: true, recipient: null, date: now, amount: seen.amount },
+      { now, pricePerCredit: o.pricePerCredit, firstPrice: o.firstPrice, isFirstPurchase: o.isFirstPurchase, bundles: o.bundles || [] });
+    out.push(v.ok ? { ok: true, text: `Сома ${seen.amount}₸ → ${v.credits} кредит` } : { ok: false, text: `Сома ${seen.amount}₸ бағаға сай емес` });
+  }
+  if (seen.edited) out.push({ ok: false, text: 'Өңдеу белгілері байқалады' });
+  if (!seen.isReceipt) out.push({ ok: false, text: 'Kaspi чегіне ұқсамайды' });
+  return out;
+}
+
+module.exports = { pdfToPng, readReceiptImage, reviewSeen, PROMPT };

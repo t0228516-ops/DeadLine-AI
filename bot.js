@@ -374,15 +374,27 @@ async function tryAutoConfirm(chatId, file) {
     if (text && text.trim().length >= 20) parsed = parseReceiptText(text);
   }
   if (!parsed || !parsed.ok) {
+    // Мәтінсіз PDF не скриншот/фото — ЕШҚАШАН автоматты расталмайды (жалған суретті модель ажырата алмайды).
+    // DeepSeek тек оқиды да, админге тексеру тізімін береді; шешім — админде.
     const V = require('./core/receiptVision');
     const img = file.kind === 'pdf' ? await V.pdfToPng(buffer) : buffer;
     const seen = img ? await V.readReceiptImage({ data: img, mime: file.kind === 'pdf' ? 'image/png' : (file.mime || 'image/jpeg') }) : null;
-    console.log(`[Receipt] ${chatId}: vision ${seen ? `ok=${seen.ok} conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}`);
-    if (!seen) return { handled: false, reason: file.kind === 'pdf' ? 'no_text_layer' : 'image' };
-    if (seen.edited) return { handled: false, reason: 'vision_edited', seen };
+    console.log(`[Receipt] ${chatId}: vision ${seen ? `conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}`);
+    const reason = file.kind === 'pdf' ? 'no_text_layer' : 'image';
+    if (!seen) return { handled: false, reason };
     if (!seen.isReceipt) return { handled: false, reason: 'vision_not_receipt', seen };
-    if (!seen.ok) return { handled: false, reason: 'vision_unsure', seen };
-    parsed = seen;
+    const user = await getUser(chatId);
+    const checks = V.reviewSeen(seen, {
+      expectedName: KASPI_NAME, maxAgeMin: RECEIPT_MAX_AGE_MIN,
+      pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: [PLUS],
+    });
+    if (seen.receiptNo) {
+      const { receiptExists } = require('./db');
+      checks.push(await receiptExists(seen.receiptNo).catch(() => false)
+        ? { ok: false, text: `№${seen.receiptNo} бұрын қолданылған` }
+        : { ok: true, text: `№${seen.receiptNo} жаңа` });
+    } else checks.push({ ok: null, text: 'Чек нөмірі оқылмады' });
+    return { handled: false, reason, seen, checks };
   }
 
   // 3) Қайталанған чек — бірден бас тарту (оқылған, бірақ қолданылған)
@@ -404,8 +416,6 @@ async function tryAutoConfirm(chatId, file) {
   });
 
   if (!verdict.ok) {
-    // Көзбен оқылған чек: модель қате оқуы мүмкін — адал студентке нақақ бас тартпаймыз, шешім админде
-    if (parsed.source === 'vision') return { handled: false, reason: verdict.reason, seen: parsed };
     // Анық жалған/қате себептер — пайдаланушыға айтамыз, админді мазаламаймыз
     const clear = {
       wrong_recipient: '❌ Төлем біздің Kaspi нөміріне жасалмаған. Дұрыс алушыға төлеп, жаңа чек жіберіңіз.',
@@ -837,12 +847,14 @@ bot.on('message', async (msg) => {
     // ── Автоматты растау: мәтін не DeepSeek көзбен оқу; сәтті болса бірден растайды ─────────
     let failReason = 'manual';
     let seenByVision = null;
+    let checks = null;
     if (AUTO_CONFIRM) {
       try {
         const result = await tryAutoConfirm(chatId, file);
         if (result.handled) return;
         failReason = result.reason;
         seenByVision = result.seen || null;
+        checks = result.checks || null;
         // фото/скриншот чек емес болса (кездейсоқ сурет) — студентке айтамыз, админді мазаламаймыз
         if (file.kind === 'image' && failReason === 'vision_not_receipt') {
           return bot.sendMessage(chatId, '🤔 Бұл Kaspi чегіне ұқсамайды. Төлем чегін *PDF* немесе толық скриншот түрінде жіберіңіз.', { parse_mode: 'Markdown' });
@@ -865,9 +877,9 @@ bot.on('message', async (msg) => {
     await bot.forwardMessage(ADMIN_ID, chatId, msg.message_id);
 
     const why = {
-      vision_edited: '⚠️ DeepSeek: чекте *өңдеу белгілері* бар',
+      image: '🖼 Скриншот/фото — тек қолмен растау',
+      no_text_layer: '🖼 PDF ішінде сурет (мәтін жоқ) — тек қолмен растау',
       vision_not_receipt: '⚠️ DeepSeek: бұл Kaspi чегі емес сияқты',
-      vision_unsure: '❔ DeepSeek: чек анық оқылмады',
       bad_amount: '❔ Сома бағаға сай емес',
       no_recipient: '❔ Алушы оқылмады',
       wrong_recipient: '⚠️ Алушы басқа сияқты',
@@ -875,10 +887,16 @@ bot.on('message', async (msg) => {
       future_date: '⚠️ Чектің уақыты дұрыс емес сияқты',
       not_successful: '⚠️ «Сәтті» белгісі көрінбейді',
     }[failReason] || '❔ Автоматты тексеру өтпеді';
-    // DeepSeek не оқыды — админ чекпен бірден салыстыра алсын
-    const seenLine = seenByVision
-      ? `\n🤖 DeepSeek оқығаны: ${seenByVision.amount != null ? `${seenByVision.amount}₸` : '?'} · ${seenByVision.dateRaw || '?'} · ${escapeMarkdown(seenByVision.recipient || '?')} · №${seenByVision.receiptNo || '?'} (сенім ${Math.round((seenByVision.confidence || 0) * 100)}%)`
-      : '';
+    // DeepSeek не оқыды + әр тармақтың тексерісі — админ чекпен бірден салыстырсын.
+    // Ескерту: сурет жалған болуы мүмкін — түпкі тексеріс Kaspi қосымшасындағы түсім.
+    const mark = (c) => (c.ok === true ? '✅' : c.ok === false ? '❌' : '❔');
+    const seenLine = checks
+      ? `\n\n🤖 DeepSeek оқығаны (сенім ${Math.round((seenByVision.confidence || 0) * 100)}%):\n`
+        + checks.map((c) => `${mark(c)} ${escapeMarkdown(c.text)}`).join('\n')
+        + '\n⚠️ Суретті жасау оңай — Kaspi-де түсімді өзіңіз тексеріңіз'
+      : seenByVision
+        ? `\n🤖 DeepSeek оқығаны: ${seenByVision.amount != null ? `${seenByVision.amount}₸` : '?'} · ${seenByVision.dateRaw || '?'} · ${escapeMarkdown(seenByVision.recipient || '?')}`
+        : '';
     const adminMsg = await bot.sendMessage(
       ADMIN_ID,
       `📥 *Жаңа чек!*\n\n👤 ${userName}\n🆔 \`${chatId}\`\n${why} (\`${failReason}\`)${seenLine}\n\n` +
