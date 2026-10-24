@@ -1201,7 +1201,7 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
     // мөлдір безендірулер (жарқыл, дақ) мәтінге кедергі емес: толтыру кезінде жасырып, кейін орнына қоямыз
     const ids = QA.seeThroughIds(files, sp, alphaCache);
     // placeholder-лердің мұраланған орны/кеглі слайдқа нақты жазылады — сыйғызу мен тексеру олармен де жұмыс істейді
-    const hid = QA.hideDeco(materializePlaceholders(files, sp, xml), ids);
+    const hid = QA.hideDeco(L.clipToPanels(materializePlaceholders(files, sp, xml), W, H), ids);
     let filled = dedupeAttrs(hid.restore(fillSlide(hid.xml, list[i] || (opts.slotFill && opts.slotFill[i] ? {} : null), { W, H, badFonts, metrics, fontStyles, layoutPlan: opts.layout && opts.layout[i], slotFill: opts.slotFill && opts.slotFill[i] })));
     // Соңғы тексеруші: мәтін ↔ мәтін/таблетка/сурет қабаттасуы, сөз бөлінуі, слайдтан шығу → жылжыту/кішірейту
     if (opts.qa !== false && process.env.TEMPLATE_QA !== '0') try {

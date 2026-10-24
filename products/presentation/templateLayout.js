@@ -63,6 +63,9 @@ function groupChildren(groupBlock) {
 
 const sameBox = (a, b) => a && b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
+/** Слайдтың бүкіл биіктігіндегі, бірақ енінің < 60%-ын алатын тақта (бүйір жолақ). */
+const isSidePanel = (b, W) => !!b && b.w < W * 0.6;
+
 /** Фон / өте үлкен пішін — оған тимейміз және кедергі деп санамаймыз. */
 function isBackdrop(b, W, H) {
   return !b || b.h > H * 0.85 || b.w * b.h > W * H * 0.5;
@@ -131,8 +134,9 @@ function surround(xml, block, W, H, items, vExtra) {
   for (const it of items) {
     const x = it.box;
     if (!x || sameBox(x, b) || it.block === block) continue;
-    if (isBackdrop(x, W, H)) continue;
     const contains = x.x <= b.x + TOL && x.y <= b.y + TOL && x.x + x.w >= b.x + b.w - TOL && x.y + x.h >= b.y + b.h - TOL;
+    // биіктігі толық, бірақ ені жартылай бүйір тақта (сол/оң жақтағы түсті жолақ) — фон емес, мәтіннің контейнері
+    if (isBackdrop(x, W, H) && !(contains && isSidePanel(x, W))) continue;
     if (contains) {
       if (!container || x.w * x.h < container.box.w * container.box.h) container = it;
       continue;
@@ -250,4 +254,41 @@ function growContainerBlock(block, extra) {
   return b ? growBlock(block, { cy: b.h + extra }) : block;
 }
 
-module.exports = { picturesOf, setWidth, setHeight, othersOf, topItems, surround, planNudge, nudgeCapacity, shiftBlock, growBlock, growContainerBlock, isBackdrop, GAP, MAX_SHIFT, MAX_WIDEN };
+/**
+ * Мәтін қорабы өзінің түсті тақтасынан (астындағы толтырылған пішін) көлденең шығып тұрса — тақтаға дейін қысқарады.
+ * Шаблонның қысқа мәтіні тақтадан шықпайтын, ал ұзын мәтін шығып кетіп, тақтадан тыс бөлігі көрінбей қалатын
+ * (ақ мәтін бежевый фонда; сурет астында). Тақта қораптың ≥60%-ын жабуы және одан БҰРЫН (астында) салынуы керек.
+ */
+function clipToPanels(xml, W, H) {
+  const items = topItems(xml);
+  let out = xml;
+  const hasText = (blk) => /<a:t>[^<]*\S[^<]*<\/a:t>/.test(blk);
+  // толтыруы бар тікбұрышты пішін (жиек <a:ln> есептелмейді)
+  const filled = (blk) => /<a:solidFill>/.test(((blk.match(/<p:spPr>[\s\S]*?<\/p:spPr>/) || [''])[0]).replace(/<a:ln\b[\s\S]*?<\/a:ln>/g, ''));
+  const panels = items.filter((it) => it.tag === 'p:sp' && it.box && !hasText(it.block)
+    && (!isBackdrop(it.box, W, H) || isSidePanel(it.box, W)) && filled(it.block)
+    && /prst="(rect|roundRect|snipRoundRect|round2SameRect)"/.test(it.block));
+  for (const t of items) {
+    const b = t.box;
+    if (t.tag !== 'p:sp' || !b || !hasText(t.block)) continue;
+    for (const p of panels) {
+      if (p.start > t.start) continue;                                         // тақта мәтіннің астында
+      const q = p.box;
+      const ix = Math.min(b.x + b.w, q.x + q.w) - Math.max(b.x, q.x);
+      const iy = Math.min(b.y + b.h, q.y + q.h) - Math.max(b.y, q.y);
+      if (ix <= 0 || iy <= 0 || ix * iy < 0.6 * b.w * b.h) continue;
+      const overL = q.x - b.x, overR = (b.x + b.w) - (q.x + q.w);
+      if (overL <= 0.03 * b.w && overR <= 0.03 * b.w) continue;
+      const pad = Math.min(GAP, Math.round(q.w * 0.04));
+      const x0 = overL > 0.03 * b.w ? q.x + pad : b.x;
+      const x1 = overR > 0.03 * b.w ? q.x + q.w - pad : b.x + b.w;
+      if (x1 - x0 < b.w * 0.5) continue;                                       // тым тарылса — шаблон әдейі солай
+      const nb = t.block.replace(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/, (m, x, y, cx, cy) => `<a:off x="${x0}" y="${y}"/><a:ext cx="${x1 - x0}" cy="${cy}"/>`);
+      out = out.replace(t.block, () => nb);
+      break;
+    }
+  }
+  return out;
+}
+
+module.exports = { clipToPanels, picturesOf, setWidth, setHeight, othersOf, topItems, surround, planNudge, nudgeCapacity, shiftBlock, growBlock, growContainerBlock, isBackdrop, GAP, MAX_SHIFT, MAX_WIDEN };

@@ -62,3 +62,17 @@ test('a title inside a group with its cards cannot grow over the cards', () => {
   const s = L.surround(xml, title, 12192000, 6858000);
   assert.ok(s.room / E < 30, `room ${s.room / E}pt stops at the cards`);
 });
+
+test('stat values: "2 out of 5", "12 million" are figures; a text box overhanging its side panel is clipped to it', () => {
+  const L = require('../products/presentation/templateLayout');
+  const E = 12700; const W = 720 * E; const H = 405 * E;
+  const panel = `<p:sp><p:nvSpPr><p:cNvPr id="2" name="p"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${228 * E}" cy="${H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="2E2CA9"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t></a:t></a:r></a:p></p:txBody></p:sp>`;
+  const text = `<p:sp><p:nvSpPr><p:cNvPr id="3" name="t"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${40 * E}" y="${57 * E}"/><a:ext cx="${205 * E}" cy="${190 * E}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>Title</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const xml = `<p:sld><p:cSld><p:spTree>${panel}${text}</p:spTree></p:cSld></p:sld>`;
+  const out = L.clipToPanels(xml, W, H);
+  const m = out.match(/<a:off x="(\d+)" y="\d+"\/>\s*<a:ext cx="(\d+)"/g).pop().match(/x="(\d+)".*cx="(\d+)"/);
+  assert.ok((+m[1] + +m[2]) / E <= 228, `right edge ${(+m[1] + +m[2]) / E}pt inside the panel`);
+  const inner = text.replace(`cx="${205 * E}"`, `cx="${147 * E}"`);                   // шаблондағы өлшемі: тақтаның ішінде
+  const sur = L.surround(`<p:sld><p:cSld><p:spTree>${panel}${inner}</p:spTree></p:cSld></p:sld>`, inner, W, H);
+  assert.ok(sur.container, 'full-height side panel is the container, not a backdrop');
+});

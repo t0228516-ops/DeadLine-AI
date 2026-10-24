@@ -26,7 +26,8 @@ const { embeddedMetrics } = require('./embeddedMetrics');
 const { templateFontStyles, styleOf } = require('./fontStyle');
 const { materializePlaceholders } = require('./phGeometry');
 
-const STAT_RE = /^[~≈<>+\-−]?\s*[$€£₸¥]?\s*\d[\d\s.,]*\s*(%|[kKmMbB]\b|млн|млрд|мың|x|×|\+)?(\s*\/\s*[^\d].{0,20})?$/u;
+// «95%», «$4.5M», «12 million», «2 out of 5», «3/4», «1,2 млн» — шаблондағы сан (стат мәні)
+const STAT_RE = /^[~≈<>+\-−]?\s*[$€£₸¥]?\s*\d[\d\s.,]*\s*(%|[kKmMbB]\b|million|billion|thousand|млн|млрд|трлн|тыс\.?|мың|x|×|\+)?(\s*(?:out of|of|из|ішінен)\s*\d[\d\s.,]*)?(\s*\/\s*[^\d].{0,20})?$/iu;
 const CREDIT_RE = /(presented|presentation|prepared|written|created|designed|made|submitted|produced|directed)\s*by|^\s*by\b|author|student|teacher|lecturer|supervisor|professor|instructor|advis|орындаған|тексерген|дайындаған|қабылдаған|жетекші|выполнил|проверил|студент|преподаватель|руководитель/i;
 const PERSON_RE = /^(?:[A-Z][a-z'’.-]+(?:\s+[A-Z][a-z'’.-]+){1,2}|[A-Z]{2,}(?:\s+[A-Z]{2,}){1,2}|[А-ЯЁӘҒҚҢӨҰҮҺІ][а-яёәғқңөұүһі]+(?:\s+[А-ЯЁӘҒҚҢӨҰҮҺІ][а-яёәғқңөұүһі.]+){1,2})$/u;
 const THANKS_RE = /thank|thanks|спасибо|рахмет|назарлар|questions?\b|q\s*&\s*a|the end|сұрақ/i;
