@@ -39,14 +39,16 @@ test('fillSlide: ұзын мәтін кедергіні жылжытады, қа
   const long = 'Электр тізбегіндегі негізгі шамалар кернеу, ток, кедергі, қуат, жиілік және сыйымдылық болып табылады. '.repeat(3).trim();
   const xml = slide(sp(1, 1000000, 800000, 4500000, 500000, 'Тақырып'), sp(2, 1000000, 1500000, 4500000, 700000, 'Lorem ipsum dolor sit amet consectetur'), pic(3, 1000000, 2500000, 2000000, 1200000));
   const out = T.fillSlide(xml, { title: 'Электр шамалары', bullets: [long] }, { W, H });
-  assert.ok(out.includes(long), 'мәтін толық сақталды (қиылмады)');
+  // оқылу шегі (13,3-дюймде 16pt): қаріп одан кішіреймейді — сыймаған соңғы сөйлемдер ғана түседі, «…» жоқ
+  const kept = (out.match(/<a:t>(Электр тізбегіндегі[^<]*)<\/a:t>/) || [])[1] || '';
+  assert.ok(kept.length >= 100 && long.startsWith(kept.replace(/\.$/, '')) && !/…/.test(kept), 'мәтін басы толық сөйлеммен сақталды: ' + kept);
   const items = L.topItems(out);
   const body = items.find((i) => /Электр тізбегіндегі/.test(i.block));
   const img = items.find((i) => i.tag === 'p:pic');
   assert.ok(img.box.y > 2500000, 'сурет төмен жылжытылды');
   assert.ok(body.box.y + body.box.h <= img.box.y, 'қорап суретке тимейді');
   const sz = +(body.block.match(/ sz="(\d+)"/) || [])[1];
-  assert.ok(sz >= 1200, 'қаріп оқылатын өлшемде: ' + sz);
+  assert.ok(sz >= 1600, 'қаріп оқылу шегінен кіші емес: ' + sz);
 });
 
 test('әріп аралығы (spc) өлшеуге кіреді: кең аралықты тақырып ерте тасымалданады', () => {

@@ -202,6 +202,10 @@ const isSerifFace = (f) => /serif|times|georgia|cambria|garamond|didot|bodoni|pl
 const fallbackFace = (face, szPt) => (isSerifFace(face) || (szPt || 0) >= 30 ? SAFE_FALLBACK : SAFE_SANS);
 
 const FM = require('./fontMetrics');
+// Оқылу шегі: мазмұн мәтіні 10-дюйм (9144000 EMU) слайдта 12pt-тен кіші болмайды (13,3-дюймде 16pt).
+// Сыймаса — қаріп кішіреймейді, мәтін қысқарады; жазушыға да осы кегльдегі сыйымдылық беріледі.
+const LEGIBLE_PT = Number(process.env.LIBRARY_MIN_BODY_PT) || 12;
+const legibleFor = (W) => LEGIBLE_PT * (W || 9144000) / 9144000;
 const IS_BOLD = / b="(?:1|true)"/;
 const BOLD_NAME = /bold|black|heavy|extrabold|semibold|demi/i;
 
@@ -276,7 +280,11 @@ function fitLines(lines, o) {
   // relax — соңғы сатылар: қаріпті әдеттегіден да кішірек етуге рұқсат (бірақ оқылатын шектен төмен емес)
   const minSz = isTitle ? (o.relax ? Math.max(16, orig * 0.3) : Math.max(20, orig * 0.35)) : (o.relax ? Math.max(9.5, orig * 0.5) : Math.max(11, orig * 0.6));
   // minScale — осы сатыда қаріп түпнұсқаның ең болмағанда осынша бөлігі болсын (кішірейгенше басқа жолдарды — қорапты үлкейту/кедергіні жылжыту — қолданамыз)
-  const floor = Math.min(Math.max(minSz, orig * (o.minScale || 0)), orig);
+  // o.legible — оқылу шегі: тақырып емес мәтін одан кішіреймейді (шаблонның өзі кіші болса — сол шекке дейін ҮЛКЕЙЕДІ)
+  // қысқа белгі (мәзір, тег, «01»: ≤2 сөз) — шаблонда әдейі шағын: үлкеймейді, бірақ өз кеглінен (шектің 80%-ына дейін) кішіреймейді
+  const shortLabel = lines.every((l) => l.trim().split(/\s+/).length <= 2);
+  const legible = isTitle || single || !o.legible ? 0 : shortLabel ? Math.min(orig, o.legible * 0.8) : o.legible;
+  const floor = Math.max(Math.min(Math.max(minSz, orig * (o.minScale || 0)), orig), legible);
 
   const measure = (arr, sz) => {
     const scale = sz / orig;
@@ -294,7 +302,7 @@ function fitLines(lines, o) {
 
   let arr = lines.slice();
   // LLM таңдаған кегль (fontPt): іздеу осыдан басталады; түпнұсқа қатар санына/толтыруға бейімдеу өтпейді
-  const startSz = o.fontPt ? Math.min(Math.max(o.fontPt, floor), orig * 1.6) : orig;
+  const startSz = Math.max(o.fontPt ? Math.min(Math.max(o.fontPt, floor), orig * 1.6) : orig, floor);
   const search = () => {
     for (let sz = startSz; sz >= floor - 0.01; sz = sz * 0.95) {
       const m = measure(arr, sz);
@@ -309,10 +317,10 @@ function fitLines(lines, o) {
   // Тақырыпта біздің (кеңірек) өлшем түпнұсқаның қатар санын асыра санауы мүмкін — сондықтан ≥2 болса мақсат 2 қатар.
   const prefLines = isTitle ? (origEst === 1 ? 1 : 2) : (origEst && origEst <= 2 ? origEst : 0);
   if (prefLines && !single && !o.fontPt) {
-    const fl = Math.min(orig, Math.max(orig * (isTitle ? 0.55 : 0.75), floor));
+    const fl = Math.max(Math.min(orig, Math.max(orig * (isTitle ? 0.55 : 0.75), floor)), floor);
     const Ls = isTitle ? [prefLines, prefLines + 1] : [prefLines];
     for (const L of Ls) {
-      for (let sz = orig; sz >= fl - 0.01; sz *= 0.97) {
+      for (let sz = Math.max(orig, floor); sz >= fl - 0.01; sz *= 0.97) {
         const m = measure(arr, sz);
         if (m.ok && m.lines <= Math.max(L, arr.length)) { hit = { sz, m }; break; }
       }
@@ -334,12 +342,12 @@ function fitLines(lines, o) {
   }
   if (!hit) hit = { sz: floor, m: measure(arr, floor) };
   // Мәтін қорапты толтырмаса (қысқа мәтін үлкен қорапта) — кегль 1.5×-ке дейін (≤30pt) өседі, қорап ≤80% толғанша.
-  if (!isTitle && !single && !o.noFill && !o.fontPt && hit.sz >= orig - 0.01) {
+  if (!isTitle && !single && !o.noFill && !o.fontPt && hit.sz >= orig - 0.01 && hit.m.ok) {
     const target = Math.max(8, box.h / 12700 - insets.t - insets.b) * 0.8;
     const maxUp = Math.min(orig * 1.5, Math.max(orig, 30));
     // өсу жол санын көбейтпейді: бір қатарлы тармақ үлкейіп екі қатарға түссе, қатар тұрған көршісіне шығады
     const maxLines = hit.m.lines;
-    for (let sz = orig + 0.5; sz <= maxUp + 0.01; sz += 0.5) {
+    for (let sz = Math.max(orig, hit.sz) + 0.5; sz <= maxUp + 0.01; sz += 0.5) {
       const m = measure(arr, sz);
       if (m.ok && m.total <= target && m.lines <= maxLines) hit = { sz, m }; else break;
     }
@@ -461,7 +469,7 @@ function replaceShapeText(block, lines, ctx) {
       box: ctx.box, grow: ctx.grow || 0, pPr, rPr, bold: IS_BOLD.test(rPr) || BOLD_NAME.test(face), serif: isSerifFace(face), single: !!ctx.single,
       unknownFace: !!face && !/^(arial|times new roman|liberation (sans|serif))$/i.test(face),
       widthFn: widthFnFor(ctx, face, IS_BOLD.test(rPr) || BOLD_NAME.test(face)),
-      minScale: ctx.minScale, relax: !!ctx.relax, noShorten: !!ctx.noShorten, fontPt: ctx.fontPt,
+      legible: ctx.legible, minScale: ctx.minScale, relax: !!ctx.relax, noShorten: !!ctx.noShorten, fontPt: ctx.fontPt,
       origTexts: paras.map((pp) => [...pp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('')).filter((t) => t.trim()),
       insets: { l: inset('lIns', 91440), r: inset('rIns', 91440), t: inset('tIns', 45720), b: inset('bIns', 45720) },
     });
@@ -821,7 +829,7 @@ function packLogoRow(pairs, ext, setBlock) {
 function fillSlide(xml, slide, ctx) {
   if (!xml || !slide) return xml;
   const { title, body } = linesForSlide(slide);
-  const c = { badFonts: ctx && ctx.badFonts, fontStyles: ctx && ctx.fontStyles, metrics: ctx && ctx.metrics };
+  const c = { badFonts: ctx && ctx.badFonts, fontStyles: ctx && ctx.fontStyles, metrics: ctx && ctx.metrics, legible: legibleFor(ctx && ctx.W) };
   const cl = classify(xml, ctx);
   const { initials, pairs } = cl;
   let content = cl.content;
@@ -1041,7 +1049,7 @@ function faceOf(block) {
 
 /** Қорапқа «жайлы» сыятын максимум таңба (кегль comfort*түпнұсқа, бірақ ≥ еден). */
 const CAP_SAMPLE = 'Қазақ хандығы XV ғасырда құрылып, көшпелі мемлекеттің дәстүрін жалғастырды. Экономика мен мәдениет дамыды.';
-function capacityChars(block, comfort, maxW, growEmu) {
+function capacityChars(block, comfort, maxW, growEmu, legiblePt) {
   const tx = txBodyOf(block);
   const bx = boxOf(block);
   if (!tx || !bx) return 0;
@@ -1056,7 +1064,9 @@ function capacityChars(block, comfort, maxW, growEmu) {
   const hPt = Math.max(8, (bx.h + (growEmu || 0)) / 12700 - inset('tIns', 45720) - inset('bIns', 45720));
   const serif = isSerifFace(faceOf(block));
   const floor = orig >= 30 ? Math.max(20, orig * 0.35) : Math.max(11, orig * 0.6);
-  const sz = Math.max(Math.min(floor, orig), orig * comfort);
+  // сыйымдылық оқылу шегіндегі кегльмен (мазмұн мәтіні: түпнұсқа ≥3 сөз); қысқа белгілер өз кеглімен
+  const placeholder = [...tx.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join(' ').trim();
+  const sz = Math.max(Math.min(floor, orig), orig * comfort, orig < 30 && legiblePt && placeholder.split(/\s+/).length >= 3 ? legiblePt : 0);
   const ln = spacingOf(pPr, 'lnSpc');
   const origRatio = !ln ? 1.2 : ln.kind === 'spcPts' ? ln.val / 100 / orig : (ln.val / 100000) * 1.2;
   const ratio = Math.min(origRatio, 1.25);
@@ -1106,14 +1116,14 @@ function planTemplateSlots(templateBuf) {
       return {
         split: true,
         title: { words: cl.pairs.length, wordMax: Math.min(...wordMax) },
-        items: cl.content.map((s) => capacityChars(s.block, 0.8, undefined, roomFor(xml, s.block, W, H))),
+        items: cl.content.map((s) => capacityChars(s.block, 0.8, undefined, roomFor(xml, s.block, W, H), legibleFor(W))),
       };
     }
     const [t, ...rest] = cl.content;
     return {
       split: false,
-      title: t ? { max: capacityChars(t.block, 0.7, undefined, roomFor(xml, t.block, W, H)) } : null,
-      items: rest.map((s) => capacityChars(s.block, 0.8, undefined, roomFor(xml, s.block, W, H))),
+      title: t ? { max: capacityChars(t.block, 0.7, undefined, roomFor(xml, t.block, W, H), legibleFor(W)) } : null,
+      items: rest.map((s) => capacityChars(s.block, 0.8, undefined, roomFor(xml, s.block, W, H), legibleFor(W))),
     };
   });
 }
@@ -1270,4 +1280,4 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
   return writeZipAll(files);
 }
 
-module.exports = { roomFor, countLines, textWidthPt, fitLines, fallbackFace, auditSlides, auditTemplateFill, minItemChars, shortenLine, logoScale, scaleBlock, roomBelow, fillTemplatePptx, planTemplateSlots, slotRuleLine, classify, capacityChars, uncoveredFonts, cmapOf, readZipAll, writeZipAll, dedupeAttrs, xmlProblem, fillSlide, linesForSlide, replaceShapeText, textShapes };
+module.exports = { legibleFor, roomFor, countLines, textWidthPt, fitLines, fallbackFace, auditSlides, auditTemplateFill, minItemChars, shortenLine, logoScale, scaleBlock, roomBelow, fillTemplatePptx, planTemplateSlots, slotRuleLine, classify, capacityChars, uncoveredFonts, cmapOf, readZipAll, writeZipAll, dedupeAttrs, xmlProblem, fillSlide, linesForSlide, replaceShapeText, textShapes };

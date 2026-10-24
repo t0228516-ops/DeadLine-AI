@@ -51,7 +51,7 @@ function featuresOf(xml, W, H, styles) {
     if (!s.x) return null;                                                     // орны мүлде белгісіз (мұрасы да жоқ) — рөл берілмейді
     const text = decode(s.text).replace(/\s+/g, ' ').trim();
     const big = szPt(s.block) >= 30;
-    const cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H)) || 0);
+    const cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H), T.legibleFor(W)) || 0);
     const box = s.x;
     const face = faceOf(s.block);
     return {
