@@ -380,7 +380,13 @@ async function tryAutoConfirm(chatId, file) {
     const V = require('./core/receiptVision');
     const img = file.kind === 'pdf' ? await V.pdfToPng(buffer) : buffer;
     const seen = img ? await V.readReceiptImage({ data: img, mime: file.kind === 'pdf' ? 'image/png' : (file.mime || 'image/jpeg') }) : null;
-    const prof = file.kind === 'pdf' ? require('./core/receiptPdf').kaspiPdfProfile(buffer) : null;
+    const RP = require('./core/receiptPdf');
+    const prof = file.kind === 'pdf' ? RP.kaspiPdfProfile(buffer) : null;
+    // iPhone чегінде файл жасалған сәт бар: ол чектегі төлем уақытынан бұрын болса — чек жалған
+    if (prof && seen && seen.date && RP.createdOk(prof, seen.date) === false) {
+      prof.ok = false;
+      prof.reasons.push(`файл ${prof.created.toISOString().slice(0, 16).replace('T', ' ')} UTC жасалған — чектегі төлем уақытына сай емес`);
+    }
     console.log(`[Receipt] ${chatId}: vision ${seen ? `ok=${seen.ok} conf=${seen.confidence} edited=${seen.edited} amount=${seen.amount} date=${seen.dateRaw || '-'}` : 'failed'}${prof ? ` pdf=${prof.ok ? prof.profile : 'FAIL: ' + prof.reasons.join('; ')}` : ''}`);
     const reason = file.kind === 'pdf' ? (prof && !prof.ok ? 'pdf_not_kaspi' : 'no_text_layer') : 'image';
     if (!seen) return { handled: false, reason };
