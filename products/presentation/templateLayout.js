@@ -259,15 +259,27 @@ function growContainerBlock(block, extra) {
  * Шаблонның қысқа мәтіні тақтадан шықпайтын, ал ұзын мәтін шығып кетіп, тақтадан тыс бөлігі көрінбей қалатын
  * (ақ мәтін бежевый фонда; сурет астында). Тақта қораптың ≥60%-ын жабуы және одан БҰРЫН (астында) салынуы керек.
  */
+/** custGeom — тікбұрыш па (Google Slides тақтаны төрт нүктелі «еркін пішін» етіп жазады) */
+function rectPath(blk) {
+  const g = (blk.match(/<a:custGeom>[\s\S]*?<\/a:custGeom>/) || [])[0];
+  if (!g || (g.match(/<a:path\b/g) || []).length !== 1 || /<a:(cubicBezTo|quadBezTo|arcTo)/.test(g)) return false;
+  const pts = [...g.matchAll(/<a:pt x="(-?\d+)" y="(-?\d+)"\/>/g)].map((m) => [+m[1], +m[2]]);
+  if (pts.length !== 4) return false;
+  const xs = new Set(pts.map((p) => p[0])), ys = new Set(pts.map((p) => p[1]));
+  return xs.size === 2 && ys.size === 2;
+}
+
 function clipToPanels(xml, W, H) {
-  const items = topItems(xml);
+  // қалыпты топтардың ішіндегілер де (тақта мен тармақтар көбіне бір топта): жалпақ тізім, рет — салыну реті
+  const flat = (list) => list.flatMap((it) => { const kids = it.tag === 'p:grpSp' && groupChildren(it.block); return kids ? flat(kids.map((k) => ({ ...k, start: it.start + k.start }))) : [it]; });
+  const items = flat(topItems(xml));
   let out = xml;
   const hasText = (blk) => /<a:t>[^<]*\S[^<]*<\/a:t>/.test(blk);
   // толтыруы бар тікбұрышты пішін (жиек <a:ln> есептелмейді)
   const filled = (blk) => /<a:solidFill>/.test(((blk.match(/<p:spPr>[\s\S]*?<\/p:spPr>/) || [''])[0]).replace(/<a:ln\b[\s\S]*?<\/a:ln>/g, ''));
   const panels = items.filter((it) => it.tag === 'p:sp' && it.box && !hasText(it.block)
     && (!isBackdrop(it.box, W, H) || isSidePanel(it.box, W)) && filled(it.block)
-    && /prst="(rect|roundRect|snipRoundRect|round2SameRect)"/.test(it.block));
+    && (/prst="(rect|roundRect|snipRoundRect|round2SameRect)"/.test(it.block) || rectPath(it.block)));
   for (const t of items) {
     const b = t.box;
     if (t.tag !== 'p:sp' || !b || !hasText(t.block)) continue;
@@ -276,14 +288,19 @@ function clipToPanels(xml, W, H) {
       const q = p.box;
       const ix = Math.min(b.x + b.w, q.x + q.w) - Math.max(b.x, q.x);
       const iy = Math.min(b.y + b.h, q.y + q.h) - Math.max(b.y, q.y);
-      if (ix <= 0 || iy <= 0 || ix * iy < 0.6 * b.w * b.h) continue;
+      // мәтіннің ортасы тақтаның ішінде, ал тақта қораптың ≥50%-ын жабады
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      if (ix <= 0 || iy <= 0 || ix * iy < 0.5 * b.w * b.h || cx < q.x || cx > q.x + q.w || cy < q.y || cy > q.y + q.h) continue;
       const overL = q.x - b.x, overR = (b.x + b.w) - (q.x + q.w);
-      if (overL <= 0.03 * b.w && overR <= 0.03 * b.w) continue;
+      const overT = q.y - b.y, overB = (b.y + b.h) - (q.y + q.h);                // тігінен: шаблонның соңғы тармағы картадан төмен шығып тұрады
+      if (overL <= 0.03 * b.w && overR <= 0.03 * b.w && overT <= 0.03 * b.h && overB <= 0.03 * b.h) continue;
       const pad = Math.min(GAP, Math.round(q.w * 0.04));
       const x0 = overL > 0.03 * b.w ? q.x + pad : b.x;
       const x1 = overR > 0.03 * b.w ? q.x + q.w - pad : b.x + b.w;
-      if (x1 - x0 < b.w * 0.5) continue;                                       // тым тарылса — шаблон әдейі солай
-      const nb = t.block.replace(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/, (m, x, y, cx, cy) => `<a:off x="${x0}" y="${y}"/><a:ext cx="${x1 - x0}" cy="${cy}"/>`);
+      const y0 = overT > 0.03 * b.h ? q.y + pad : b.y;
+      const y1 = overB > 0.03 * b.h ? q.y + q.h - pad : b.y + b.h;
+      if (x1 - x0 < b.w * 0.5 || y1 - y0 < b.h * 0.3) continue;                // тым тарылса — шаблон әдейі солай
+      const nb = t.block.replace(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/, () => `<a:off x="${x0}" y="${y0}"/><a:ext cx="${x1 - x0}" cy="${y1 - y0}"/>`);
       out = out.replace(t.block, () => nb);
       break;
     }
