@@ -337,9 +337,11 @@ function fitLines(lines, o) {
   if (!isTitle && !single && !o.noFill && !o.fontPt && hit.sz >= orig - 0.01) {
     const target = Math.max(8, box.h / 12700 - insets.t - insets.b) * 0.8;
     const maxUp = Math.min(orig * 1.5, Math.max(orig, 30));
+    // өсу жол санын көбейтпейді: бір қатарлы тармақ үлкейіп екі қатарға түссе, қатар тұрған көршісіне шығады
+    const maxLines = hit.m.lines;
     for (let sz = orig + 0.5; sz <= maxUp + 0.01; sz += 0.5) {
       const m = measure(arr, sz);
-      if (m.ok && m.total <= target) hit = { sz, m }; else break;
+      if (m.ok && m.total <= target && m.lines <= maxLines) hit = { sz, m }; else break;
     }
   }
   const szOut = Math.round(hit.sz * 100);
@@ -427,7 +429,9 @@ function elemOf(xml, tag) {
 function widthFnFor(ctx, face, bold) {
   if (!face || /^(arial|times new roman|liberation (sans|serif))$/i.test(face)) return null;
   const em = (ctx && ctx.metrics && ctx.metrics.get && ctx.metrics.get(face)) || tableMetrics(face);
-  return em ? (s, sz, spc) => em.width(s, sz, spc || 0, bold) : null;
+  // қазақ әріптері жоқ қаріп кирилл мәтінде Arial/Times-қа ауысады — оның өлшемі сол бағамен (null)
+  if (!em || em.kk === false) return null;
+  return (s, sz, spc) => em.width(s, sz, spc || 0, bold);
 }
 
 /** Бір пішіннің ішіндегі барлық абзацты lines жолдарымен ауыстырады (бірінші абзацтың форматтауын сақтап). */
@@ -1052,12 +1056,19 @@ function capacityChars(block, comfort, maxW, growEmu) {
   const ratio = Math.min(origRatio, 1.25);
   // орташа таңба ені: қаріптің нақты метрикасы бойынша (кең Merriweather/Montserrat — аз таңба), болмаса Arial/Times бағасы
   const wfn = widthFnFor(null, faceOf(block), IS_BOLD.test(rPr));
-  const avg = wfn ? wfn(CAP_SAMPLE, 1, 0) / CAP_SAMPLE.length : (serif ? 0.5 : 0.56) * 1.04;
+  // БАС ӘРІППЕН жазылатын қорап (түпнұсқа мәтін не cap="all"): бас әріп ~25% кең — сыйымдылық соған сай аз
+  const origRaw = [...tx.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('');
+  const caps = / cap="all"/.test(rPr) || (/\p{L}{3}/u.test(origRaw) && origRaw === origRaw.toUpperCase());
+  const sample = caps ? CAP_SAMPLE.toUpperCase() : CAP_SAMPLE;
+  const avg = wfn ? wfn(sample, 1, 0) / sample.length : (serif ? 0.5 : 0.56) * 1.04 * (caps ? 1.25 : 1);
   const perLine = Math.max(1, Math.floor(wPt / (sz * avg)));
   let lines = Math.max(1, Math.floor(hPt / (ratio * sz)));
   const origTexts = tagBlocks(tx, 'a:p').map((pp) => [...pp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('')).filter((t) => t.trim());
   const origEst = origTexts.reduce((n, t) => n + countLines(t, orig, wPt, serif, IS_BOLD.test(rPr), 0, wfn), 0);
-  if (origEst && origEst <= (orig >= 30 ? 3 : 2)) lines = Math.min(lines, orig >= 30 ? origEst + 1 : origEst);   // түпнұсқадағы қатар санынан аспайды
+  // түпнұсқадағы қатар санынан аспайды; бірақ ұзын түсіндірме мәтінге арналған шағын кегльді қорап (карточка мәтіні)
+  // астындағы бос орын бар болса +2 қатарға дейін өседі — әйтпесе әр тармақ бір қысқа сөйлем болып қалады
+  const explain = orig < 24 && origRaw.length >= 30;
+  if (origEst && origEst <= (orig >= 30 ? 3 : 2)) lines = Math.min(lines, orig >= 30 ? origEst + 1 : explain ? origEst + 2 : origEst);
   return Math.max(4, Math.floor(perLine * lines * 0.85));
 }
 
