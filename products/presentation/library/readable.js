@@ -74,6 +74,20 @@ const textOf = (blk) => [...blk.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1
 const contains = (a, px, py) => px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h;
 const isRotated = (blk) => /<a:xfrm[^>]*\brot="(?!0")/.test(blk);
 
+/** Слайдтың (не макеті/мастерінің) фоны сурет пе */
+function slideBgIsImage(files, slidePath) {
+  let part = slidePath;
+  for (const want of ['slideLayout', 'slideMaster', null]) {
+    const bg = String(files.get(part) || '').match(/<p:bg>[\s\S]*?<\/p:bg>/);
+    if (bg) return /<a:blipFill/.test(bg[0]);
+    if (!want) return false;
+    const rel = Object.values(relsMap(files.get(part.replace(/([^/]+)$/, '_rels/$1.rels')))).find((r) => r.type === want);
+    if (!rel) return false;
+    part = resolvePath(part, rel.target);
+  }
+  return false;
+}
+
 /** Слайд → макет → мастер фоны (тек тұтас түс; сурет/градиент — null) */
 function slideBg(files, slidePath, theme) {
   let part = slidePath;
@@ -120,10 +134,11 @@ function fixSlide(xml, ctx) {
     const cx = s.box.x + s.box.w / 2; const cy = s.box.y + s.box.h / 2;
     // астындағы фон: тек СЕНІМДІ тұтас түс өзгертуге негіз болады; сурет/градиент/стиль толтыруы — белгісіз, түс өзгермейді
     let under = null;
+    let underPic = null;                                    // мәтін суреттің/фотоның үстінде (түсін біле алмаймыз)
     for (let j = idx - 1; j >= 0 && !under; j--) {
       const u = shapes[j];
       if (!contains(u.box, cx, cy)) continue;
-      if (u.kind === 'pic') { under = 'unknown'; break; }
+      if (u.kind === 'pic') { under = 'unknown'; underPic = u; break; }
       const spPr = (u.blk.match(/<p:spPr[\s\S]*?<\/p:spPr>|<p:spPr\/>/) || [''])[0].split(/<a:ln[\s>]/)[0];
       if (/<a:blipFill|<a:gradFill|<a:pattFill|<a:grpFill/.test(spPr)) { under = 'unknown'; break; }
       const c = colorOf(spPr, theme);
@@ -135,7 +150,7 @@ function fixSlide(xml, ctx) {
     for (let j = (ctx.inherited || []).length - 1; j >= 0 && !under; j--) {
       const u = ctx.inherited[j];
       if (!contains(u.box, cx, cy)) continue;
-      if (u.kind === 'pic') { under = 'unknown'; break; }
+      if (u.kind === 'pic') { under = 'unknown'; underPic = u; break; }
       const spPr = (u.blk.match(/<p:spPr[\s\S]*?<\/p:spPr>|<p:spPr\/>/) || [''])[0].split(/<a:ln[\s>]/)[0];
       if (/<a:blipFill|<a:gradFill|<a:pattFill|<a:grpFill/.test(spPr)) { under = 'unknown'; break; }
       const c = colorOf(spPr, theme);
@@ -155,6 +170,25 @@ function fixSlide(xml, ctx) {
         changes.color++;
         return `${open}<a:solidFill><a:srgbClr val="${fixed}"/></a:solidFill>`;
       });
+    }
+    // 2б) сурет/фото фонның үстіндегі ұсақ мәтін (тақырып емес): жартылай мөлдір астар — ақ мәтінге қою, қою мәтінге ақшыл.
+    //     Гүлді/түрлі түсті суреттің үстінде түсті өзгерту жеткіліксіз: фонның бір жері ашық, бір жері қою.
+    const overImage = (underPic && underPic.box.w * underPic.box.h >= s.box.w * s.box.h * 0.8) || (!under && ctx.bgImage);
+    const spPrNow = (blk.match(/<p:spPr>[\s\S]*?<\/p:spPr>/) || [''])[0];
+    if (!large && overImage && text.length >= 12 && !/<a:solidFill>/.test(spPrNow.split(/<a:ln[\s>]/)[0])) {
+      const fillXml = (blk.match(/<a:rPr\b[^>]*>\s*(<a:solidFill>[\s\S]*?<\/a:solidFill>)/) || [])[1];
+      const tc = (fillXml && colorOf(fillXml, theme)) || { hex: '000000' };
+      const light = lum(tc.hex) > 0.4;
+      const backing = `<a:solidFill><a:srgbClr val="${light ? '000000' : 'FFFFFF'}"><a:alpha val="${light ? 55000 : 72000}"/></a:srgbClr></a:solidFill>`;
+      let sp2 = spPrNow;
+      if (/<a:noFill\/>/.test(sp2.split(/<a:ln[\s>]/)[0])) sp2 = sp2.replace(/<a:noFill\/>/, backing);
+      else sp2 = sp2.replace(/(<a:(?:prstGeom|custGeom)\b[\s\S]*?<\/a:(?:prstGeom|custGeom)>|<a:prstGeom[^>]*\/>)/, `$1${backing}`);
+      if (sp2 !== spPrNow) {
+        blk = blk.replace(spPrNow, () => sp2);
+        // астар шетіне жабыспасын: ішкі шегініс кемінде ~0.08"
+        blk = blk.replace(/<a:bodyPr\b[^>]*>/, (bp) => bp.replace(/ ([lr]Ins)="(\d+)"/g, (m, n, v) => ` ${n}="${Math.max(+v, 73152)}"`));
+        changes.color++;
+      }
     }
     // 3) бүйірден кірген әшекей → дене мәтінінің қорабы сол жағынан тарылады (тақырып — ірі, тарылса жолы көбейіп, көршіге түседі)
     const b = s.box;
@@ -285,7 +319,7 @@ function makeReadable(buf) {
   for (const sp of orderedSlides(files)) {
     const rels = relsMap(files.get(sp.replace(/([^/]+)$/, '_rels/$1.rels')));
     const inkSpan = (d, f0, f1, axis) => inkSpanOf(files, sp, rels, d, f0, f1, inkCache, axis);
-    const r = fixSlide(String(files.get(sp)), { W, theme, bg: slideBg(files, sp, theme), inkSpan, inherited: inheritedShapes(files, sp) });
+    const r = fixSlide(String(files.get(sp)), { W, theme, bg: slideBg(files, sp, theme), bgImage: slideBgIsImage(files, sp), inkSpan, inherited: inheritedShapes(files, sp) });
     files.set(sp, r.xml);
     for (const k of Object.keys(total)) total[k] += r.changes[k];
   }

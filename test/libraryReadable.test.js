@@ -54,3 +54,17 @@ test('numberSections: a divider after content slides becomes part 2', () => {
   const out = readZipAll(R.numberSections(writeZipAll(files), ['cover', 'text', 'section']));
   assert.match(out.get(orderedSlides(out)[2]), /<a:t>02<\/a:t>/);
 });
+
+test('small text over a photo gets a translucent backing; titles and text on solid panels do not', () => {
+  const { fixSlide } = require('../products/presentation/library/readable');
+  const E = 12700;
+  const pic = `<p:pic><p:nvPicPr><p:cNvPr id="2" name="p"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${720 * E}" cy="${405 * E}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+  const tb = (id, sz, t) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="t${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${200 * E}" y="${(id * 60) * E}"/><a:ext cx="${300 * E}" cy="${40 * E}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr lIns="0" rIns="0"/><a:p><a:r><a:rPr sz="${sz}"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const xml = `<p:sld><p:cSld><p:spTree>${pic}${tb(3, 1200, 'Сұрақтарыңызды қоя аласыздар')}${tb(4, 4400, 'Назарларыңызға рақмет!')}</p:spTree></p:cSld></p:sld>`;
+  const r = fixSlide(xml, { W: 720 * E, theme: {}, bg: null, inherited: [] });
+  const small = r.xml.match(/<p:sp>(?:(?!<\/p:sp>)[\s\S])*Сұрақтарыңызды[\s\S]*?<\/p:sp>/)[0];
+  const big = r.xml.match(/<p:sp>(?:(?!<\/p:sp>)[\s\S])*Назарларыңызға[\s\S]*?<\/p:sp>/)[0];
+  assert.match(small, /<p:spPr>[\s\S]*<a:srgbClr val="000000"><a:alpha val="55000"\/>/, 'white small text → dark translucent backing');
+  assert.match(small, /lIns="73152"/);
+  assert.doesNotMatch(big, /<a:alpha/, 'titles stay as designed');
+});

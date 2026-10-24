@@ -283,8 +283,15 @@ function fitLines(lines, o) {
   // o.legible — оқылу шегі: тақырып емес мәтін одан кішіреймейді (шаблонның өзі кіші болса — сол шекке дейін ҮЛКЕЙЕДІ)
   // қысқа белгі (мәзір, тег, «01»: ≤2 сөз) — шаблонда әдейі шағын: үлкеймейді, бірақ өз кеглінен (шектің 80%-ына дейін) кішіреймейді
   const shortLabel = lines.every((l) => l.trim().split(/\s+/).length <= 2);
-  const legible = isTitle || single || !o.legible ? 0 : shortLabel ? Math.min(orig, o.legible * 0.8) : o.legible;
-  const floor = Math.max(Math.min(Math.max(minSz, orig * (o.minScale || 0)), orig), legible);
+  const labelLike = shortLabel || single;
+  // белгі (қысқа не бір жолдық): шектің 90%-ына дейін үлкейеді, бірақ сөзі (бір жолдықта — бүкіл жолы) қорапқа сыятын кегльден аспайды
+  const labelFloor = () => {
+    const unit = Math.max(...lines.map((l) => (single ? tw(l, 1, 0) : Math.max(...l.trim().split(/\s+/).map((w) => tw(w, 1, 0))))), 0.01);
+    return Math.max(Math.min(orig, o.legible), Math.min(o.legible * 0.9, (wPt * 0.94) / unit));
+  };
+  const legible = isTitle || !o.legible ? 0 : labelLike ? labelFloor() : o.legible;
+  const baseFloor = Math.min(Math.max(minSz, orig * (o.minScale || 0)), orig);
+  const floor = Math.max(baseFloor, legible);
 
   const measure = (arr, sz) => {
     const scale = sz / orig;
@@ -334,11 +341,16 @@ function fitLines(lines, o) {
     let k = 0;
     arr.forEach((l, i) => { if (l.length > arr[k].length) k = i; });
     const cur = arr[k];
-    if (cur.length <= 12) break;
+    if (cur.length <= 12 || cur.trim().split(/\s+/).length <= 4) break;   // қысқа тіркес қиылмайды («XV ғасырдың ортасы» → «XV ғасырдың,» болмасын)
     const next = shortenLine(cur);
     if (next === cur) break;
     arr[k] = next;
     hit = search();
+  }
+  // оқылу шегінде де сыймады (қысқа тіркес не қиюға келмейтін мәтін): толық мәтін — шаблонның бұрынғы ең төменгі кегліне дейін
+  // (ұзын мәтін мұнда кірмейді — ол кейінгі сатыда қысқарады, қаріп кішіреймейді)
+  if (!hit && legible && floor > baseFloor + 0.01 && arr.every((l) => l.trim().split(/\s+/).length <= 4)) {
+    for (let sz = floor * 0.95; sz >= baseFloor - 0.01; sz *= 0.95) { const m = measure(arr, sz); if (m.ok) { hit = { sz, m }; break; } }
   }
   if (!hit) hit = { sz: floor, m: measure(arr, floor) };
   // Мәтін қорапты толтырмаса (қысқа мәтін үлкен қорапта) — кегль 1.5×-ке дейін (≤30pt) өседі, қорап ≤80% толғанша.
