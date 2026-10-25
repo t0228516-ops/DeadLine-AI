@@ -149,10 +149,10 @@ test('subjects: templates with subject-bound decor appear only for that subject,
   const bound = new Set(L.CATALOG.templates.filter((t) => t.subjects).map((t) => t.id));
   assert.ok(bound.size >= 5);
   let r = 0; const rng = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
-  for (let i = 0; i < 300; i++) assert.ok(!bound.has(L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', rng }).id), 'тарихқа дәрігер/ғарыш шаблоны жоқ');
+  for (let i = 0; i < 300; i++) assert.ok(!bound.has(L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', rng }).id), 'тарихқа дәрігер/биология шаблоны жоқ');
   let hits = 0;
-  for (let i = 0; i < 300; i++) if (L.chooseTemplate({ topic: 'Күн жүйесінің планеталары', rng }).id === 'sc01064') hits++;
-  assert.ok(hits > 100, `ғарыш тақырыбына ғарыш шаблоны жиі (${hits}/300)`);
+  for (let i = 0; i < 300; i++) if (L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу', rng }).id === 'sc00395') hits++;
+  assert.ok(hits > 100, `медицина тақырыбына медицина шаблоны жиі (${hits}/300)`);
 });
 
 test('credits link: only the SlidesCarnival run is linked, before extLst; neighbours untouched', () => {
