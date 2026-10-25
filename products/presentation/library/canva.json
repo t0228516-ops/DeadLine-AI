@@ -57,7 +57,13 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 30,
+    "to": [
+     140
+    ]
+   }
   },
   {
    "id": "DAHXgUbmwyg",
@@ -132,7 +138,8 @@
    "stats": [],
    "quote": [],
    "closing": 10,
-   "credits": null
+   "credits": null,
+   "mirror": false
   },
   {
    "id": "DAHWmAJVLOY",
@@ -156,7 +163,8 @@
    "stats": [],
    "quote": [],
    "closing": 10,
-   "credits": null
+   "credits": null,
+   "mirror": false
   },
   {
    "id": "DAHGDt95UT0",
@@ -208,7 +216,13 @@
    "stats": [],
    "quote": [],
    "closing": 10,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 0,
+    "to": [
+     140
+    ]
+   }
   },
   {
    "id": "DAHZAsvvtZo",
@@ -548,7 +562,13 @@
    "stats": [],
    "quote": [],
    "closing": 12,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 210,
+    "to": [
+     355
+    ]
+   }
   },
   {
    "id": "DAHZBmbzuBw",
@@ -579,7 +599,13 @@
    "stats": [],
    "quote": [],
    "closing": 12,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 210,
+    "to": [
+     355
+    ]
+   }
   },
   {
    "id": "DAHZBm7gqIw",
@@ -864,7 +890,13 @@
    "stats": [],
    "quote": [],
    "closing": 11,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 45,
+    "to": [
+     140
+    ]
+   }
   },
   {
    "id": "DAHZA9r1Rus",
@@ -891,7 +923,8 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "mirror": false
   },
   {
    "id": "DAHZA0w95ZY",
@@ -917,7 +950,13 @@
    ],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 165,
+    "to": [
+     355
+    ]
+   }
   },
   {
    "id": "DAHZA4I5MGw",
@@ -946,7 +985,13 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 345,
+    "to": [
+     140
+    ]
+   }
   },
   {
    "id": "DAHZA9Csswc",
@@ -1129,7 +1174,13 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 210,
+    "to": [
+     355
+    ]
+   }
   },
   {
    "id": "DAHZA87LF58",
@@ -1190,7 +1241,13 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 75,
+    "to": [
+     175
+    ]
+   }
   },
   {
    "id": "DAHZAzdXeYk",
@@ -1357,7 +1414,13 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null
+   "credits": null,
+   "recolor": {
+    "from": 255,
+    "to": [
+     355
+    ]
+   }
   }
  ]
 }

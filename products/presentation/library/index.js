@@ -162,7 +162,7 @@ const creditsSlide = (t) => t.credits || t.closing || t.cover;
 
 /**
  * Толтыруға дайын кесілген шаблон.
- * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object, brief?:string, language?:string, llm?:Function, arrange?:boolean}} o
+ * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object, brief?:string, language?:string, llm?:Function, arrange?:boolean, variant?:{mirror:boolean, hue:number}}} o
  */
 async function prepareDeck(o = {}) {
   const fixed = o.entry || (o.id && byId.get(o.id));
@@ -174,6 +174,8 @@ async function prepareDeck(o = {}) {
     console.warn(`[Library] ${t.id}: ${e.message} — another template`);
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
   }
+  // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
+  if (t.source === 'canva') { try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); } }
   const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
   let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
@@ -198,11 +200,24 @@ async function prepareDeck(o = {}) {
     console.log(`[Library] ${t.id}: ${want} slides would exceed ${(MAX_DECK_BYTES / 1048576).toFixed(0)}MB — another template`);
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
   }
+  // Шаблонның нұсқасы (айна, түс): бір шаблон қайталанса да әр студентте әртүрлі көрінеді (library/variants.js)
+  const variant = o.variant || require('./variants').pickVariant(t, o.rng);
+  if (variant.mirror || variant.hue) {
+    let browser = null;
+    try {
+      let page = null;
+      if (variant.mirror) { browser = await require('../renderer').launchBrowser(require('puppeteer')); page = await browser.newPage(); }
+      creditsBuf = await require('./variants').applyVariant(creditsBuf, variant, { page });
+    } catch (e) {
+      console.warn(`[Library] variant skipped: ${e.message}`);
+      variant.mirror = false; variant.hue = 0;
+    } finally { if (browser) await browser.close().catch(() => {}); }
+  }
   // Credits-сіз нұсқа — толтыруға; мәтін оқылатын етіледі (кегль, контраст, әшекейден арақашықтық)
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
   if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
-  console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
-  return { id: t.id, source: t.source, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+  console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB${variant.mirror ? ' mirror' : ''}${variant.hue ? ` hue+${variant.hue}` : ''}`);
+  return { id: t.id, source: t.source, style: t.style, variant, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
     outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 
