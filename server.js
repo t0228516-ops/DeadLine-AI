@@ -155,6 +155,19 @@ function authMiddleware(req, res, next) {
   next();
 }
 
+// ─── Кітапхана шаблондарын жеке қоймаға жүктеу (тек LIBRARY_UPLOAD_TOKEN бар болса; жүктеп болған соң айнымалы өшіріледі) ───
+app.put('/api/library/:id', express.raw({ type: '*/*', limit: '80mb' }), async (req, res) => {
+  const token = process.env.LIBRARY_UPLOAD_TOKEN || '';
+  const got = String(req.headers['x-upload-token'] || '');
+  if (token.length < 24 || got.length !== token.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(token))) return res.status(404).end();
+  const id = String(req.params.id || '');
+  if (!/^[A-Za-z0-9_-]{6,40}$/.test(id) || !Buffer.isBuffer(req.body) || req.body.length < 10000 || req.body.readUInt32LE(0) !== 0x04034b50) return res.status(400).json({ error: 'bad file' });
+  try {
+    await require('./products/presentation/library/s3').putObject(`canva/${id}.pptx`, req.body);
+    res.json({ ok: true, id, bytes: req.body.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── API ──────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, version: '3.0.0', service: 'DeadLine' });

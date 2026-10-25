@@ -37,11 +37,12 @@ function isPhotoBytes(name, buf) {
   return !!st && st.transparent < 0.2 && st.colors >= 40;
 }
 
-/** Бір слайдтағы <p:pic> блоктары: rId, орын/өлшем (EMU) */
+/** Бір слайдтағы фото блоктары: <p:pic> және Canva-ның суретпен толтырылған пішіні (<p:sp> + blipFill): rId, орын/өлшем (EMU) */
 function picsOf(xml) {
   const out = [];
-  for (const m of String(xml).matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g)) {
+  for (const m of String(xml).matchAll(/<p:pic>[\s\S]*?<\/p:pic>|<p:sp>[\s\S]*?<\/p:sp>/g)) {
     const block = m[0];
+    if (block.startsWith('<p:sp>') && !/<p:spPr>(?:(?!<\/p:spPr>)[\s\S])*<a:blipFill/.test(block)) continue;
     const rid = (block.match(/<a:blip [^>]*r:embed="([^"]+)"/) || [])[1];
     const x = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     if (!rid || !x || /<a:tile\b/.test(block)) continue;
@@ -54,6 +55,26 @@ function picsOf(xml) {
  * @param {Buffer} buf
  * @returns {Array<{slide:number, rid:string, w:number, h:number, area:number}>} slide — 0-негізді
  */
+/** Мәтіні бар пішіндердің орны (EMU) — суреттің үстінде мәтін тұр ма, соны білу үшін */
+function textBoxesOf(xml) {
+  const out = [];
+  for (const m of String(xml).matchAll(/<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g)) {
+    if (!/<a:t>[^<]*\S[^<]*<\/a:t>/.test(m[0])) continue;
+    const x = m[0].match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+    if (x) out.push({ x: +x[1], y: +x[2], w: +x[3], h: +x[4] });
+  }
+  return out;
+}
+
+/** Мәтін қорабының кемінде жартысы сурет ішінде ме (сурет — мәтіннің фоны) */
+function underText(p, boxes) {
+  return boxes.some((b) => {
+    const iw = Math.min(p.x + p.w, b.x + b.w) - Math.max(p.x, b.x);
+    const ih = Math.min(p.y + p.h, b.y + b.h) - Math.max(p.y, b.y);
+    return iw > 0 && ih > 0 && (iw * ih) / Math.max(1, b.w * b.h) >= 0.5;
+  });
+}
+
 function photoSlots(buf) {
   const files = readZipAll(buf);
   const { W, H } = slideSize(files);
@@ -61,6 +82,7 @@ function photoSlots(buf) {
   orderedSlides(files).forEach((sp, i) => {
     const rels = relsMap(files.get(relsPathOf(sp)));
     const seen = new Set();
+    const boxes = textBoxesOf(files.get(sp));
     for (const p of picsOf(files.get(sp))) {
       const r = rels[p.rid];
       if (!r || seen.has(p.rid)) continue;
@@ -69,7 +91,7 @@ function photoSlots(buf) {
       const area = (p.w * p.h) / (W * H);
       if (area < MIN_AREA || !isPhotoBytes(media, data)) continue;
       seen.add(p.rid);
-      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data) });
+      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data), underText: underText(p, boxes) });
     }
   });
   return out;
@@ -221,4 +243,4 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+module.exports = { picsOf, underText, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };

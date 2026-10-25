@@ -1,0 +1,1363 @@
+{
+ "source": "Canva",
+ "site": "https://www.canva.com",
+ "permission": "docs/canva-permission.md",
+ "templates": [
+  {
+   "id": "DAHYKJeOZvA",
+   "slug": "Vintage History Project",
+   "style": "vintage",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 15,
+   "credits": null
+  },
+  {
+   "id": "DAHXsEk3XpQ",
+   "slug": "Red Beige Vintage History",
+   "style": "history",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHXgUbmwyg",
+   "slug": "Vintage Maritime History",
+   "style": "vintage",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [
+    12
+   ],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10,
+    11
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 13,
+   "credits": null
+  },
+  {
+   "id": "DAHXaUeMyfo",
+   "slug": "Gray Black Modern History",
+   "style": "history",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHXTBoHN8M",
+   "slug": "Black Yellow History Project",
+   "style": "history",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHWmAJVLOY",
+   "slug": "Black Beige History Project",
+   "style": "dark",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHGDt95UT0",
+   "slug": "Vintage Minimalist History",
+   "style": "vintage",
+   "groups": [
+    "history",
+    "philosophy"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    6,
+    9,
+    10
+   ],
+   "stats": [
+    5,
+    8
+   ],
+   "quote": [],
+   "closing": 11,
+   "credits": null
+  },
+  {
+   "id": "DAHXgcOlu2w",
+   "slug": "Vintage History Stories",
+   "style": "vintage",
+   "groups": [
+    "history",
+    "philosophy"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAsvvtZo",
+   "slug": "Ancient Great Steppe",
+   "style": "photo",
+   "groups": [
+    "history"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    9
+   ],
+   "stats": [],
+   "quote": [
+    8
+   ],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHXsKSg2FA",
+   "slug": "Elegant Art History",
+   "style": "elegant",
+   "groups": [
+    "history",
+    "philosophy"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 16,
+   "credits": null
+  },
+  {
+   "id": "DAHXrVW7Lx8",
+   "slug": "Aesthetic Art History",
+   "style": "elegant",
+   "groups": [
+    "history",
+    "philosophy"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [
+    4
+   ],
+   "text": [
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHXb_9kFOk",
+   "slug": "Art Treasures",
+   "style": "elegant",
+   "groups": [
+    "philosophy"
+   ],
+   "subjects": [
+    "art"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    7
+   ],
+   "stats": [
+    6
+   ],
+   "quote": [
+    5
+   ],
+   "closing": 9,
+   "credits": null
+  },
+  {
+   "id": "DAHYKIYJJg4",
+   "slug": "Playful Plant Science",
+   "style": "botanical",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "biology",
+    "ecology"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    6,
+    8
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAvTaZik",
+   "slug": "Human Cell and Genetics",
+   "style": "photo",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "biology",
+    "medicine"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    7,
+    9
+   ],
+   "stats": [
+    6
+   ],
+   "quote": [
+    8
+   ],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAh3hA7s",
+   "slug": "Heart Health",
+   "style": "photo",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "medicine"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    7,
+    9
+   ],
+   "stats": [
+    6
+   ],
+   "quote": [
+    8
+   ],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAocIHUw",
+   "slug": "Climate and Ecology",
+   "style": "photo",
+   "groups": [
+    "science",
+    "general"
+   ],
+   "subjects": [
+    "ecology",
+    "geography"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    7,
+    9
+   ],
+   "stats": [
+    6
+   ],
+   "quote": [
+    8
+   ],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHC6tz8v98",
+   "slug": "Illustrative Ecology",
+   "style": "botanical",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "ecology",
+    "biology"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHBpEwNn2I",
+   "slug": "Waste Industrial Ecology",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "ecology"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    8
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHXb-YeZyU",
+   "slug": "Landforms Geography",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "geography"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 13,
+   "credits": null
+  },
+  {
+   "id": "DAHXcAzklSc",
+   "slug": "Electricity Group Project",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "physics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 12,
+   "credits": null
+  },
+  {
+   "id": "DAHZBmbzuBw",
+   "slug": "Magnetic Fields",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "physics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 12,
+   "credits": null
+  },
+  {
+   "id": "DAHZBm7gqIw",
+   "slug": "Vintage Science",
+   "style": "vintage",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "chemistry",
+    "biology",
+    "physics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 11,
+   "credits": null
+  },
+  {
+   "id": "DAHZBnlI0TY",
+   "slug": "Cartoon Science",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "biology",
+    "chemistry"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    8
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZBinEUqs",
+   "slug": "Research Project",
+   "style": "dark",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "chemistry",
+    "biology",
+    "medicine"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 11,
+   "credits": null
+  },
+  {
+   "id": "DAHZBhAoaMQ",
+   "slug": "Scientific Laboratory",
+   "style": "minimal",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "chemistry"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 12,
+   "credits": null
+  },
+  {
+   "id": "DAHZBgWf0s0",
+   "slug": "Science Project",
+   "style": "corporate",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "chemistry",
+    "biology"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 13,
+   "credits": null
+  },
+  {
+   "id": "DAHZBr3h2sw",
+   "slug": "Scientific Discovery",
+   "style": "school",
+   "groups": [
+    "science",
+    "education"
+   ],
+   "subjects": [
+    "chemistry"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    8
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHYKFbdT3c",
+   "slug": "Psychology Growth",
+   "style": "illustrated",
+   "groups": [
+    "philosophy",
+    "education"
+   ],
+   "subjects": [
+    "psychology"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "stats": [],
+   "quote": [
+    7
+   ],
+   "closing": 8,
+   "credits": null
+  },
+  {
+   "id": "DAHZAqQqNlk",
+   "slug": "AI in Everyday Life",
+   "style": "photo",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "it"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    7,
+    9
+   ],
+   "stats": [
+    6
+   ],
+   "quote": [
+    8
+   ],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHC6pWSFsc",
+   "slug": "Modern Technology",
+   "style": "dark",
+   "groups": [
+    "science"
+   ],
+   "subjects": [
+    "it"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHXgC1LqP0",
+   "slug": "Business Plan",
+   "style": "dark",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "economics",
+    "it"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    5,
+    6,
+    7,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 11,
+   "credits": null
+  },
+  {
+   "id": "DAHZA9r1Rus",
+   "slug": "Finances",
+   "style": "dark",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "economics"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA0w95ZY",
+   "slug": "Company Profile",
+   "style": "corporate",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "economics"
+   ],
+   "cover": 1,
+   "agenda": 3,
+   "section": [],
+   "text": [
+    2,
+    4,
+    6,
+    9
+   ],
+   "stats": [
+    7
+   ],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA4I5MGw",
+   "slug": "Macroeconomics",
+   "style": "playful",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "economics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA9Csswc",
+   "slug": "Innovation in Economics",
+   "style": "corporate",
+   "groups": [
+    "general",
+    "education"
+   ],
+   "subjects": [
+    "economics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA5ZvXO0",
+   "slug": "Globalized Economy",
+   "style": "illustrated",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "economics"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAw84_Z4",
+   "slug": "Law Firm Elegant",
+   "style": "dark",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "law"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    15,
+    16,
+    17
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 20,
+   "credits": null
+  },
+  {
+   "id": "DAHZA1z7pwQ",
+   "slug": "Trusted Legal Services",
+   "style": "dark",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "law"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA-aeXEA",
+   "slug": "Lawyer Profession",
+   "style": "illustrated",
+   "groups": [
+    "general",
+    "education"
+   ],
+   "subjects": [
+    "law"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 10,
+   "credits": null
+  },
+  {
+   "id": "DAHZAx8HDts",
+   "slug": "Justice in Balance",
+   "style": "corporate",
+   "groups": [
+    "general",
+    "history"
+   ],
+   "subjects": [
+    "law"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA87LF58",
+   "slug": "Law Firm Bold",
+   "style": "bold",
+   "groups": [
+    "general"
+   ],
+   "subjects": [
+    "law"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    12,
+    13,
+    14
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA96o-Ns",
+   "slug": "Literature Talk",
+   "style": "playful",
+   "groups": [
+    "philosophy",
+    "education"
+   ],
+   "subjects": [
+    "literature"
+   ],
+   "cover": 1,
+   "agenda": 2,
+   "section": [],
+   "text": [
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZAzdXeYk",
+   "slug": "Literature Project",
+   "style": "vintage",
+   "groups": [
+    "philosophy"
+   ],
+   "subjects": [
+    "literature"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 12,
+   "credits": null
+  },
+  {
+   "id": "DAHZA_bvVW8",
+   "slug": "Silent Library",
+   "style": "elegant",
+   "groups": [
+    "philosophy",
+    "education"
+   ],
+   "subjects": [
+    "literature"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZA45yZ4Y",
+   "slug": "Classic Literature",
+   "style": "vintage",
+   "groups": [
+    "philosophy"
+   ],
+   "subjects": [
+    "literature"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": 12,
+   "credits": null
+  },
+  {
+   "id": "DAHZBpPQsYI",
+   "slug": "Reinventing Education",
+   "style": "corporate",
+   "groups": [
+    "education",
+    "general"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZBjJqp90",
+   "slug": "Digital Learning",
+   "style": "illustrated",
+   "groups": [
+    "education"
+   ],
+   "subjects": [
+    "it"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  },
+  {
+   "id": "DAHZBpVNEeE",
+   "slug": "Future of Education",
+   "style": "corporate",
+   "groups": [
+    "education",
+    "general"
+   ],
+   "cover": 1,
+   "agenda": null,
+   "section": [],
+   "text": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "stats": [],
+   "quote": [],
+   "closing": null,
+   "credits": null
+  }
+ ]
+}

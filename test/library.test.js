@@ -75,9 +75,13 @@ test('plan: cover first, closing last, the asked length, no layout twice in a ro
 
 test('catalog: every template has a cover, credits and text slides; groups are known', () => {
   const G = new Set(['general', 'history', 'science', 'education', 'philosophy']);
-  assert.ok(L.CATALOG.templates.length >= 10 && L.CATALOG.templates.length <= 30, 'рұқсат: 10–15, кейін 30-ға дейін');
+  const sc = L.CATALOG.templates.filter((t) => t.source === 'slidescarnival');
+  const cv = L.CATALOG.templates.filter((t) => t.source === 'canva');
+  assert.ok(sc.length >= 10 && sc.length <= 30, 'SlidesCarnival рұқсаты: 10–15, кейін 30-ға дейін');
+  assert.ok(cv.length <= 100, 'Canva лицензиясы: 100 шаблонға дейін');
   for (const t of L.CATALOG.templates) {
-    assert.ok(t.cover >= 1 && t.credits > t.cover, t.id);
+    // Canva шаблонында Credits слайды жоқ — «Designed with Canva» қорытынды (не мұқаба) слайдынан жасалады
+    assert.ok(t.cover >= 1 && (t.source === 'canva' ? L.creditsSlide(t) >= 1 : t.credits > t.cover), t.id);
     assert.ok(t.text.length + t.section.length >= 2, t.id);
     assert.ok(t.groups.every((g) => G.has(g)), t.id);
   }
@@ -89,7 +93,7 @@ test('choose: topic decides the group; the student\'s recent templates are avoid
   assert.deepStrictEqual(L.topicGroups('Менің арманым'), ['general']);
   const t = L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', rng: () => 0 });
   assert.ok(t.groups.includes('history'));
-  const avoid = L.CATALOG.templates.filter((x) => x.groups.includes('history')).map((x) => x.id).slice(0, -1);
+  const avoid = L.CATALOG.templates.filter((x) => x.groups.includes('history') && !x.subjects).map((x) => x.id).slice(0, -1);
   const t2 = L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', avoid, rng: () => 0 });
   assert.ok(!avoid.includes(t2.id));
 });
@@ -144,14 +148,14 @@ test('normalizeGroups: scaled groups get real child sizes, nested groups too; sa
 
 test('subjects: templates with subject-bound decor appear only for that subject, and often there', () => {
   assert.deepStrictEqual(L.topicSubjects('Жүрек ауруларының алдын алу'), ['medicine']);
-  assert.deepStrictEqual(L.topicSubjects('Дәріс: экономика негіздері'), [], '«дәріс» — дәрі емес');
+  assert.deepStrictEqual(L.topicSubjects('Дәріс: экономика негіздері'), ['economics'], '«дәріс» — дәрі емес');
   assert.deepStrictEqual(L.topicSubjects('Тауар және баға'), []);
   const bound = new Set(L.CATALOG.templates.filter((t) => t.subjects).map((t) => t.id));
   assert.ok(bound.size >= 5);
   let r = 0; const rng = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
   for (let i = 0; i < 300; i++) assert.ok(!bound.has(L.chooseTemplate({ topic: 'Қазақ хандығының тарихы', rng }).id), 'тарихқа дәрігер/биология шаблоны жоқ');
   let hits = 0;
-  for (let i = 0; i < 300; i++) if (L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу', rng }).id === 'sc00395') hits++;
+  for (let i = 0; i < 300; i++) if ((L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу', rng }).subjects || []).includes('medicine')) hits++;
   assert.ok(hits > 100, `медицина тақырыбына медицина шаблоны жиі (${hits}/300)`);
 });
 

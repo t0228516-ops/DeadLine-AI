@@ -208,6 +208,8 @@ async function swapLibraryPhotos(buf, slides, ctx) {
   try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
   const keep = new Set(ctx.keepMedia || []);
   slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
+  // Canva: мәтін астындағы сурет — дизайнның атмосфералық фоны (қараңғы, бұлыңғыр); оны фотомен (карта, ашық сурет) ауыстырсақ мәтін оқылмайды
+  if (ctx.source === 'canva') slots = slots.filter((s) => !s.underText);
   if (!slots.length) return buf;
   if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let browser = null;
@@ -697,7 +699,7 @@ async function generatePresentation(userInput, options = {}) {
         // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
         try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
-          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
+          topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
         });
         fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
         console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);

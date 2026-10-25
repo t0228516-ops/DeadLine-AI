@@ -15,7 +15,13 @@ const path = require('path');
 const os = require('os');
 const axios = require('axios');
 const { carveDeck, appendSlideFrom } = require('./carve');
-const CATALOG = require('./slidescarnival.json');
+// екі көз: SlidesCarnival (сайттан жүктеледі) және Canva (лицензиямен бір рет жүктелген, біздің қоймада — docs/canva-permission.md)
+const SC = require('./slidescarnival.json');
+const CANVA = (() => { try { return require('./canva.json'); } catch { return { templates: [] }; } })();
+const CATALOG = {
+  ...SC,
+  templates: [...SC.templates.map((t) => ({ source: 'slidescarnival', ...t })), ...CANVA.templates.map((t) => ({ source: 'canva', ...t }))],
+};
 
 const LIB_DIR = process.env.LIBRARY_DIR || path.join(process.env.JOBS_DIR || os.tmpdir(), 'library');
 const MAX_DECK_BYTES = (Number(process.env.LIBRARY_MAX_MB) || 45) * 1024 * 1024; // Telegram бот файлы ~50 МБ
@@ -38,6 +44,11 @@ const SUBJECT_RE = {
   psychology: new RegExp(`${L}(психолог|эмоция|стресс|тұлға|мінез-құлық|эмоци|личност|psycholog|emotion|stress|mental|personality)`, 'iu'),
   literature: new RegExp(`${L}(әдебиет|ақын|жазушы|роман|өлең|поэма|шығарма|литератур|поэт|писател|стихотвор|literatur|poet|novel|poem|writer)`, 'iu'),
   geography: new RegExp(`${L}(географ|материк|мұхит|урбаниз|қала құрылыс|океан|geograph|continent|ocean|urban)`, 'iu'),
+  law: new RegExp(`${L}(құқық|заң|сот|конституция|адвокат|қылмыс|юрист|права?\\b|правов|закон|суд|юрид|адвокат|преступ|конституц|law\\b|legal|court|justice|crime|constitution)`, 'iu'),
+  economics: new RegExp(`${L}(экономика|экономикал|қаржы|нарық|инфляция|бизнес|кәсіпкер|банк|салық|маркетинг|менеджмент|экономи|финанс|рынок|инфляц|предприним|налог|econom|financ|market|business|bank|tax|marketing|management|inflation)`, 'iu'),
+  chemistry: new RegExp(`${L}(химия|химиял|молекула|зертхана|реакция|хими|молекул|реакци|лаборатор|chemi|molecul|laborator)`, 'iu'),
+  physics: new RegExp(`${L}(физика|электр|магнит|энергия|оптика|механика|физик|электри|энерги|механик|оптик|physic|electric|magnet|energy|mechanic|optic)`, 'iu'),
+  art: new RegExp(`${L}(өнер|бейнелеу|музыка|театр|кино|сәулет|мүсін|искусств|живопис|музык|театр|архитект|скульпт|painting|music|theat|cinema|architect|sculpt|museum|музей|мұражай)`, 'iu'),
 };
 
 /** Тақырыптың пәндері (бірнеше болуы мүмкін, жоқ болса — бос) */
@@ -76,7 +87,11 @@ function chooseTemplate(o = {}) {
   // гүл/қағаз әшекейлі шаблон (decor) тек мектеп, өнер, мәдениет тақырыбына; пәні анық (ЖИ, медицина) не белгісіз тақырыпқа — бейтарап шаблон
   const decorOk = !subjects.length && groups.some((g) => g === 'education' || g === 'philosophy');
   const plain = decorOk ? fresh : fresh.filter((t) => !t.decor);
-  const list = plain.length ? plain : fresh.length ? fresh : pool;
+  let list = plain.length ? plain : fresh.length ? fresh : pool;
+  // Canva шаблондары сапалырақ — көбіне солар (LIBRARY_CANVA_SHARE, әдепкі 0.75)
+  const canva = list.filter((t) => t.source === 'canva');
+  const cshare = process.env.LIBRARY_CANVA_SHARE == null || process.env.LIBRARY_CANVA_SHARE === '' ? 0.75 : Number(process.env.LIBRARY_CANVA_SHARE);
+  if (canva.length && canva.length < list.length) list = rng() < cshare ? canva : list.filter((t) => t.source !== 'canva');
   return list[Math.floor(rng() * list.length) % list.length];
 }
 
@@ -124,6 +139,13 @@ function filePath(id) { return path.join(LIB_DIR, `${id}.pptx`); }
 async function fetchTemplate(t, o = {}) {
   const fp = filePath(t.id);
   try { const st = fs.statSync(fp); if (st.size > 10000) return fs.readFileSync(fp); } catch {}
+  if (t.source === 'canva') {
+    // Canva: тек біздің жеке қоймада (scripts/canva-prepare.py өңдеген нұсқа)
+    const buf = await (o.s3 || require('./s3')).getObject(`canva/${t.id}.pptx`);
+    if (!buf || buf.length < 10000) throw new Error(`library: ${t.id} қоймада жоқ`);
+    try { fs.mkdirSync(LIB_DIR, { recursive: true }); fs.writeFileSync(fp, buf); } catch (e) { console.warn(`[Library] cache write: ${e.message}`); }
+    return buf;
+  }
   const url = `${CATALOG.site}/download/${t.id}/${t.slug}/pptx`;
   const res = await (o.http || axios).get(url, {
     responseType: 'arraybuffer', timeout: 120000, maxContentLength: 90 * 1024 * 1024, maxRedirects: 5,
@@ -135,6 +157,9 @@ async function fetchTemplate(t, o = {}) {
   return buf;
 }
 
+/** Credits слайды: SlidesCarnival-да шаблонның өз слайды; Canva-да жоқ — жабу (не мұқаба) слайды негізінде жасалады (canvaCredits) */
+const creditsSlide = (t) => t.credits || t.closing || t.cover;
+
 /**
  * Толтыруға дайын кесілген шаблон.
  * @param {{topic?:string, slideCount?:number, avoid?:string[], id?:string, rng?:()=>number, http?:object, brief?:string, language?:string, llm?:Function, arrange?:boolean}} o
@@ -142,7 +167,13 @@ async function fetchTemplate(t, o = {}) {
 async function prepareDeck(o = {}) {
   const fixed = o.entry || (o.id && byId.get(o.id));
   const t = fixed || chooseTemplate(o);
-  const src = await fetchTemplate(t, o);
+  let src;
+  try { src = await fetchTemplate(t, o); } catch (e) {
+    // Canva шаблоны қоймада жоқ/қойма қолжетімсіз — басқа шаблон (студент күтіп қалмайды)
+    if (fixed || (o.tries || 0) >= 3) throw e;
+    console.warn(`[Library] ${t.id}: ${e.message} — another template`);
+    return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
+  }
   const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
   let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
@@ -152,13 +183,13 @@ async function prepareDeck(o = {}) {
   }).catch(() => null);
   if (arranged) {
     picks = arranged.picks;
-    creditsBuf = carveDeck(src, picks.concat([t.credits - 1]));
+    creditsBuf = carveDeck(src, picks.concat([creditsSlide(t) - 1]));
     if (creditsBuf.length > MAX_DECK_BYTES) { console.log(`[Library] ${t.id}: arranged deck too large — default order`); arranged = null; }
   }
   // файл тым үлкен болса (ауыр фон суреттері) слайд азаяды
   for (let tries = 0; !arranged && tries < 4; tries++) {
     picks = planPicks(t, n);
-    creditsBuf = carveDeck(src, picks.concat([t.credits - 1]));
+    creditsBuf = carveDeck(src, picks.concat([creditsSlide(t) - 1]));
     if (creditsBuf.length <= MAX_DECK_BYTES || n <= 5) break;
     n = Math.max(5, n - 3);
   }
@@ -171,7 +202,7 @@ async function prepareDeck(o = {}) {
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
   if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB`);
-  return { id: t.id, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+  return { id: t.id, source: t.source, style: t.style, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
     outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 
@@ -221,7 +252,60 @@ function linkCredits(buf, idx) {
 /** Толтырылған колодаға түпнұсқа Credits слайдын қосу (атрибуция мен slidescarnival.com сілтемесі — рұқсаттың міндетті шарты) */
 function appendCredits(filledBuf, prep) {
   const out = appendSlideFrom(filledBuf, prep.creditsBuf, prep.creditsIdx);
-  return linkCredits(out, -1);
+  return prep.source === 'canva' ? canvaCredits(out, -1) : linkCredits(out, -1);
+}
+
+const CANVA_URL = 'https://www.canva.com';
+
+/**
+ * Canva лицензиясының шарты: әр презентацияда «Designed with Canva» анық жазылған credits слайды.
+ * Шаблонның жабу слайды алынады (дизайны сақталады), ең ірі мәтін → «Designed with Canva», келесісі → canva.com сілтемесі,
+ * қалған мәтін қораптары алынады.
+ */
+function canvaCredits(buf, idx) {
+  const { readZipAll, writeZipAll } = require('../templateFill');
+  const { orderedSlides } = require('../../../design-dna/structure');
+  const files = readZipAll(buf);
+  const all = orderedSlides(files);
+  const sp = all[idx < 0 ? all.length + idx : idx];
+  if (!sp) return buf;
+  let xml = String(files.get(sp));
+  const rp = sp.replace(/([^/]+)$/, '_rels/$1.rels');
+  let rels = files.get(rp) || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const rid = 'rIdDlCanvaLink';
+  if (!rels.includes(`Id="${rid}"`)) rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="${HLINK_TYPE}" Target="${CANVA_URL}" TargetMode="External"/></Relationships>`);
+  const shapes = [...xml.matchAll(/<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g)].map((m) => m[0]).filter((b) => /<a:t>[^<]*\S[^<]*<\/a:t>/.test(b));
+  const size = (b) => Math.max(0, ...[...b.matchAll(/\bsz="(\d+)"/g)].map((m) => +m[1]));
+  const ranked = shapes.slice().sort((a, b) => size(b) - size(a));
+  const setText = (block, text, link) => {
+    const runPr = ((block.match(/<a:rPr\b[^>]*\/>|<a:rPr\b[^>]*>[\s\S]*?<\/a:rPr>/) || [''])[0] || '<a:rPr lang="en-US"/>').replace(/<a:hlinkClick\b[^>]*\/>/g, '');
+    // сілтеме бүкіл пішінге (cNvPr): мәтін шаблонның өз түсінде қалады (run сілтемесі көк түске боялып, қараңғы фонда көрінбейді)
+    block = block.replace(/(<p:cNvPr\b[^>]*>)<a:hlinkClick\b[^>]*\/>/, '$1');
+    if (link) {
+      const a = `<a:hlinkClick r:id="${rid}"/>`;
+      block = /<p:cNvPr\b[^>]*\/>/.test(block) ? block.replace(/<p:cNvPr\b([^>]*?)\/>/, `<p:cNvPr$1>${a}</p:cNvPr>`)
+        : block.replace(/<p:cNvPr\b([^>]*)>/, `<p:cNvPr$1>${a}`);
+    }
+    const pPr = (block.match(/<a:pPr\b[^>]*\/>|<a:pPr\b[^>]*>[\s\S]*?<\/a:pPr>/) || [''])[0];
+    return block.replace(/(<p:txBody>[\s\S]*?<a:lstStyle\/>|<p:txBody>[\s\S]*?<\/a:lstStyle>|<p:txBody>\s*<a:bodyPr[^>]*\/>)[\s\S]*?<\/p:txBody>/,
+      (m, head) => `${head}<a:p>${pPr}<a:r>${runPr}<a:t>${text}</a:t></a:r></a:p></p:txBody>`);
+  };
+  // жазу қорапқа сыюы керек: «Designed with Canva» мен сілтеме бір-бір жолға; кегль тек кішірейеді
+  const fit = (block, chars, capPt) => {
+    const w = +((block.match(/<a:ext cx="(\d+)"/) || [])[1] || 0) / 12700;
+    const was = size(block) / 100 || capPt;
+    const pt = Math.max(9, Math.min(was, capPt, w ? w / (chars * 0.58) : was));
+    return block.replace(/(<a:(?:rPr|endParaRPr|defRPr)\b[^>]*?)\s(?:sz|spc)="-?\d+"/g, '$1').replace(/(<a:(?:rPr|endParaRPr|defRPr)\b[^>]*?)\s(?:sz|spc)="-?\d+"/g, '$1').replace(/<a:(rPr|endParaRPr|defRPr)\b/g, `<a:$1 sz="${Math.round(pt) * 100}"`);
+  };
+  let titlePt = 60;
+  ranked.forEach((b, i) => {
+    if (i === 0) xml = xml.replace(b, () => { const out = fit(setText(b, 'Designed with Canva'), 19, 60); titlePt = size(out) / 100; return out; });
+    else if (i === 1) xml = xml.replace(b, () => fit(setText(b, 'www.canva.com', true), 15, Math.min(20, Math.max(9, titlePt * 0.6))));
+    else xml = xml.replace(b, '');
+  });
+  files.set(sp, xml);
+  files.set(rp, rels);
+  return writeZipAll(files);
 }
 
 /**
@@ -236,4 +320,4 @@ function eligible(o = {}, env = process.env, rng = Math.random) {
   return rng() < share;
 }
 
-module.exports = { CATALOG, linkCredits, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
+module.exports = { CATALOG, linkCredits, canvaCredits, creditsSlide, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
