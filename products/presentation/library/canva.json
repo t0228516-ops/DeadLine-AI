@@ -991,7 +991,8 @@
     "to": [
      140
     ]
-   }
+   },
+   "disabled": "collage: stickers overlap text (stress test 2026-10-25: 8–21 unfixed overlaps)"
   },
   {
    "id": "DAHZA9Csswc",

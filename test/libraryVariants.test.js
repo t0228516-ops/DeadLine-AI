@@ -123,3 +123,10 @@ test('titles: a title split into one-line boxes («HUMAN» / «CELL &» / «GENE
   const nums = `<p:spTree>${stat(1, 1000000)}${stat(2, 2700000)}</p:spTree>`;
   assert.strictEqual(mergeSlide(nums, 18288000), nums, 'бағандағы сандар біріктірілмейді');
 });
+
+test('mirror: a big title is right-aligned even when long, so its letters do not run under mirrored decor', () => {
+  const big = (id, x, text) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="1000000"/><a:ext cx="8000000" cy="3000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>`
+    + `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:pPr algn="l"/><a:r><a:rPr lang="en-US" sz="5400"/><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const xml = slide1(V.mirrorDeck(deckWith(big(2, 1000000, 'EMPOWERING BUSINESSES IN A GLOBALIZED ECONOMY'))).buf);
+  assert.match(xml, /name="s2"[\s\S]*?algn="r"/);
+});

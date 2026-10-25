@@ -132,6 +132,9 @@ async function groqChat(systemPrompt, userPrompt, label) {
 }
 
 // ─── Retry helper ─────────────────────────────────────────────────────────
+// 503/429 кезінде қайта сұрау саны: 5+10+15+20+25+30+30 с ≈ 2,5 мин күту (бұрын — шексіз)
+const MAX_BUSY_ATTEMPTS = Number(process.env.DEEPSEEK_BUSY_ATTEMPTS) || 8;
+
 async function withRetry(fn, label) {
   let attempt = 0;
   while (true) {
@@ -146,6 +149,11 @@ async function withRetry(fn, label) {
       const isTimeout = err.isTimeout === true;
 
       if (!is503 && !is429 && !isTruncated && !isTimeout) throw err;
+
+      // DeepSeek істемей тұрса (503/429) — шексіз күтпейміз: ~3 минуттан кейін қате, кредит қайтады, кезек босайды
+      if ((is503 || is429) && attempt >= MAX_BUSY_ATTEMPTS) {
+        throw new Error(`${msg} — DeepSeek ${attempt} әрекетте жауап бермеді`);
+      }
 
       // 3 реттен көп кесілсе/timeout болса, циклді тоқтатып, жоғарыға нақты
       // қате беру — шексіз retry-мен пайдаланушыны күттірмеу үшін (нақты
@@ -168,6 +176,25 @@ async function withRetry(fn, label) {
       await new Promise(r => setTimeout(r, delay));
     }
   }
+}
+
+/**
+ * Жауап бұзық JSON не керекті өрісі жоқ болса — бір рет қайта сұраймыз (бір сәтсіз жауап бүкіл презентацияны құлатпасын).
+ * Екінші рет те жарамсыз болса — соңғы нәтиже қайтады, шақырушы өзі қате береді.
+ */
+async function askJson(call, valid, label) {
+  let last = null;
+  for (let k = 0; k < 2; k++) {
+    try {
+      last = parseJSON(await call());
+      if (valid(last)) return last;
+      console.warn(`[DeepSeek] ${label} — response missing required fields, asking again`);
+    } catch (e) {
+      if (k === 1) throw e;
+      console.warn(`[DeepSeek] ${label} — ${String(e.message).slice(0, 80)}, asking again`);
+    }
+  }
+  return last;
 }
 
 // ─── JSON parser ──────────────────────────────────────────────────────────
@@ -620,8 +647,8 @@ Each slideTopics entry must be specific enough to guide detailed content generat
 - For STRUCTURED MATERIAL, include the actual section identity AND its key points, e.g. "Апта 3: Нейрондық желілер — перцептрон, активация функциялары, backpropagation" (not just "Нейрондық желілер").
 - For SHORT TOPIC, a short 3-6 word description is enough.`;
 
-  const text = await withRetry(() => groqChat(system, user, 'generateOutline'), 'generateOutline');
-  const parsed = parseJSON(text);
+  const parsed = await askJson(() => withRetry(() => groqChat(system, user, 'generateOutline'), 'generateOutline'),
+    (p) => p && Array.isArray(p.slideTopics), 'generateOutline');
 
   if (!parsed?.slideTopics || !Array.isArray(parsed.slideTopics)) {
     throw new Error('Outline missing slideTopics array');
@@ -787,8 +814,8 @@ ${VISUAL_RULES}
 
 ${INFOGRAPHIC_RULES}`;
 
-  const text = await withRetry(() => groqChat(system, user, `generateBatch[${batchTopics.map(b=>b.index).join(',')}]`), 'generateBatch');
-  const parsed = parseJSON(text);
+  const parsed = await askJson(() => withRetry(() => groqChat(system, user, `generateBatch[${batchTopics.map(b=>b.index).join(',')}]`), 'generateBatch'),
+    (p) => p && Array.isArray(p.slides), 'generateBatch');
 
   if (!parsed?.slides || !Array.isArray(parsed.slides)) {
     throw new Error('Batch response missing slides array');

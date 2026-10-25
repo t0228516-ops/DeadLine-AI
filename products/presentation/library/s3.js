@@ -45,7 +45,7 @@ async function getObject(key) {
   if (!configured()) return null;
   const { url, headers } = signed('GET', key);
   try {
-    const res = await axios.get(url, { headers, responseType: 'arraybuffer', timeout: 120000, maxContentLength: 200 * 1024 * 1024 });
+    const res = await axios.get(url, { headers, responseType: 'arraybuffer', timeout: 30000, maxContentLength: 200 * 1024 * 1024 });
     return Buffer.from(res.data);
   } catch (e) {
     if (e.response && e.response.status === 404) return null;

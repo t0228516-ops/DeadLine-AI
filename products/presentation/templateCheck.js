@@ -301,6 +301,8 @@ function checkSlide(origXml, xml, o = {}) {
       if (pinned.has(T.name)) continue;
       if (gaveUp.has(keyOf(T))) continue;
       if (T.rot) { gaveUp.add(keyOf(T)); issues.push({ code: pr.code, shape: T.name, fixed: false }); continue; }
+      // мәтін өз таблеткасының/карточкасының ішінде тұрса — сол ішінде қалады (сыртқа шығарса, таблетка бос қалады)
+      const home = holders.find((h) => contains(h.r, T.box, 8));
       const maxSz = Math.max(...T.paras.map((p) => p.sz));
       const minS = maxSz >= 30 ? Math.max(0.45, 20 / maxSz) : Math.max(0.7, Math.min(1, 9 / maxSz));
       const best = { cost: Infinity };
@@ -333,6 +335,7 @@ function checkSlide(origXml, xml, o = {}) {
             if (Math.abs(dy) > SH * 0.35) continue;
             const r = glyphRect(T, s, dy, dx);
             if (problemOf(v, r)) continue;                                       // анықтаумен БІРДЕЙ ереже
+            if (home && (dy || dx) && !contains(home.r, r, 8)) continue;
             const cost = (1 - s) + Math.abs(dy) / SH * 2 + Math.abs(dx) / SW * 2;
             if (cost < best.cost) Object.assign(best, { cost, s, dy, dx });
           }

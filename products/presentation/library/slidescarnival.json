@@ -46,7 +46,7 @@
       "cover": 1, "agenda": 2, "section": [3, 7, 13], "text": [5, 6, 8, 9, 14, 15], "stats": [16], "quote": [18], "closing": null, "credits": 21 },
     { "id": "sc01541", "subjects": ["it"], "slug": "it-support-company-brand", "style": "bold", "groups": ["science"],
       "cover": 1, "agenda": 2, "section": [3, 7, 11], "text": [6, 8, 9, 12], "stats": [], "quote": [17], "closing": null, "credits": 20 },
-    { "id": "sc02662", "keepMedia": ["image30.png"], "slug": "ethics-in-forensic-psychology-thesis-defense", "style": "geometric", "groups": ["general", "philosophy", "education"],
+    { "id": "sc02662", "disabled": "stress test 2026-10-25: 9 unfixed text overlaps", "keepMedia": ["image30.png"], "slug": "ethics-in-forensic-psychology-thesis-defense", "style": "geometric", "groups": ["general", "philosophy", "education"],
       "cover": 1, "agenda": 2, "section": [], "text": [3, 5, 6, 7, 8, 11, 13, 14, 15], "stats": [10], "quote": [17], "closing": null, "credits": 20 },
     { "id": "sc02858", "subjects": ["literature"], "slug": "literature-review-slides", "style": "vintage", "groups": ["philosophy", "education"],
       "cover": 1, "agenda": 2, "section": [5], "text": [3, 4, 6, 8, 11, 13], "stats": [], "quote": [10], "closing": 14, "credits": 16 },

@@ -20,7 +20,8 @@ const SC = require('./slidescarnival.json');
 const CANVA = (() => { try { return require('./canva.json'); } catch { return { templates: [] }; } })();
 const CATALOG = {
   ...SC,
-  templates: [...SC.templates.map((t) => ({ source: 'slidescarnival', ...t })), ...CANVA.templates.map((t) => ({ source: 'canva', ...t }))],
+  // disabled — сапа сынағынан өтпеген шаблон (себебі жазылған): каталогта сақталады, бірақ таңдалмайды
+  templates: [...SC.templates.map((t) => ({ source: 'slidescarnival', ...t })), ...CANVA.templates.map((t) => ({ source: 'canva', ...t }))].filter((t) => !t.disabled),
 };
 
 const LIB_DIR = process.env.LIBRARY_DIR || path.join(process.env.JOBS_DIR || os.tmpdir(), 'library');
@@ -59,6 +60,9 @@ function topicSubjects(topic) {
 
 const byId = new Map(CATALOG.templates.map((t) => [t.id, t]));
 
+const CANVA_PAUSE_MS = 5 * 60 * 1000;
+let canvaDownUntil = 0;
+
 /** Тақырыптың топтары (бірнешеуі болуы мүмкін); ешқайсысы сай келмесе — ['general'] */
 function topicGroups(topic) {
   const t = String(topic || '');
@@ -68,15 +72,17 @@ function topicGroups(topic) {
 
 /**
  * Шаблон таңдау: тақырып тобына сай (пәнге байланған шаблон — тек сол пәнге), студенттің соңғы кітапхана шаблондарынан (avoid) өзгеше.
- * @param {{topic?:string, avoid?:string[], rng?:()=>number}} o
+ * @param {{topic?:string, avoid?:string[], rng?:()=>number, noCanva?:boolean}} o
  */
 function chooseTemplate(o = {}) {
   const rng = o.rng || Math.random;
   const groups = topicGroups(o.topic);
   const subjects = topicSubjects(o.topic);
   const avoid = new Set(o.avoid || []);
+  // Canva қоймасы жақында істемеді — біраз уақыт Canva шаблонын таңдамаймыз (әр студент 3 сәтсіз әрекетті күтпесін)
+  const noCanva = o.noCanva || Date.now() < canvaDownUntil;
   // пәнге байланған шаблон тек сол пәнге; қалғаны — тақырып тобы бойынша
-  const usable = CATALOG.templates.filter((t) => !t.subjects || t.subjects.some((x) => subjects.includes(x)));
+  const usable = CATALOG.templates.filter((t) => (!noCanva || t.source !== 'canva') && (!t.subjects || t.subjects.some((x) => subjects.includes(x))));
   const fit = usable.filter((t) => (t.subjects ? true : t.groups.some((g) => groups.includes(g))));
   const pool = (fit.length ? fit : usable.filter((t) => t.groups.includes('general')));
   const fresh = pool.filter((t) => !avoid.has(t.id));
@@ -169,10 +175,12 @@ async function prepareDeck(o = {}) {
   const t = fixed || chooseTemplate(o);
   let src;
   try { src = await fetchTemplate(t, o); } catch (e) {
-    // Canva шаблоны қоймада жоқ/қойма қолжетімсіз — басқа шаблон (студент күтіп қалмайды)
+    // Canva шаблоны қоймада жоқ/қойма қолжетімсіз — басқа шаблон (студент күтіп қалмайды): қойма бір шаблонды бермесе,
+    // қалғанын да бермейді деп есептеп, 5 минут Canva-сыз (SlidesCarnival) жұмыс істейміз
+    if (t.source === 'canva') canvaDownUntil = Date.now() + CANVA_PAUSE_MS;
     if (fixed || (o.tries || 0) >= 3) throw e;
     console.warn(`[Library] ${t.id}: ${e.message} — another template`);
-    return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1 });
+    return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1, noCanva: o.noCanva || t.source === 'canva' });
   }
   // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
   if (t.source === 'canva') { try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); } }

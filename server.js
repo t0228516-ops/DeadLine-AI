@@ -833,6 +833,14 @@ function scheduleLearn(job, outcome, info) {
 }
 
 // ─── Generation runner ────────────────────────────────────────────────────
+// Бір тапсырманың ең ұзақ уақыты: сыртқы қызмет (DeepSeek, суреттер) ілініп қалса — қате, кредит қайтады, кезектегі орын босайды
+const JOB_TIMEOUT_MS = Number(process.env.JOB_TIMEOUT_MS) || 15 * 60 * 1000;
+function withDeadline(promise, ms, label) {
+  let timer;
+  const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`[timeout] ${label} ${Math.round(ms / 60000)} мин ішінде бітпеді`)), ms); });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 let activeGenerations = 0;
 const waitQueue = []; // [{ resolve, free }]
 
@@ -888,7 +896,7 @@ async function executeReferatJob(job) {
   console.log(`[Job] ${jobId} referat language=${job.payload?.language} pages=${job.payload?.pages}`);
   try {
     const progressMap = { outline: 8, write: 35, fit: 80, docx: 92 };
-    const result = await generateReferat({
+    const result = await withDeadline(generateReferat({
       topic: job.payload.topic,
       pages: job.payload.pages,
       language: job.payload.language,
@@ -902,7 +910,7 @@ async function executeReferatJob(job) {
           progress: progressMap[phase] || 20,
         });
       },
-    });
+    }), JOB_TIMEOUT_MS, 'referat');
     const destDir = path.join(JOBS_DIR, jobId);
     fs.mkdirSync(destDir, { recursive: true });
     const docxPath = path.join(destDir, 'referat.docx');
@@ -988,7 +996,7 @@ async function executeJob(jobId) {
         pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
       } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
     }
-    const result = await generatePresentation(userInput, {
+    const result = await withDeadline(generatePresentation(userInput, {
       ...avoid,
       library,
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
@@ -1026,7 +1034,7 @@ async function executeJob(jobId) {
           progress,
         });
       },
-    });
+    }), JOB_TIMEOUT_MS, 'generation');
 
     // Move outputs into jobs dir for stable serving
     const destDir = path.join(JOBS_DIR, jobId);

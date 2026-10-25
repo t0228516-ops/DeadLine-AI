@@ -105,3 +105,21 @@ test('photos: a picture behind a text box is the slide background (kept in Canva
   assert.strictEqual(underText(pic, [{ x: 1100, y: 100, w: 400, h: 100 }]), false, 'мәтін суреттің жанында');
   assert.strictEqual(underText(pic, [{ x: 900, y: 100, w: 400, h: 100 }]), false, 'аздап қабысады — фон емес');
 });
+
+test('storage down: after one Canva template cannot be fetched, the next requests use SlidesCarnival for a while', async () => {
+  const t = L.CATALOG.templates.find((x) => x.source === 'canva' && x.subjects && x.subjects.includes('medicine'));
+  const picks = () => Array.from({ length: 40 }, () => L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу' }).source);
+  assert.ok(picks().includes('canva'), 'әдетте Canva да таңдалады');
+  for (let i = 0; i < 20; i++) assert.strictEqual(L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу', noCanva: true }).source, 'slidescarnival');
+  let asked = 0;
+  await assert.rejects(L.prepareDeck({ entry: t, s3: { getObject: async () => { asked++; return null; } }, arrange: false }), /қоймада жоқ/);
+  assert.strictEqual(asked, 1);
+  assert.ok(!picks().includes('canva'), 'қойма істемейді — 5 минут Canva таңдалмайды');
+});
+
+test('disabled templates (failed the quality test) stay in the catalog file but are never chosen', () => {
+  const raw = [...require('../products/presentation/library/canva.json').templates, ...require('../products/presentation/library/slidescarnival.json').templates];
+  const off = raw.filter((x) => x.disabled).map((x) => x.id);
+  assert.ok(off.includes('DAHZA4I5MGw') && off.includes('sc02662'));
+  for (const id of off) assert.ok(!L.CATALOG.templates.some((x) => x.id === id), id);
+});

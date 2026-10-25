@@ -73,12 +73,15 @@ const swapLR = (x) => x.replace(/<a:(srcRect|fillRect)\b([^>]*)\/>/g, (m, tag, a
 });
 
 /**
- * Қысқа жазу (тақырып, белгі, тізім жолы ≤ 40 таңба) айналғанда оңға тегістеледі — сонда ол түпнұсқадағыдай қораптың сыртқы
+ * Қысқа жазу (тақырып, белгі, тізім жолы ≤ 40 таңба) және ірі тақырып айналғанда оңға тегістеледі — сонда ол түпнұсқадағыдай қораптың сыртқы
  * шетіне жабысады және бағандағы қораптар бір сызықта тұрады. Абзац солға тегістелген күйі қалады (оңнан тегістелген абзац қиын оқылады).
  */
-function alignShort(el) {
+function alignShort(el, W) {
   const text = [...el.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join('');
-  if (!text.trim() || text.length > 40 || /\balgn="(ctr|r|just|dist)"/.test(el)) return el;
+  // ірі тақырып ұзын болса да оңға: әйтпесе солға тегістелген әріптер айналған безендірудің (скотч, сурет) астына түседі
+  const sz = Math.max(0, ...[...el.matchAll(/\bsz="(\d+)"/g)].map((m) => +m[1]));
+  const big = sz >= 2800 * ((W || 12192000) / 12192000);
+  if (!text.trim() || (text.length > 40 && !big) || /\balgn="(ctr|r|just|dist)"/.test(el)) return el;
   return el.replace(/<a:p>(?!<a:pPr)/g, '<a:p><a:pPr algn="r"/>')
     .replace(/<a:pPr\b([^>]*?)(\/?)>/g, (m, a, sl) => `<a:pPr${/\balgn=/.test(a) ? a.replace(/\balgn="l"/, 'algn="r"') : `${a} algn="r"`}${sl}>`);
 }
@@ -103,7 +106,7 @@ function mirrorElement(tag, el, ox, span, ctx, unit) {
     const x0 = +((x.match(/<a:off x="(-?\d+)"/) || [])[1] || 0);
     return y.replace(/<a:off x="-?\d+"/, `<a:off x="${2 * ox + span - unit.x - unit.w + (x0 - unit.x)}"`);
   });
-  if (tag === 'p:sp' && !unit && /<p:txBody>/.test(out)) out = out.replace(/<p:txBody>[\s\S]*?<\/p:txBody>/, (t) => alignShort(t));
+  if (tag === 'p:sp' && !unit && /<p:txBody>/.test(out)) out = out.replace(/<p:txBody>[\s\S]*?<\/p:txBody>/, (t) => alignShort(t, ctx.W));
   if (!flip && /<a:custGeom>/.test(out)) out = out.replace(/<a:custGeom>[\s\S]*?<\/a:custGeom>/, (g) => mirrorPaths(g));
   if (fullBleed) {
     const rid = (out.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
