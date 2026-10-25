@@ -51,8 +51,16 @@ function featuresOf(xml, W, H, styles) {
     if (!s.x) return null;                                                     // орны мүлде белгісіз (мұрасы да жоқ) — рөл берілмейді
     const text = decode(s.text).replace(/\s+/g, ' ').trim();
     const big = szPt(s.block) >= 30;
-    const cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H), T.legibleFor(W)) || 0);
+    let cap = Math.max(4, T.capacityChars(s.block, big ? 0.7 : 0.8, undefined, T.roomFor(xml, s.block, W, H), T.legibleFor(W)) || 0);
     const box = s.x;
+    // Canva: мәтін қорабы өзі тұрған таблеткадан кеңірек болады — сыйымдылық таблетканың енімен (әйтпесе жазу таблеткадан асады)
+    const pill = holders.find((h) => h.box.w < box.w * 0.95 && h.box.x >= box.x - 60000 && h.box.x + h.box.w <= box.x + box.w + 60000
+      && Math.min(h.box.y + h.box.h, box.y + box.h) - Math.max(h.box.y, box.y) >= Math.min(h.box.h, box.h) * 0.6);
+    // таблеткада бір жол сыяды (оның биіктігі екі жолға жетпесе) — сыйымдылық бір жолдың әрпімен
+    if (pill) {
+      const lines = pill.box.h / 12700 >= szPt(s.block) * 2.3 ? 2 : 1;
+      cap = Math.max(4, Math.min(Math.floor(cap * (pill.box.w / box.w)), Math.floor(lines * (pill.box.w / 12700 - 12) / (szPt(s.block) * 0.56))));
+    }
     const face = faceOf(s.block);
     return {
       id, text, len: text.length, sz: szPt(s.block), face, style: styleOf(styles, face), bold: isBold(s.block),

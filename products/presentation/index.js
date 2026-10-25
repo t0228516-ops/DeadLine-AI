@@ -701,7 +701,18 @@ async function generatePresentation(userInput, options = {}) {
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
         });
-        fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
+        let finalBuf = require('./library').appendCredits(withPhotos, options.library);
+        // Telegram 50 МБ шегіне жақын ауыр шаблон: суреттер кішірейеді (LIBRARY_SHRINK_MB, әдепкі 20 МБ-тан бастап)
+        if (finalBuf.length > (Number(process.env.LIBRARY_SHRINK_MB) || 20) * 1048576) {
+          let browser = null;
+          try {
+            browser = await require('./renderer').launchBrowser(require('puppeteer'));
+            const before = finalBuf.length;
+            finalBuf = await require('./library/photos').shrinkImages(finalBuf, await browser.newPage());
+            console.log(`[Library] images shrunk ${(before / 1e6).toFixed(1)} → ${(finalBuf.length / 1e6).toFixed(1)} MB`);
+          } catch (e) { console.warn(`[Library] shrink skipped: ${e.message}`); } finally { if (browser) await browser.close().catch(() => {}); }
+        }
+        fs.writeFileSync(pptxPath, finalBuf);
         console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);
       }
       // соңғы тексерушінің нәтижесі үйрену жүйесіне: қай ақау қанша, нешеуі түзелді

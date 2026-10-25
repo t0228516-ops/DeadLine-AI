@@ -123,3 +123,35 @@ test('disabled templates (failed the quality test) stay in the catalog file but 
   assert.ok(off.includes('DAHZA4I5MGw') && off.includes('sc02662'));
   for (const id of off) assert.ok(!L.CATALOG.templates.some((x) => x.id === id), id);
 });
+
+test('shrinkImages: a big opaque PNG becomes a smaller JPEG (links and content types follow); a transparent PNG stays PNG', async (t) => {
+  let browser;
+  try { browser = await require('../products/presentation/renderer').launchBrowser(require('puppeteer')); } catch (e) { t.skip('Chromium жоқ: ' + e.message); return; }
+  try {
+    const page = await browser.newPage();
+    const make = (alpha) => page.evaluate((alpha) => {
+      const c = document.createElement('canvas'); c.width = 2600; c.height = 1600; const g = c.getContext('2d');
+      // фотоға ұқсас (шулы) сурет — PNG-де ауыр, JPEG-те жеңіл
+      const d = g.createImageData(2600, 1600);
+      // тегіс градиент + сәл шу (фотоға ұқсас): PNG-де ауыр, JPEG-те жеңіл
+      for (let i = 0; i < d.data.length; i += 4) { const p = i >> 2; const x = p % 2600; const y = (p / 2600) | 0; const n = Math.random() * 24;
+        d.data[i] = (x / 11 + n) & 255; d.data[i + 1] = (y / 7 + n) & 255; d.data[i + 2] = ((x + y) / 17 + n) & 255; d.data[i + 3] = alpha && x < 400 ? 0 : 255; }
+      g.putImageData(d, 0, 0);
+      return c.toDataURL('image/png').split(',')[1];
+    }, alpha).then((b) => Buffer.from(b, 'base64'));
+    const files = readZipAll(FIX);
+    const media = [...files.keys()].filter((n) => /^ppt\/media\/.+\.png$/.test(n));
+    assert.ok(media.length >= 2);
+    const opaque = await make(false); const clear = await make(true);
+    files.set(media[0], opaque); files.set(media[1], clear);
+    const out = await require('../products/presentation/library/photos').shrinkImages(require('../products/presentation/templateFill').writeZipAll(files), page);
+    const f2 = readZipAll(out);
+    const j = media[0].replace(/\.png$/, '_s.jpeg');
+    assert.ok(f2.has(j) && !f2.has(media[0]), 'мөлдір емес PNG → JPEG');
+    assert.ok(f2.get(j).length < opaque.length);
+    assert.ok([...f2].some(([n, d]) => n.endsWith('.rels') && String(d).includes(j.split('/').pop())), 'сілтеме жаңарды');
+    assert.ok(!([...f2].some(([n, d]) => n.endsWith('.rels') && new RegExp(`/${media[0].split('/').pop()}"`).test(String(d)))), 'ескі атқа сілтеме қалмады');
+    assert.match(String(f2.get('[Content_Types].xml')), /Extension="jpeg"/);
+    assert.ok(f2.has(media[1]) && f2.get(media[1]).readUInt32BE(0) === 0x89504e47, 'мөлдір PNG — PNG күйінде');
+  } finally { await browser.close(); }
+});

@@ -219,3 +219,16 @@ test('choose: a clear subject always gets its own template; flower/paper decor n
   for (let i = 0; i < 300; i++) if (decor.has(L.chooseTemplate({ topic: 'Мектептегі тәрбие сағаты', rng }).id)) hits++;
   assert.ok(hits > 0, 'мектеп тақырыбына әшекейлі шаблон шыға алады');
 });
+
+test('catalog: no slide with a table is used — table cells are not filled and would keep English template text', () => {
+  const dir = process.env.STRESS_LIBDIR;
+  if (!dir || !fs.existsSync(dir)) return;   // шаблон файлдары тек сапа сынағында бар (git-те жоқ)
+  for (const t of L.CATALOG.templates) {
+    const p = path.join(dir, `${t.id}.pptx`);
+    if (!fs.existsSync(p)) continue;
+    const files = readZipAll(fs.readFileSync(p));
+    const slides = orderedSlides(files);
+    const roles = [t.cover, t.agenda, t.closing, ...t.text, ...t.section, ...t.stats, ...t.quote].filter(Boolean);
+    for (const n of roles) assert.ok(!/<a:tbl>/.test(String(files.get(slides[n - 1]))), `${t.id} slide ${n}`);
+  }
+});

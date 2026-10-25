@@ -172,3 +172,14 @@ test('слот жазушы: тақырыптағы сан карточка са
   assert.ok(calls.some((c) => c.label === 'template-slots-fix' && /names 4 items but the slide shows exactly 3/.test(c.user)), 'LLM-ге қайта жаздырылды');
   assert.deepStrictEqual(r.plan[0].byId[0], ['ЖИ үш саланы өзгертіп жатыр'], 'LLM түзетпесе — сан детерминді түзелді');
 });
+
+test('слот жазушы: студент аты-жөнін бермесе — мұқабадағы «Presented by» орны бос қалмайды (жыл жазылады)', async () => {
+  const buf = tpl();
+  const sc = analyzeTemplate(buf);
+  const slides = [{ title: 'Кино тарихы' }, { title: 'Кино' }, { title: 'Дыбысты кино' }];
+  const r = await writeSlots({ schema: sc, slides, topic: 'Кино тарихы', language: 'Kazakh', coverMeta: {}, creditLines: coverCreditItems, llm: mockLlm() });
+  const out = fillTemplatePptx(buf, slides, { slotFill: r.plan, qa: false });
+  const t1 = [...readZipAll(out).get('ppt/slides/slide1.xml').matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]);
+  assert.ok(t1.some((x) => new RegExp(`${new Date().getFullYear()} Ж\\.?`, 'i').test(x)), JSON.stringify(t1));
+  assert.ok(!t1.some((x) => /MATTHEW|PRESENTATION BY/.test(x)));
+});

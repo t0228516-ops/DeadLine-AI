@@ -170,6 +170,57 @@ function replacePhotos(buf, list) {
 }
 
 /**
+ * Файл Telegram шегіне (50 МБ) жақындамасын: үлкен суреттер ≤ maxPx-ке кішірейеді, мөлдір емес PNG — JPEG болады
+ * (жаңа атпен; сілтемелер мен мазмұн түрлері жаңарады), мөлдір PNG — PNG күйінде тек кішірейеді. Слайдтағы орны мен кесуі өзгермейді.
+ * @param {Buffer} buf
+ * @param {object} page Chromium беті
+ * @param {{minBytes?:number, maxPx?:number, quality?:number}} [o] minBytes — осыдан кіші суретке тимейміз
+ * @returns {Promise<Buffer>}
+ */
+async function shrinkImages(buf, page, o = {}) {
+  const minBytes = o.minBytes || 700 * 1024; const maxPx = o.maxPx || 1920; const quality = o.quality || 0.85;
+  const files = readZipAll(buf);
+  let ct = files.get('[Content_Types].xml') || '';
+  const renamed = new Map();
+  for (const [name, data] of [...files]) {
+    if (!/^ppt\/media\/[^/]+\.(png|jpe?g)$/i.test(name) || data.length < minBytes) continue;
+    const png = Buffer.from(data).readUInt32BE(0) === 0x89504e47;
+    // альфа арнасы бар PNG көбіне іс жүзінде мөлдір емес (Canva): пикселдер тексеріледі — шын мөлдір болса ғана PNG қалады
+    const res = await page.evaluate(async (src, mayAlpha, maxPx, q) => {
+      const img = new Image(); img.src = src; await img.decode();
+      const k = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, c.width, c.height);
+      let alpha = false;
+      if (mayAlpha) { const d = g.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alpha = true; break; } }
+      if (alpha) return { png: true, b64: c.toDataURL('image/png').split(',')[1] };
+      const c2 = document.createElement('canvas'); c2.width = c.width; c2.height = c.height;
+      const g2 = c2.getContext('2d'); g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(c, 0, 0);
+      return { png: false, b64: c2.toDataURL('image/jpeg', q).split(',')[1] };
+    }, `data:${png ? 'image/png' : 'image/jpeg'};base64,${Buffer.from(data).toString('base64')}`, png && pngHasAlpha(data), maxPx, quality).catch(() => null);
+    if (!res) continue;
+    const keepPng = res.png; const b64 = res.b64;
+    const out = Buffer.from(b64, 'base64');
+    if (out.length >= data.length * 0.9) continue;                          // ұтыс аз — түпнұсқа қалады
+    if (png && !keepPng) {
+      const jn = name.replace(/\.png$/i, '_s.jpeg');
+      files.delete(name); files.set(jn, out); renamed.set(name.split('/').pop(), jn.split('/').pop());
+    } else files.set(name, out);
+  }
+  if (renamed.size) {
+    for (const [n, d] of [...files]) {
+      if (!n.endsWith('.rels')) continue;
+      const x = String(d).replace(/Target="([^"]*\/)?([^"/]+)"/g, (m, dir, f) => (renamed.has(f) ? `Target="${dir || ''}${renamed.get(f)}"` : m));
+      if (x !== String(d)) files.set(n, x);
+    }
+    if (!/Extension="jpeg"/i.test(ct)) ct = ct.replace(/(<Types[^>]*>)/, '$1<Default Extension="jpeg" ContentType="image/jpeg"/>');
+    files.set('[Content_Types].xml', ct);
+  }
+  return writeZipAll(files);
+}
+
+/**
  * Суреттің пиксель сипаты (Chromium canvas, 64×64): фото ме, әлде текстура/иллюстрация ма.
  *   lumStd  — жарықтық ауытқуы (қағаз, бір түсті фон — өте аз)
  *   top8    — ең жиі 8 түс (4 бит/арна) қанша пиксельді алады (жалпақ иллюстрация, карта, әшекей — көп)
@@ -243,4 +294,4 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { picsOf, underText, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+module.exports = { picsOf, underText, shrinkImages, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };

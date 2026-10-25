@@ -327,6 +327,11 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
     const perf = queue.find((c) => c.kind === 'performed');
     const grp = queue.find((c) => c.kind === 'group');
     if (perf && grp && pairs.length) { perf.extra = `${grp.label}: ${grp.value}`; queue = queue.filter((c) => c !== grp); }
+    // студент аты-жөнін бермесе — мұқабадағы «Presented by» таблеткасы бос қалмасын: бірінші жұпқа жыл жазылады
+    if (!credits.length && sch.kind === 'cover' && pairs.length) {
+      const y = new Date().getFullYear();
+      queue = [{ kind: 'year', label: '', value: /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.` }];
+    }
     for (const p of pairs) {
       const c = take('performed') || take('checked') || queue.shift();
       if (p.label) t[p.label.key] = c ? caseLike(p.label.orig, c.label, 'label') : '';
