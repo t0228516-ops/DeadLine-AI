@@ -69,10 +69,14 @@ function chooseTemplate(o = {}) {
   const fit = usable.filter((t) => (t.subjects ? true : t.groups.some((g) => groups.includes(g))));
   const pool = (fit.length ? fit : usable.filter((t) => t.groups.includes('general')));
   const fresh = pool.filter((t) => !avoid.has(t.id));
-  // пәні дәл сай шаблон (әшекейі тақырыпқа қатысты) — жартысында бірінші кезекте
+  // пәні дәл сай шаблон (әшекейі тақырыпқа қатысты) — бірінші кезекте (LIBRARY_SUBJECT_SHARE, әдепкі — әрқашан)
   const exact = fresh.filter((t) => t.subjects);
-  if (exact.length && rng() < (Number(process.env.LIBRARY_SUBJECT_SHARE) || 0.5)) return exact[Math.floor(rng() * exact.length) % exact.length];
-  const list = fresh.length ? fresh : pool;
+  const share = process.env.LIBRARY_SUBJECT_SHARE == null || process.env.LIBRARY_SUBJECT_SHARE === '' ? 1 : Number(process.env.LIBRARY_SUBJECT_SHARE);
+  if (exact.length && rng() < share) return exact[Math.floor(rng() * exact.length) % exact.length];
+  // гүл/қағаз әшекейлі шаблон (decor) тек мектеп, өнер, мәдениет тақырыбына; пәні анық (ЖИ, медицина) не белгісіз тақырыпқа — бейтарап шаблон
+  const decorOk = !subjects.length && groups.some((g) => g === 'education' || g === 'philosophy');
+  const plain = decorOk ? fresh : fresh.filter((t) => !t.decor);
+  const list = plain.length ? plain : fresh.length ? fresh : pool;
   return list[Math.floor(rng() * list.length) % list.length];
 }
 

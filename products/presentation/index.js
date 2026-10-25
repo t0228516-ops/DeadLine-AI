@@ -221,10 +221,11 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     for (const s of slots) {
       if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
     }
-    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
+    // слайдтағы барлық фото ауысады (4-ке дейін): ауыспай қалған шаблон фотосы тақырыпқа жат, ал бір макет екі рет келсе — екі слайдта бірдей фото
+    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 12;
     const perSlide = new Map();
     slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
-      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 4) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
     if (!slots.length) { console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
     const used = new Set();
     const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
@@ -684,6 +685,9 @@ async function generatePresentation(userInput, options = {}) {
   }
   if (isTemplateFill) {
     await onProgress('template', 'Шаблонға мәтін салынуда...');
+    // Баяндама мәтіні шаблон режимінде де: шаблон қорабына аз мәтін сыяды — студент оқитын толық мәтін .docx-те
+    const tplNotesTask = generateSpeakerNotes({ slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta })
+      .catch((e) => { console.warn(`[Notes] failed (continuing): ${e.message}`); return null; });
     try {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
       const qaReport = [];
@@ -712,6 +716,15 @@ async function generatePresentation(userInput, options = {}) {
       templateGeomScore = Math.max(45, 100 - unfixed * 12);
       console.log(`[Pipeline] Template health=${templateHealth} (unfixedQA=${unfixed} fallback=${w.fallback || 0} problems=${w.problems || 0}${oldRemaining ? ` oldRemaining=${oldRemaining}` : ''})`);
       console.log('[Pipeline] Template-Fill: PPTX = пайдаланушы шаблоны, тек мәтін ауыстырылды');
+      const notesRes = await tplNotesTask;
+      if (notesRes && notesRes.notes.length === slides.length && notesRes.ok) {
+        notesMeta = { ok: notesRes.ok, study: !!notesRes.study };
+        try {
+          speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
+          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta }));
+        } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
+        console.log(`[Pipeline] Template speaker notes: ${notesRes.ok}/${slides.length} slides, study guide=${notesMeta.study}`);
+      }
     } catch (err) {
       // Рендерге (сурет-слайд) түспейміз: клиентке өңделетін PPTX керек. Қате болса — кредит қайтарылады.
       console.warn('[Pipeline] Template-Fill failed:', err.message);

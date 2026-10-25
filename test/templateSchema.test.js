@@ -159,3 +159,16 @@ test('placeholder: мұраланған орын мен кегль слайдқ�
   assert.match(out, /<a:rPr lang="kk-KZ" sz="4400"\/><a:t>Тақырып/);
   assert.match(out, /<a:rPr lang="kk-KZ" sz="1800"\/><a:t>Мәтін/);
 });
+
+test('слот жазушы: тақырыптағы сан карточка санына сай («төрт сала» + 3 карточка → қайта жазу, болмаса «үш»)', async () => {
+  const card = (k, id, part) => ({ key: `c${k}${part[0]}`, id, role: 'card', part, max: 60 });
+  const schema = { deck: { chrome: [], tags: [] }, slides: [{ index: 1, kind: 'content', slots: [{ key: 't', id: 0, role: 'title', max: 60 }, card(1, 1, 'heading'), card(2, 2, 'heading'), card(3, 3, 'heading'), card(1, 4, 'body'), card(2, 5, 'body'), card(3, 6, 'body')] }] };
+  const calls = [];
+  const llm = async (sys, user, label) => {
+    calls.push({ label, user });
+    return { slides: [{ index: 1, slots: { t: 'ЖИ төрт саланы өзгертіп жатыр', c1h: 'Денсаулық', c2h: 'Білім', c3h: 'Көлік', c1b: 'Суреттерді талдайды.', c2b: 'Жеке оқу жолын құрады.', c3b: 'Жол қауіпсіздігін арттырады.' } }] };
+  };
+  const r = await writeSlots({ schema, slides: [{ title: 'ЖИ' }], topic: 'ЖИ', language: 'Kazakh', llm });
+  assert.ok(calls.some((c) => c.label === 'template-slots-fix' && /names 4 items but the slide shows exactly 3/.test(c.user)), 'LLM-ге қайта жаздырылды');
+  assert.deepStrictEqual(r.plan[0].byId[0], ['ЖИ үш саланы өзгертіп жатыр'], 'LLM түзетпесе — сан детерминді түзелді');
+});

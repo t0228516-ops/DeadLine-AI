@@ -12,6 +12,7 @@
  * Нәтиже fillTemplatePptx(..., { slotFill }) үшін: әр слайдқа { byId: {id: [жолдар]}, logo: [сөздер]|null }.
  */
 const { linesForSlide } = require('./templateFill');
+const { countIn, setCount } = require('./countWords');
 
 const BATCH = 3;
 const clean = (t) => String(t == null ? '' : t).replace(/\s*(…|\.{3})\s*$/, '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
@@ -64,7 +65,7 @@ function slotLine(s) {
   const extra = s.role === 'accent' ? ' — 1 word (2 at most); together with "t" it must read as ONE heading: "t" first, then this word completes it; never repeat a word of "t"'
     : s.role === 'stat' && s.part === 'value' ? ' — a REAL, well-known figure for this slide (year, date, percentage, count, amount with unit); NEVER invent statistics — if unsure, use a year or a date'
       : s.role === 'stat' && s.part === 'label' ? ' — says what the figure is'
-        : s.role === 'card' && s.part === 'heading' ? ' — names exactly what its card text explains'
+        : s.role === 'card' && s.part === 'heading' ? ' — names exactly what its own card text (the same number) explains'
           : s.role === 'body' || (s.role === 'card' && s.part === 'body') ? ' — complete informative sentence(s) with concrete facts'
             : s.role === 'title' ? ' — states the point of the slide, no final period' : '';
   return `  "${s.key}": ${roleText(s)}, ${lim}${extra}`;
@@ -135,6 +136,16 @@ function slotProblem(s, text, language) {
   if (s.role === 'stat' && s.part === 'value' && !/\d|^[IVXLC]+\b/.test(t)) return 'a figure must contain a number';
   if (wantsCyr(language) && !hasCyr(t) && !(s.role === 'stat' && s.part === 'value') && /[a-z]{4,}/i.test(t) && !/^[A-Z][\w.+-]*(\s[A-Z0-9][\w.+-]*)*$/.test(t)) return 'not in the presentation language';
   return null;
+}
+
+/** Слайдтағы карточка саны (тақырып аталған санмен сәйкес болуы керек) */
+const cardCount = (sch) => sch.slots.filter((x) => x.role === 'card' && x.part === 'heading').length;
+
+/** Тақырып «төрт сала» дейді, слайдта 3 карточка — қате (null — дұрыс). */
+function countProblem(sch, s, text) {
+  if (s.role !== 'title' || sch.kind !== 'content') return null;
+  const c = cardCount(sch); const n = countIn(text);
+  return c >= 2 && n != null && n !== c ? `the heading names ${n} items but the slide shows exactly ${c}` : null;
 }
 
 /** Детерминді қорғаныс: LLM бермеген/қате слотқа жалпы мазмұннан мәтін. */
@@ -227,7 +238,7 @@ async function writeSlots(o) {
   const problemsOf = () => {
     const list = [];
     items.forEach(({ sch }, i) => {
-      for (const s of llmSlots(sch)) { const p = slotProblem(s, out[i].texts[s.key], language); if (p) list.push({ i, s, p }); }
+      for (const s of llmSlots(sch)) { const p = slotProblem(s, out[i].texts[s.key], language) || countProblem(sch, s, out[i].texts[s.key]); if (p) list.push({ i, s, p }); }
       if (sch.logo) {
         const w = out[i].logo || [];
         if (w.length !== sch.logo.words || w.some((x) => lettersOf(x).length > sch.logo.wordMax)) list.push({ i, s: { key: 'logo' }, p: `needs exactly ${sch.logo.words} word(s), each ≤ ${sch.logo.wordMax} letters` });
@@ -276,6 +287,7 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
         }
         report.fallback++;
       }
+      if (countProblem(sch, s, v)) v = setCount(v, cardCount(sch));   // «төрт сала» + 3 карточка → «үш сала»
       t[s.key] = fitToLimit(v || '', s.max);
     }
     if (sch.logo) {

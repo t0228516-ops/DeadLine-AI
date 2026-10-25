@@ -201,3 +201,17 @@ test('prepareDeck: content-first arrangement — the LLM plan picks the slides a
   assert.strictEqual(bad.outline, null, 'жарамсыз жоспар — бұрынғы рет');
   assert.strictEqual(bad.slideCount, 8);
 });
+
+test('choose: a clear subject always gets its own template; flower/paper decor never goes to AI or unknown topics', () => {
+  let r = 0; const rng = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  const it = new Set(L.CATALOG.templates.filter((t) => t.subjects && t.subjects.includes('it')).map((t) => t.id));
+  const decor = new Set(L.CATALOG.templates.filter((t) => t.decor).map((t) => t.id));
+  assert.ok(decor.has('sc00500'), 'Matisse — decor');
+  for (let i = 0; i < 200; i++) assert.ok(it.has(L.chooseTemplate({ topic: 'Жасанды интеллекттің өмірге әсері', rng }).id), 'ЖИ → IT шаблоны');
+  // IT шаблондарын студент жуырда көрген — бейтарап шаблон, бірақ гүлді емес
+  for (let i = 0; i < 200; i++) assert.ok(!decor.has(L.chooseTemplate({ topic: 'Жасанды интеллекттің өмірге әсері', avoid: [...it], rng }).id));
+  for (let i = 0; i < 200; i++) assert.ok(!decor.has(L.chooseTemplate({ topic: 'Нарықтық экономика', rng }).id), 'белгісіз тақырыпқа әшекейлі шаблон жоқ');
+  let hits = 0;
+  for (let i = 0; i < 300; i++) if (decor.has(L.chooseTemplate({ topic: 'Мектептегі тәрбие сағаты', rng }).id)) hits++;
+  assert.ok(hits > 0, 'мектеп тақырыбына әшекейлі шаблон шыға алады');
+});

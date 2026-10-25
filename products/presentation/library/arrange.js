@@ -12,6 +12,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { setCount } = require('../countWords');
 
 const META_VERSION = 1;
 const FORMS = ['points', 'steps', 'figures', 'compare', 'explain', 'quote', 'section'];
@@ -59,17 +60,21 @@ function slideMeta(src, t, dir) {
 const itemsOf = (m) => Math.max(m.cards, m.labels, m.bodies > 1 ? m.bodies : 0);
 
 /** Форма мен слайдтың сәйкестігі (көп — жақсы; -Infinity — мүлде болмайды) */
+/** Мәтін слайдында тақырыптан басқа мәтін орны жоқ (тек атау) — мазмұнға жарамайды, тек бөлім бөлгіші бола алады */
+const titleOnly = (m) => m.role === 'text' && !itemsOf(m) && !m.bodies && !m.subtitle && !m.figures;
+
 function fitScore(m, shape) {
   const k = itemsOf(m);
   const want = Math.max(1, Math.min(6, Number(shape.count) || 0));
+  if (shape.form !== 'section' && titleOnly(m)) return -Infinity;   // студент оқитын мәтінсіз слайд шықпасын
   switch (shape.form) {
     case 'quote': return m.role === 'quote' ? 10 : -Infinity;
-    case 'section': return m.role === 'section' ? 10 : -Infinity;
+    case 'section': return m.role === 'section' ? 10 : titleOnly(m) ? 7 : -Infinity;
     case 'figures': return m.figures ? 10 - 2 * Math.abs(m.figures - want) : -Infinity;
-    case 'compare': return m.role === 'text' || m.role === 'section' ? (k === 2 ? 9 : k ? 5 - Math.abs(k - 2) : 1) - (m.figures ? 6 : 0) : -Infinity;
+    case 'compare': return m.role === 'text' ? (k === 2 ? 9 : k ? 5 - Math.abs(k - 2) : 1) - (m.figures ? 6 : 0) : -Infinity;   // бөлім слайдында салыстыруға орын жоқ
     case 'explain':
       if (m.role !== 'text') return -Infinity;
-      return (m.bodies || m.subtitle ? 6 : 2) - 2 * Math.max(0, k - 1) + (m.photos ? 1 : 0);
+      return (m.bodies ? 6 : m.subtitle ? 3 : 2) - 2 * Math.max(0, k - 1) + (m.photos ? 1 : 0);
     case 'points': case 'steps':
       if (m.role !== 'text') return -Infinity;
       if (!k) return m.bodies || m.subtitle ? 1 : 0;   // бір абзацқа тізім де сыяды, бірақ нашар
@@ -108,7 +113,10 @@ function matchPicks(t, meta, shapes, fixed) {
   for (const i of order) {
     // сай слайд жоқ (мыс. шаблонда дәйексөз/сан слайды жоқ) — «түсіндіру» формасына ең жақын слайд (элементі ең аз)
     let best = pick(shapes[i], i) || pick({ form: 'explain', count: 1 }, i);
-    if (!best) best = meta.find((m) => m.role === 'text' && m.slide !== middle[i - 1] && m.slide !== middle[i + 1]) || meta.find((m) => m.role === 'text') || meta.find((m) => m.role !== 'cover');
+    if (!best) {
+      const textish = meta.filter((m) => m.role === 'text').sort((a, b) => titleOnly(a) - titleOnly(b));
+      best = textish.find((m) => m.slide !== middle[i - 1] && m.slide !== middle[i + 1]) || textish[0] || meta.find((m) => m.role !== 'cover');
+    }
     used.set(best.slide, (used.get(best.slide) || 0) + 1);
     middle[i] = best.slide;
   }
@@ -171,7 +179,15 @@ function storyFrom(plan, picks, meta, t, fixed) {
     if (fixed.closing && t.closing && i === n - 1) { topics.push('CLOSING: thank-you / questions slide'); return; }
     const s = plan.shapes[k++];
     if (!s) { topics.push('Conclusion — key takeaways'); return; }
-    topics.push([s.heading, s.purpose ? ` — ${s.purpose}` : '', s.points.length ? `. Key points: ${s.points.join('; ')}` : '',
+    // шаблон слайдында жоспардан басқа сан элемент болса (4 пункт → 3 карточка): тақырыптағы сан мен пункттер слайдқа сай етіледі
+    const items = m ? itemsOf(m) : 0;
+    let heading = s.heading; let points = s.points; let exact = '';
+    if (items >= 2 && ['points', 'steps'].includes(s.form) && items !== s.count) {
+      heading = setCount(heading, items);
+      points = points.slice(0, items);
+      exact = `. Exactly ${items} items — the heading must not name another number`;
+    }
+    topics.push([heading, s.purpose ? ` — ${s.purpose}` : '', points.length ? `. Key points: ${points.join('; ')}` : '', exact,
       m && m.profile ? `. Slide form: ${m.profile}` : ''].join(''));
   });
   return { title: plan.title, slideTopics: topics };

@@ -179,11 +179,16 @@ function fixSlide(xml, ctx) {
       const fillXml = (blk.match(/<a:rPr\b[^>]*>\s*(<a:solidFill>[\s\S]*?<\/a:solidFill>)/) || [])[1];
       const tc = (fillXml && colorOf(fillXml, theme)) || { hex: '000000' };
       const light = lum(tc.hex) > 0.4;
-      const backing = `<a:solidFill><a:srgbClr val="${light ? '000000' : 'FFFFFF'}"><a:alpha val="${light ? 55000 : 72000}"/></a:srgbClr></a:solidFill>`;
+      // астар — шаблонның өз палитрасынан (ең қою / ең ашық тема түсі), қара/ақ «жамау» болып көрінбейді
+      const pal = Object.values(theme).filter((h) => /^[0-9A-F]{6}$/i.test(h));
+      const pick = light ? pal.filter((h) => contrast(h, tc.hex) >= 4.5).sort((a, b) => lum(a) - lum(b))[0] || '000000'
+        : pal.filter((h) => contrast(h, tc.hex) >= 4.5).sort((a, b) => lum(b) - lum(a))[0] || 'FFFFFF';
+      const backing = `<a:solidFill><a:srgbClr val="${pick}"><a:alpha val="${light ? 82000 : 88000}"/></a:srgbClr></a:solidFill>`;
       let sp2 = spPrNow;
       if (/<a:noFill\/>/.test(sp2.split(/<a:ln[\s>]/)[0])) sp2 = sp2.replace(/<a:noFill\/>/, backing);
       else sp2 = sp2.replace(/(<a:(?:prstGeom|custGeom)\b[\s\S]*?<\/a:(?:prstGeom|custGeom)>|<a:prstGeom[^>]*\/>)/, `$1${backing}`);
       if (sp2 !== spPrNow) {
+        sp2 = sp2.replace(/<a:prstGeom prst="rect">/, '<a:prstGeom prst="roundRect">');   // жұмсақ бұрыш — тікбұрышты «жамау» емес
         blk = blk.replace(spPrNow, () => sp2);
         // астар шетіне жабыспасын: ішкі шегініс кемінде ~0.08"
         blk = blk.replace(/<a:bodyPr\b[^>]*>/, (bp) => bp.replace(/ ([lr]Ins)="(\d+)"/g, (m, n, v) => ` ${n}="${Math.max(+v, 73152)}"`));
@@ -316,6 +321,13 @@ function makeReadable(buf) {
   const theme = themeColors(files);
   const total = { font: 0, color: 0, inset: 0 };
   const inkCache = new Map();                                   // осы колоданың суреттері ғана
+  let aligned = 0;
+  // екі шетке созылған мәтін (algn="just") қазақ сөзінде үлкен бос аралық қалдырады — солға тураланады
+  for (const k of files.keys()) {
+    if (!/^ppt\/(slides|slideLayouts|slideMasters)\/[^/]+\.xml$/.test(k)) continue;
+    const x = String(files.get(k));
+    if (/algn="(just|dist|justLow|thaiDist)"/.test(x)) { files.set(k, x.replace(/algn="(?:just|dist|justLow|thaiDist)"/g, 'algn="l"')); aligned++; }
+  }
   for (const sp of orderedSlides(files)) {
     const rels = relsMap(files.get(sp.replace(/([^/]+)$/, '_rels/$1.rels')));
     const inkSpan = (d, f0, f1, axis) => inkSpanOf(files, sp, rels, d, f0, f1, inkCache, axis);
@@ -323,7 +335,7 @@ function makeReadable(buf) {
     files.set(sp, r.xml);
     for (const k of Object.keys(total)) total[k] += r.changes[k];
   }
-  console.log(`[Library] readable: font +${total.font}, contrast ${total.color}, clear of decor ${total.inset}`);
+  console.log(`[Library] readable: font +${total.font}, contrast ${total.color}, clear of decor ${total.inset}, left-aligned ${aligned} part(s)`);
   return writeZipAll(files);
 }
 
