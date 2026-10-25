@@ -35,7 +35,9 @@ function shapeOfProfile(profile) {
  */
 function slideMeta(src, t, dir) {
   const file = dir && path.join(dir, `${t.id}.meta.json`);
-  try { const c = JSON.parse(fs.readFileSync(file, 'utf8')); if (c.v === META_VERSION) return c.slides; } catch {}
+  // каталогтағы рөлдер өзгерсе (мыс. кестесі бар слайд алынса) — ескі есеп қолданылмайды
+  const sig = JSON.stringify([t.cover, t.agenda, t.section, t.text, t.stats, t.quote, t.closing]);
+  try { const c = JSON.parse(fs.readFileSync(file, 'utf8')); if (c.v === META_VERSION && c.sig === sig) return c.slides; } catch {}
   const { carveDeck } = require('./carve');
   const { analyzeTemplate } = require('../templateSchema');
   const { photoSlots } = require('./photos');
@@ -52,7 +54,7 @@ function slideMeta(src, t, dir) {
   const photos = new Map();
   for (const p of photoSlots(deck)) photos.set(p.slide, (photos.get(p.slide) || 0) + 1);
   const slides = roles.map((r, i) => ({ ...r, ...shapeOfProfile(sch.slides[i] ? sch.slides[i].profile : ''), photos: photos.get(i) || 0, profile: sch.slides[i] ? sch.slides[i].profile : '' }));
-  if (file) { try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify({ v: META_VERSION, slides })); } catch {} }
+  if (file) { try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify({ v: META_VERSION, sig, slides })); } catch {} }
   return slides;
 }
 
