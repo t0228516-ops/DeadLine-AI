@@ -57,4 +57,24 @@ function opaqueRatio(buf, alphaMin = 128) {
   }
 }
 
-module.exports = { opaqueRatio };
+/**
+ * Суреттің мөлдір емес пикселдерінің торы: n×n ұяшық, әрқайсысында мөлдір емес (alpha ≥ alphaMin) пиксел үлесі.
+ * Иллюстрацияның (адам, ноутбук) нақты сызылған жері — мәтінге кедергі осы ұяшықтармен өлшенеді, ал суреттің бос (мөлдір) бұрышы кедергі емес.
+ */
+function alphaGrid(buf, n = 12, alphaMin = 128) {
+  const img = require('./library/png').decodePng(buf);
+  if (!img || (img.ch !== 4 && img.ch !== 2)) return null;
+  const { w, h, ch, data } = img;
+  const cnt = new Array(n * n).fill(0); const tot = new Array(n * n).fill(0);
+  const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 40000)));
+  for (let y = 0; y < h; y += step) {
+    const cy = Math.min(n - 1, Math.floor((y / h) * n));
+    for (let x = 0; x < w; x += step) {
+      const k = cy * n + Math.min(n - 1, Math.floor((x / w) * n));
+      tot[k]++; if (data[(y * w + x) * ch + ch - 1] >= alphaMin) cnt[k]++;
+    }
+  }
+  return { n, cells: cnt.map((c, i) => (tot[i] ? c / tot[i] : 0)) };
+}
+
+module.exports = { alphaGrid, opaqueRatio };

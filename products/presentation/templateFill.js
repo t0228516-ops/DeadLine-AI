@@ -1250,6 +1250,7 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
   const { W, H } = slideSize(files);
   const badFonts = uncoveredFonts(files);
   const alphaCache = new Map();
+  const gridCache = new Map();
   let metrics = null;
   try { metrics = embeddedMetrics(files); } catch (e) { metrics = null; }
   let fontStyles = null;
@@ -1272,7 +1273,7 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
       const cl0 = classify(hid.xml, { W, H });
       const nameOf = (b) => (b.match(/<p:cNvPr [^>]*name="([^"]*)"/) || [])[1];
       const pinned = new Set(cl0.pairs ? cl0.pairs.flatMap((pp) => [nameOf(pp.ini.block), nameOf(pp.dsp.block)]).filter(Boolean) : []);
-      const qa = QA.checkSlide(xml, filled, { W, H, ids, metrics, pinned });
+      const qa = QA.checkSlide(xml, filled, { W, H, ids, metrics, pinned, grids: QA.alphaGrids(files, sp, gridCache) });
       if (qa.issues.length) {
         console.log(`[TemplateQA] ${sp}: ${qa.issues.map((q) => `${q.code}(${q.shape})${q.fixed ? `→${q.how.scale}×,${q.how.dyPt}pt` : ' ТҮЗЕЛМЕДІ'}`).join('; ')}`);
         if (Array.isArray(opts.qaReport)) opts.qaReport.push({ slide: i + 1, issues: qa.issues });
@@ -1280,6 +1281,8 @@ function fillTemplatePptx(templateBuf, slides, opts = {}) {
       filled = qa.xml;
     } catch (e) {
       console.warn(`[TemplateQA] ${sp}: тексеру қатесі — ${e.message}`);
+      // тексеру құласа — слайд тексерілмеген: денсаулық бағасында ақау болып саналады (100 болып көрінбесін)
+      if (Array.isArray(opts.qaReport)) opts.qaReport.push({ slide: i + 1, issues: [{ code: 'qa_error', shape: '', fixed: false }] });
     }
     const prob = xmlProblem(filled);
     if (prob) {

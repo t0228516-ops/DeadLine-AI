@@ -15,7 +15,7 @@
  */
 const { scanChildren } = require('../../design-dna/learnReader');
 const { tagBlocks, xfrmOf } = require('../../design-dna/structure');
-const { opaqueRatio } = require('./pngAlpha');
+const { opaqueRatio, alphaGrid } = require('./pngAlpha');
 
 const PT = 12700;
 const GAP = 10;                // pt: мәтін мен көрші арасындағы ең аз ара
@@ -51,6 +51,24 @@ function seeThroughIds(files, slidePath, cache = new Map()) {
     if (!cache.has(p)) { const b = files.get(p); cache.set(p, Buffer.isBuffer(b) ? opaqueRatio(b) : null); }
     const r = cache.get(p);
     if (r != null && r < SEE_THROUGH) out.add(id);
+  }
+  return out;
+}
+
+/** Слайдтың мөлдір PNG суреттерінің ұяшық торлары: r:embed → alphaGrid (кедергі — суреттің нақты сызылған жері) */
+function alphaGrids(files, slidePath, cache = new Map()) {
+  const out = new Map();
+  const rels = files.get(slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels'));
+  if (typeof rels !== 'string') return out;
+  for (const m of rels.matchAll(/<Relationship [^>]*>/g)) {
+    const id = (m[0].match(/Id="([^"]+)"/) || [])[1];
+    const t = (m[0].match(/Target="([^"]+)"/) || [])[1];
+    if (!id || !t || !/\.png$/i.test(t) || /TargetMode="External"/.test(m[0])) continue;
+    const p = t.startsWith('/') ? t.slice(1) : 'ppt/' + t.replace(/^\.\.\//, '');
+    if (!cache.has(p)) { const b = files.get(p); let g = null; try { g = Buffer.isBuffer(b) ? alphaGrid(b) : null; } catch { g = null; } cache.set(p, g); }
+    const g = cache.get(p);
+    // толық мөлдір емес сурет (фото) — ұяшыққа бөлінбейді: тұтас тіктөртбұрыш
+    if (g && g.cells.some((c) => c < 0.95)) out.set(id, g);
   }
   return out;
 }
@@ -191,7 +209,32 @@ const padded = (r) => ({ x: r.x - PAD, y: r.y - PAD, w: r.w + 2 * PAD, h: r.h + 
 const hits = (r, ob) => (ob.allow ? inter(r, ob.r) > (ob.allow + 0.12) * Math.min(area(r), area(ob.r)) : inter(r, ob.kind === 'text' || ob.pad === false ? ob.r : padded(ob.r)) > 0);
 
 /** Слайдтың жоғарғы деңгейлі элементтері: мәтіндер және мәтінсіз элементтер (pt). */
-function layout(xml, ids) {
+const CELL_MIN = 0.3;           // ұяшықтың осынша бөлігі сызылған болса — кедергі
+
+/**
+ * Мөлдір PNG суреттің (адам, ноутбук иллюстрациясы) нақты сызылған ұяшықтары: тұтас тіктөртбұрыштың орнына кедергі —
+ * жолдағы көршілес сызылған ұяшықтар бірігеді. Бұрылған сурет не торы жоқ сурет — тұтас тіктөртбұрыш (null).
+ */
+function cellRects(block, r, grids) {
+  if (!grids || !grids.size) return null;
+  const ids = blipIds(block);
+  if (ids.length !== 1 || !grids.has(ids[0])) return null;
+  const g = grids.get(ids[0]);
+  if (!g || /<a:xfrm\b[^>]*\srot="(?!0")/.test(block)) return null;
+  const flip = /<a:xfrm\b[^>]*\sflipH="(1|true)"/.test(block);
+  const cw = r.w / g.n; const ch = r.h / g.n; const out = [];
+  for (let y = 0; y < g.n; y++) {
+    let start = -1;
+    for (let x = 0; x <= g.n; x++) {
+      const on = x < g.n && g.cells[y * g.n + (flip ? g.n - 1 - x : x)] >= CELL_MIN;
+      if (on && start < 0) start = x;
+      if (!on && start >= 0) { out.push({ x: r.x + start * cw, y: r.y + y * ch, w: (x - start) * cw, h: ch }); start = -1; }
+    }
+  }
+  return out;
+}
+
+function layout(xml, ids, grids) {
   const texts = []; const things = [];
   for (const k of scanChildren(spTreeInner(xml))) {
     if (k.tag === 'p:sp') {
@@ -202,7 +245,10 @@ function layout(xml, ids) {
     if (isDecoBlock(k.block, ids)) continue;
     const x = k.tag === 'p:grpSp' ? xfrmOf((k.block.match(/<p:grpSpPr>[\s\S]*?<\/p:grpSpPr>/) || [''])[0]) : xfrmOf(k.block);
     if (!x || !x.w || !x.h) continue;
-    things.push({ tag: k.tag, block: k.block, r: { x: x.x / PT, y: x.y / PT, w: x.w / PT, h: x.h / PT } });
+    const r = { x: x.x / PT, y: x.y / PT, w: x.w / PT, h: x.h / PT };
+    const cells = k.tag !== 'p:grpSp' ? cellRects(k.block, r, grids) : null;
+    if (cells) { for (const c of cells) things.push({ tag: 'p:pic', block: k.block, r: c, parent: r }); continue; }
+    things.push({ tag: k.tag, block: k.block, r });
   }
   return { texts, things };
 }
@@ -235,7 +281,7 @@ function checkSlide(origXml, xml, o = {}) {
   const issues = [];
   const metrics = o.metrics || null;
   const pinned = o.pinned || new Set();
-  const lay = (x) => { const L = layout(x, ids); for (const t of L.texts) t.metrics = metrics; return L; };
+  const lay = (x) => { const L = layout(x, ids, o.grids); for (const t of L.texts) t.metrics = metrics; return L; };
   const orig = lay(origXml || xml);
   const origRect = new Map();
   for (const t of orig.texts) origRect.set(t.name + '|' + Math.round(t.box.x) + '|' + Math.round(t.box.w), glyphRect(t));
@@ -262,7 +308,8 @@ function checkSlide(origXml, xml, o = {}) {
       });
       for (const th of things) {
         if (contains(th.r, t.box, 8)) continue;                                  // мәтін осы элементтің ІШІНДЕ (фон/таблетка/карточка)
-        if (area(th.r) > SW * SH * 0.45 || (th.r.w > SW * 0.95 && th.r.h > SH * 0.3)) continue;   // фон/жолақ
+        const big = th.parent || th.r;
+        if (area(big) > SW * SH * 0.45 || (big.w > SW * 0.95 && big.h > SH * 0.3)) continue;   // фон/жолақ (иллюстрация ұяшығы — бүкіл суреті бойынша)
         const isHolder = holders.includes(th);
         const allow = !isHolder && or ? fracOf(or, th.r) : 0;                   // шаблонда әуелден үстінде тұрған — сол деңгейге дейін рұқсат
         if (allow >= 0.9) continue;                                              // мәтін әдейі суреттің/пішіннің үстінде (толық)
@@ -363,4 +410,4 @@ function checkSlide(origXml, xml, o = {}) {
   return { xml: out, issues };
 }
 
-module.exports = { checkSlide, hideDeco, seeThroughIds, glyphRect, readText, isDecoBlock, SEE_THROUGH };
+module.exports = { checkSlide, hideDeco, seeThroughIds, alphaGrids, glyphRect, readText, isDecoBlock, SEE_THROUGH };
