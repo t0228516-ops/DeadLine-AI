@@ -225,7 +225,14 @@ function analyzeTemplate(template) {
       if (r.role === 'stat' && r.part === 'value') f.cap = Math.min(f.cap, oneLineChars, 14);
       const min = (r.role === 'body' || (r.role === 'card' && r.part === 'body')) && f.cap >= 60 ? Math.round(Math.min(f.cap, 320) * 0.45) : 0;
       const max = r.role === 'title' && big ? f.cap : f.cap;
-      slots.push({ key: r.key, id: f.id, role: r.role, part: r.part || null, deck: !!r.deck, max: Math.min(max, 320), min, orig: f.text, sz: f.sz, script: f.style.cls === 'script', oneLine: f.oneLine });
+      // тар қорап (таблетка, жапсырма): бір сөз бір жолға сыюы керек — әйтпесе сөз ортасынан бөлінеді («ТОКСИ|НДІЛІК»).
+      // Кегль 72%-ға дейін кішірейе алады; бас әріп кеңірек
+      const upper = /\p{Lu}{3}/u.test(f.text) && f.text === f.text.toUpperCase();
+      // (ірі тақырып 50%-ға дейін кішірейеді); шаблонның өз ең ұзын сөзі әрқашан сыяды деп есептеледі
+      const longest = Math.max(0, ...String(f.text).split(/\s+/).map((w) => w.replace(/[^\p{L}]/gu, '').length));
+      const wordMax = Math.max(3, longest, Math.floor((f.box.w / 12700 - 14) / (f.sz * (f.sz >= 30 ? 0.5 : 0.72) * (f.style.cls === 'serif' || f.style.cls === 'script' ? 0.5 : 0.56) * (upper ? 1.22 : 1) * 1.04)));
+      slots.push({ key: r.key, id: f.id, role: r.role, part: r.part || null, deck: !!r.deck, max: Math.min(max, 320), min, orig: f.text, sz: f.sz, script: f.style.cls === 'script', oneLine: f.oneLine,
+        ...(wordMax < 16 ? { wordMax } : {}) });
     }
     // логотип (бас әріп + сөз)
     let logo = null;

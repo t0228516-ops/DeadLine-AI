@@ -204,7 +204,10 @@ async function prepareDeck(o = {}) {
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1, noCanva: o.noCanva || t.source === 'canva' });
   }
   // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
-  if (t.source === 'canva') { try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); } }
+  if (t.source === 'canva') {
+    try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); }
+    try { src = require('./titles').widenPillLabels(src); } catch (e) { console.warn(`[Library] pill labels: ${e.message}`); }
+  }
   const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
   let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
@@ -246,7 +249,9 @@ async function prepareDeck(o = {}) {
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
   if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB${variant.mirror ? ' mirror' : ''}${variant.hue ? ` hue+${variant.hue}` : ''}`);
-  return { id: t.id, source: t.source, style: t.style, variant, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+  // шаблон осы пәнге арналған (медицина шаблоны — медицина тақырыбы): оның фотолары тақырыпқа сай, ауыспаса да қалады
+  const subjectFit = !!(t.subjects && t.subjects.some((x) => topicSubjects(o.topic).includes(x)));
+  return { id: t.id, source: t.source, style: t.style, variant, subjectFit, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
     outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 

@@ -210,10 +210,14 @@ async function swapLibraryPhotos(buf, slides, ctx) {
   let tiny = [];
   try { tiny = P.tinyPortraits(buf).filter((s) => !keep.has(s.media.split('/').pop())); } catch {}
   slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
+  const all = slots;
   // мәтін астындағы сурет — дизайнның атмосфералық фоны (қараңғы, бұлыңғыр): оны суретті көрмей (ашық карта, ақ ғимарат) ауыстырсақ,
   // ақ тақырып оқылмай қалады. Canva-да мұқабасы да ауыспайды; SlidesCarnival мұқабасы — ауысады (оның фоны мәтінмен бірге жобаланған)
   slots = slots.filter((s) => !s.underText || (ctx.source !== 'canva' && s.slide === 0));
-  if (!slots.length && !tiny.length) return buf;
+  // шаблон тақырыптың пәніне арналмаған болса, ауыспай қалған шаблон фотосы (сынып, бөтен адамдар) тақырыпқа жат —
+  // олардың байттары (хэш) ctx.neutral-ға жиналады да, Credits қосылғаннан кейін түстік фонға айналады (neutralizeMedia)
+  const neutralize = !ctx.subjectFit && ctx.neutral instanceof Set;
+  if (!slots.length && !tiny.length && !(neutralize && all.length)) return buf;
   if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let browser = null;
   try {
@@ -223,22 +227,26 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     const page = await browser.newPage();
     // текстура, карта, әшекей — фото емес, шаблонның өз безендіруі қалады
     const verdict = new Map();
-    for (const s of slots.concat(tiny)) {
+    for (const s of (neutralize ? all : slots).concat(tiny)) {
       if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
     }
+    const leftover = (replaced) => {
+      if (!neutralize) return;
+      for (const s of all) if (verdict.get(s.media) && !replaced.has(`${s.slide}:${s.rid}`)) ctx.neutral.add(P.hashOf(files.get(s.media)));
+    };
     // бөтен адамдардың кішкене суреттері (аватарлар) алынады — тақырыпқа жат беттер слайдта қалмасын
     const strangers = tiny.filter((s) => verdict.get(s.media));
     if (strangers.length) {
       buf = P.removePictures(buf, strangers);
       console.log(`[Library] photos: ${strangers.length} small stranger portrait(s) removed`);
-      if (!slots.length) return buf;
+      if (!slots.length) { leftover(new Set()); return buf; }
     }
     // слайдтағы барлық фото ауысады (4-ке дейін): ауыспай қалған шаблон фотосы тақырыпқа жат, ал бір макет екі рет келсе — екі слайдта бірдей фото
     const max = Number(process.env.LIBRARY_PHOTO_MAX) || 12;
     const perSlide = new Map();
     slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
       .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 4) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
-    if (!slots.length) { console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
+    if (!slots.length) { leftover(new Set()); console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
     const used = new Set();
     const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
     const found = await mapLimit(slots, 3, async (slot) => {
@@ -261,13 +269,14 @@ async function swapLibraryPhotos(buf, slides, ctx) {
       } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
     });
     const hits = found.filter(Boolean);
-    if (!hits.length) { console.log(`[Library] photos: 0/${slots.length} found — template photos kept`); return buf; }
+    if (!hits.length) { leftover(new Set()); console.log(`[Library] photos: 0/${slots.length} found — template photos ${neutralize ? 'toned out' : 'kept'}`); return buf; }
     const list = [];
     for (const h of hits) {
       const bytes = await P.composite(page, files.get(h.media), h.media, h.dataUri, h.focus).catch((e) => { console.warn(`[Library] composite: ${e.message}`); return null; });
       if (bytes) list.push({ slide: h.slide, rid: h.rid, bytes });
     }
     const out = P.replacePhotos(buf, list);
+    leftover(new Set(list.map((h) => `${h.slide}:${h.rid}`)));
     console.log(`[Library] photos: ${out.replaced}/${slots.length} replaced with on-topic photos`);
     return out.buf;
   } catch (e) {
@@ -708,10 +717,17 @@ async function generatePresentation(userInput, options = {}) {
       if (options.library && options.library.creditsBuf) {
         // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
         try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
+        const neutral = new Set();
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
+          subjectFit: !!options.library.subjectFit, neutral,
         });
         let finalBuf = require('./library').appendCredits(withPhotos, options.library);
+        // тақырыпқа жат шаблон фотосы (Credits слайдындағысы да) — сол жерінде, пішінімен түстік фонға айналады
+        if (!options.library.subjectFit && options.library.swapPhotos !== false) {
+          finalBuf = await require('./library/photos').neutralizeMedia(finalBuf, neutral, { lastSlide: true })
+            .catch((e) => { console.warn(`[Library] neutralize: ${e.message}`); return finalBuf; });
+        }
         // Telegram 50 МБ шегіне жақын ауыр шаблон: суреттер кішірейеді (LIBRARY_SHRINK_MB, әдепкі 20 МБ-тан бастап)
         if (finalBuf.length > (Number(process.env.LIBRARY_SHRINK_MB) || 20) * 1048576) {
           let browser = null;

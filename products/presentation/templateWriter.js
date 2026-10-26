@@ -68,7 +68,8 @@ function slotLine(s) {
         : s.role === 'card' && s.part === 'heading' ? ' — names exactly what its own card text (the same number) explains'
           : s.role === 'body' || (s.role === 'card' && s.part === 'body') ? ' — complete informative sentence(s) with concrete facts'
             : s.role === 'title' ? ' — states the point of the slide, no final period' : '';
-  return `  "${s.key}": ${roleText(s)}, ${lim}${extra}`;
+  const word = s.wordMax ? `; narrow box — every word ≤ ${s.wordMax} letters (pick a shorter synonym, never cut a word)` : '';
+  return `  "${s.key}": ${roleText(s)}, ${lim}${extra}${word}`;
 }
 
 function sourceOf(slide) {
@@ -80,7 +81,9 @@ function sourceOf(slide) {
 function buildSlidesPrompt({ topic, language, deckTitle, items }) {
   const blocks = items.map(({ sch, slide }) => {
     const slots = sch.slots.filter((s) => !s.deck && s.role !== 'credit' && s.role !== 'info');
-    const lines = slots.map(slotLine);
+    // мұқабаның тар тақырыбы: бір жалпы сөз («Зардап», «Әсер») қалмасын — тақырыптың өзегі (зат есім) аталады, қалғаны — астыңғы жазуда
+    const lines = slots.map((s) => slotLine(s) + (sch.kind === 'cover' && s.role === 'title' && s.max < 22
+      ? ' — must name the SUBJECT of the presentation itself (e.g. «Семей полигоны», «Абай»), never a generic word like «Зардап», «Әсер», «Тарих»; details go to the subtitle' : ''));
     if (sch.logo) {
       const what = sch.kind === 'end' ? 'a closing word of thanks written in giant letters (e.g. ["Рахмет"])' : sch.kind === 'cover' ? 'the presentation title written in giant letters (e.g. ["Кино","тарихы"])' : 'the slide heading written in giant letters';
       lines.unshift(`  "logo": array of exactly ${sch.logo.words} real word(s), each ≤ ${sch.logo.wordMax} letters — ${what}`);
@@ -131,6 +134,7 @@ function slotProblem(s, text, language) {
   if (/…|\.{3}$/.test(String(text))) return 'ends with "…"';
   if (s.max && t.length > Math.ceil(s.max * 1.1)) return `${t.length} characters, limit ${s.max}`;
   if (s.min && t.length < s.min * 0.8) return `only ${t.length} characters, needs at least ${s.min}`;
+  if (s.wordMax) { const long = t.split(/[\s/–—-]+/).find((w) => lettersOf(w).length > s.wordMax); if (long) return `the word "${long}" is too long for this narrow box (each word ≤ ${s.wordMax} letters) — use a shorter word`; }
   if (s.orig && t.toLowerCase() === String(s.orig).toLowerCase() && /[a-z]/i.test(s.orig) && wantsCyr(language)) return 'left the English template text';
   // сан қорабы — тек сан (жыл, %, саны; рим ғасыры): «часы», «Хандықтың құрылуы» сияқты сөз үлкен сан орнында тұрмайды
   if (s.role === 'stat' && s.part === 'value' && !/\d|^[IVXLC]+\b/.test(t)) return 'a figure must contain a number';

@@ -143,7 +143,8 @@ async function withRetry(fn, label) {
     } catch (err) {
       attempt++;
       const msg = err.message || '';
-      const is503 = msg.includes('503') || msg.includes('fetch failed');
+      // 500/502/504 (шлюз, «upstream request failed») — 503 сияқты уақытша: бүкіл презентация бір сәттік ақаудан құламасын
+      const is503 = /\b50[0234]\b/.test(msg) || msg.includes('fetch failed') || /upstream|ECONNRESET|socket hang up/i.test(msg);
       const is429 = msg.includes('429') || msg.includes('quota') || msg.includes('rate_limit') || msg.includes('Rate limit');
       const isTruncated = err.isTruncated === true;
       const isTimeout = err.isTimeout === true;
