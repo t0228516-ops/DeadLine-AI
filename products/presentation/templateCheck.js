@@ -48,7 +48,13 @@ function seeThroughIds(files, slidePath, cache = new Map()) {
     const t = (m[0].match(/Target="([^"]+)"/) || [])[1];
     if (!id || !t || !/\.png$/i.test(t) || /TargetMode="External"/.test(m[0])) continue;
     const p = t.startsWith('/') ? t.slice(1) : 'ppt/' + t.replace(/^\.\.\//, '');
-    if (!cache.has(p)) { const b = files.get(p); cache.set(p, Buffer.isBuffer(b) ? opaqueRatio(b) : null); }
+    if (!cache.has(p)) {
+      const b = files.get(p);
+      let r = Buffer.isBuffer(b) ? opaqueRatio(b) : null;
+      // мөлдір фонда анық сызылған бөлігі бар сурет (бөлгіш сызық, кішкене белгіше) — безендіру емес, кедергі: жұмсақ жарқыл ғана мөлдір саналады
+      if (r != null && r < SEE_THROUGH) { let g = null; try { g = alphaGrid(b); } catch { g = null; } if (g && Math.max(...g.cells) >= 0.5) r = 1; }
+      cache.set(p, r);
+    }
     const r = cache.get(p);
     if (r != null && r < SEE_THROUGH) out.add(id);
   }
@@ -315,7 +321,10 @@ function checkSlide(origXml, xml, o = {}) {
         if (allow >= 0.9) continue;                                              // мәтін әдейі суреттің/пішіннің үстінде (толық)
         // шаблонда да осы аралықта тұрса (5pt-тен жақын) — қосымша ара талап етілмейді
         const pad = !(or && inter(or, padded(th.r)) > 0);
-        ob.push({ r: th.r, kind: isHolder ? 'holder' : th.tag === 'p:pic' ? 'image' : 'shape', allow, pad });
+        // жіңішке бөлгіш сызық (пункттердің арасындағы) — MIN_OV-тан жұқа болса да кедергі: мәтін оның үстінен өтпесін
+        const r = th.r.h < MIN_OV + 1 ? { ...th.r, y: th.r.y - (MIN_OV + 1 - th.r.h) / 2, h: MIN_OV + 1 }
+          : th.r.w < MIN_OV + 1 ? { ...th.r, x: th.r.x - (MIN_OV + 1 - th.r.w) / 2, w: MIN_OV + 1 } : th.r;
+        ob.push({ r, kind: isHolder ? 'holder' : th.tag === 'p:pic' ? 'image' : 'shape', allow: r === th.r ? allow : (or ? fracOf(or, r) : 0), pad });
       }
       return ob;
     };
