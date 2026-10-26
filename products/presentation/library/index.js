@@ -204,6 +204,8 @@ async function prepareDeck(o = {}) {
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1, noCanva: o.noCanva || t.source === 'canva' });
   }
   // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
+  // бейімдеу: шаблонның бір рет түзетілген нұсқасы (бет нөмірлері, қорап өлшемдері, мәтінді жапқан иллюстрация) — library/adapt.js
+  try { src = require('./adapt').adaptDeck(src, t.id); } catch (e) { console.warn(`[Library] adapt: ${e.message}`); }
   if (t.source === 'canva') {
     try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); }
     try { src = require('./titles').widenPillLabels(src); } catch (e) { console.warn(`[Library] pill labels: ${e.message}`); }

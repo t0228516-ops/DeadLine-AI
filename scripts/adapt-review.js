@@ -51,12 +51,10 @@ function reviewSlide(xml) {
 
 function prepare(buf, o = {}) {
   const T = require('../products/presentation/library/titles');
-  let out = T.mergeStackedTitles(buf);
-  out = T.widenPillLabels(out);
-  if (!o.raw) {
-    try { out = require('../products/presentation/library/adapt').adaptDeck(out, o.id); } catch (e) { if (!/Cannot find module/.test(e.message)) throw e; }
-  }
-  return out;
+  // бейімдеу патчы шаблонның түпнұсқа аттарымен жазылады — біріктіруден бұрын
+  let out = o.raw ? buf : require('../products/presentation/library/adapt').adaptDeck(buf, o.id);
+  out = T.mergeStackedTitles(out);
+  return T.widenPillLabels(out);
 }
 
 if (require.main === module) {

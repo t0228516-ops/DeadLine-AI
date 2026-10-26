@@ -717,6 +717,8 @@ async function generatePresentation(userInput, options = {}) {
       if (options.library && options.library.creditsBuf) {
         // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
         try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
+        // шаблонның өз бет нөмірлері — біздің слайд ретімен (02, 05, 03 … емес)
+        try { fs.writeFileSync(pptxPath, require('./library/adapt').renumberFolios(fs.readFileSync(pptxPath))); } catch (e) { console.warn(`[Library] folios: ${e.message}`); }
         const neutral = new Set();
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
