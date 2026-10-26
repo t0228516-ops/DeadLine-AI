@@ -27,6 +27,17 @@ function slideSize(files) {
 
 // ─── Айналық бейне ──────────────────────────────────────────────────────────
 
+/** Слайдтың суреті мөлдір PNG ме (RGBA/сұр+альфа не tRNS): пішіні пикселде, сондықтан айнада пикселдері де айналуы керек */
+function cutoutOf(files, part) {
+  const rels = String(files.get(part.replace(/([^/]+)$/, '_rels/$1.rels')) || '');
+  return (rid) => {
+    const m = rels.match(new RegExp(`<Relationship\\b[^>]*\\bId="${rid}"[^>]*\\bTarget="([^"]+)"|<Relationship\\b[^>]*\\bTarget="([^"]+)"[^>]*\\bId="${rid}"`));
+    const b = m && files.get(resolvePath(part, m[1] || m[2]));
+    if (!b || b.length < 33 || b.readUInt32BE(0) !== 0x89504e47) return false;
+    return b[25] === 4 || b[25] === 6 || b.subarray(0, 4096).includes('tRNS');
+  };
+}
+
 /** custGeom жолдарын айналдыру: x → w - x; arcTo бұрыштары: st → 180° - st, sw → -sw */
 function mirrorPaths(geom) {
   return geom.replace(/<a:path\b([^>]*)>([\s\S]*?)<\/a:path>/g, (m, attrs, body) => {
@@ -95,7 +106,11 @@ function mirrorElement(tag, el, ox, span, ctx, unit) {
   const ext = xf[0].match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
   const isImage = tag === 'p:pic' || (tag === 'p:sp' && /<p:spPr>(?:(?!<\/p:spPr>)[\s\S])*<a:blipFill/.test(el));
   // мәтін астындағы толық фон (слайд енінің ≥90%): суреттің пикселдері айналады (flipH-ты кейбір бағдарлама суретке қолданбайды)
+  // мөлдір PNG (Canva: диагональ панель, нөмір шаршысы бар жолақ, алтыбұрыш фото — пішіні пикселдің ішінде) — оның да пикселдері айналады,
+  // әйтпесе сурет орнын ауыстырады да, ішіндегі қиғаш шет не шаршы мәтіннің үстіне түседі
+  const rid0 = isImage && (el.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
   const fullBleed = isImage && ext && +ext[1] >= ctx.W * 0.9;
+  const cut = isImage && !fullBleed && !!(rid0 && ctx.cutout && ctx.cutout(rid0));
   let flip = false;
   if (isImage) flip = false;                                 // кіші фото: тек орны (адам, мәтінді карта айналмайды)
   else if (tag === 'p:cxnSp' || prst === 'line') flip = !!(ext && +ext[2] > 0) && !/<a:(head|tail)End type="(?!none)/.test(el); // көлденең сызық, нұсқар — айналмайды
@@ -111,6 +126,10 @@ function mirrorElement(tag, el, ox, span, ctx, unit) {
   if (fullBleed) {
     const rid = (out.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
     if (rid) { ctx.flipRids.add(rid); out = swapLR(out); }
+  } else if (cut) {
+    // мөлдір PNG: пикселдері айналады; фото болса (flipImages түсінен таниды) — жоқ, фотодағы жазу кері оқылмасын
+    // (онда l↔r ауысқан кесінді фотоны сәл басқа жерінен көрсетеді — пішіні бұзылмайды)
+    ctx.softRids.add(rid0); ctx.flipRids.add(rid0); out = swapLR(out);
   }
   // пішіннің градиенті (flipH болмаса — өзі айналмайды)
   if (!flip) out = out.replace(/<(p:spPr|p:grpSpPr)>[\s\S]*?<\/\1>/, (x) => mirrorFills(x));
@@ -181,15 +200,16 @@ function closeOf(s, from, tag) {
 /**
  * Бүкіл презентацияны айналдыру. Пикселдері айналуы керек суреттер (толық фон, слайд фоны) жаңа атпен көшіріледі
  * (сол сурет басқа жерде айналмай тұруы мүмкін) — олардың тізімі `flip`; пикселдерді flipImages айналдырады.
- * @returns {{buf:Buffer, flip:string[]}}
+ * soft — тек мөлдір PNG ретінде айналатындар: flipImages олардың фото екенін көрсе, айналдырмайды.
+ * @returns {{buf:Buffer, flip:string[], soft:string[]}}
  */
 function mirrorDeck(buf) {
   const files = readZipAll(buf);
   const { W } = slideSize(files);
-  const flip = [];
+  const flip = []; const hard = new Set();
   for (const [name, data] of [...files]) {
     if (!PARTS.test(name)) continue;
-    const ctx = { W, flipRids: new Set() };
+    const ctx = { W, flipRids: new Set(), softRids: new Set(), cutout: cutoutOf(files, name) };
     let xml = String(data).replace(/(<p:spTree>[\s\S]*?(?:<\/p:grpSpPr>|<p:grpSpPr\/>))([\s\S]*)(<\/p:spTree>)/, (mm, head, body, tail) => head + mirrorTree(body, 0, W, ctx) + tail);
     xml = xml.replace(/<p:bg>[\s\S]*?<\/p:bg>/, (bg) => {
       const rid = (bg.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
@@ -206,6 +226,7 @@ function mirrorDeck(buf) {
           if (!files.has(src)) return mm;
           const dst = src.replace(/(\.[a-z]+)$/i, '_m$1');
           if (!files.has(dst)) { files.set(dst, files.get(src)); flip.push(dst); }
+          if (!ctx.softRids.has(rid)) hard.add(dst);
           const nt = t.replace(/(\.[a-z]+)$/i, '_m$1');
           return a1 ? a1 + nt + z1 : a2 + nt + z2;
         });
@@ -227,24 +248,38 @@ function mirrorDeck(buf) {
       if (!used.has(src)) files.delete(src);
     }
   }
-  return { buf: writeZipAll(files), flip };
+  return { buf: writeZipAll(files), flip, soft: flip.filter((d) => !hard.has(d)) };
 }
 
 /** Суреттердің пикселдерін көлденең айналдыру (Chromium canvas; PNG мөлдірлігі сақталады) */
-async function flipImages(buf, paths, page) {
+async function flipImages(buf, paths, page, soft = []) {
   if (!paths.length) return buf;
   const files = readZipAll(buf);
   for (const p of paths) {
     const data = files.get(p);
     if (!data) continue;
     const mime = /\.png$/i.test(p) ? 'image/png' : 'image/jpeg';
-    const b64 = await page.evaluate(async (src, type) => {
+    const b64 = await page.evaluate(async (src, type, keepPhoto) => {
       const img = new Image(); img.src = src; await img.decode();
       const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-      const g = c.getContext('2d'); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(img, 0, 0);
+      const g = c.getContext('2d');
+      if (keepPhoto) {
+        // фото (түсі көп): айналмайды — пішіні кері қарағаны жазуы кері оқылғанынан жақсы; жалпақ безендіру (түсі аз) айналады
+        g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        const step = Math.max(1, Math.floor(Math.sqrt((c.width * c.height) / 6000)));
+        const seen = new Set();
+        for (let y = 0; y < c.height; y += step) for (let x = 0; x < c.width; x += step) {
+          const i = (y * c.width + x) * 4;
+          if (d[i + 3] > 200) seen.add(((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4));
+        }
+        if (seen.size > 160) return null;
+        g.clearRect(0, 0, c.width, c.height);
+      }
+      g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(img, 0, 0);
       return c.toDataURL(type, 0.86).split(',')[1];
-    }, `data:${mime};base64,${Buffer.from(data).toString('base64')}`, mime);
-    files.set(p, Buffer.from(b64, 'base64'));
+    }, `data:${mime};base64,${Buffer.from(data).toString('base64')}`, mime, soft.includes(p));
+    if (b64) files.set(p, Buffer.from(b64, 'base64'));
   }
   return writeZipAll(files);
 }
@@ -327,7 +362,7 @@ async function applyVariant(buf, v, o = {}) {
   if (v && v.mirror) {
     const m = mirrorDeck(out);
     if (!m.flip.length) out = m.buf;
-    else if (o.page) out = await flipImages(m.buf, m.flip, o.page);
+    else if (o.page) out = await flipImages(m.buf, m.flip, o.page, m.soft);
     else v.mirror = false;
   }
   return out;

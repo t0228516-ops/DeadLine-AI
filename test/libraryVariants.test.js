@@ -130,3 +130,22 @@ test('mirror: a big title is right-aligned even when long, so its letters do not
   const xml = slide1(V.mirrorDeck(deckWith(big(2, 1000000, 'EMPOWERING BUSINESSES IN A GLOBALIZED ECONOMY'))).buf);
   assert.match(xml, /name="s2"[\s\S]*?algn="r"/);
 });
+
+test('mirror: a transparent PNG (shape cut into its pixels) is flipped too, softly (a photo is kept); an opaque picture only moves', () => {
+  const pic = '<p:sp><p:nvSpPr><p:cNvPr id="9" name="bar"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm flipH="false"><a:off x="1000000" y="0"/><a:ext cx="6000000" cy="900000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect l="-2000" r="-1000"/></a:stretch></a:blipFill></p:spPr></p:sp>';
+  const withPng = (colorType) => {
+    const files = readZipAll(deckWith(pic));
+    const rp = 'ppt/slides/_rels/slide1.xml.rels';
+    files.set(rp, String(files.get(rp)).replace('</Relationships>', '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/bar.png"/></Relationships>'));
+    files.set('ppt/slides/slide1.xml', slide1(writeZipAll(files)).replace('r:embed="rId2"/><a:stretch><a:fillRect l="-2000"', 'r:embed="rId9"/><a:stretch><a:fillRect l="-2000"'));
+    const png = Buffer.alloc(64); png.writeUInt32BE(0x89504e47, 0); png[25] = colorType;
+    files.set('ppt/media/bar.png', png);
+    return writeZipAll(files);
+  };
+  const cut = V.mirrorDeck(withPng(6));
+  assert.ok(cut.flip.includes('ppt/media/bar_m.png'));
+  assert.ok(cut.soft.includes('ppt/media/bar_m.png'), 'фото болса flipImages айналдырмайды');
+  assert.match(slide1(cut.buf), /<a:fillRect l="-1000" r="-2000"\/>/, 'кесінді l↔r ауысады');
+  const opaque = V.mirrorDeck(withPng(2));
+  assert.ok(!opaque.flip.includes('ppt/media/bar_m.png'));
+});
