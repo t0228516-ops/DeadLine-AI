@@ -11,7 +11,7 @@
  *
  */
 const { readZipAll, writeZipAll } = require('../templateFill');
-const { sldSzMatch, resolvePath } = require('../../../design-dna/structure');
+const { sldSzMatch, resolvePath, orderedSlides } = require('../../../design-dna/structure');
 
 const PARTS = /^ppt\/(slides\/slide|slideLayouts\/slideLayout|slideMasters\/slideMaster)\d+\.xml$/;
 const FULL = 21600000;   // 360° (1/60000 градус)
@@ -203,12 +203,12 @@ function closeOf(s, from, tag) {
  * soft — тек мөлдір PNG ретінде айналатындар: flipImages олардың фото екенін көрсе, айналдырмайды.
  * @returns {{buf:Buffer, flip:string[], soft:string[]}}
  */
-function mirrorDeck(buf) {
+function mirrorDeck(buf, o = {}) {
   const files = readZipAll(buf);
   const { W } = slideSize(files);
   const flip = []; const hard = new Set();
   for (const [name, data] of [...files]) {
-    if (!PARTS.test(name)) continue;
+    if (!PARTS.test(name) || (o.only && !o.only.has(name))) continue;
     const ctx = { W, flipRids: new Set(), softRids: new Set(), cutout: cutoutOf(files, name) };
     let xml = String(data).replace(/(<p:spTree>[\s\S]*?(?:<\/p:grpSpPr>|<p:grpSpPr\/>))([\s\S]*)(<\/p:spTree>)/, (mm, head, body, tail) => head + mirrorTree(body, 0, W, ctx) + tail);
     xml = xml.replace(/<p:bg>[\s\S]*?<\/p:bg>/, (bg) => {
@@ -356,6 +356,19 @@ function pickVariant(t, rng = Math.random) {
  * @param {{mirror:boolean, hue:number}} v
  * @param {{page?:object}} o page — Chromium беті (айналатын суреттер үшін); жоқ болса айнаға қажет сурет болғанда айна жасалмайды
  */
+/**
+ * Бір макет презентацияда қайта шықса, оның екінші (төртінші…) реті айналы түрде шығады — екі слайд «көшірме» болып көрінбесін.
+ * slides — 0-негізді слайд реттері. Беті (page) жоқ болса, пикселін айналдыру керек слайдтар өзгеріссіз қалады.
+ */
+async function mirrorSlides(buf, slides, page) {
+  if (!slides.length) return buf;
+  const parts = orderedSlides(readZipAll(buf));
+  const only = new Set(slides.map((i) => parts[i]).filter(Boolean));
+  const m = mirrorDeck(buf, { only });
+  if (!m.flip.length) return m.buf;
+  return page ? flipImages(m.buf, m.flip, page, m.soft) : buf;
+}
+
 async function applyVariant(buf, v, o = {}) {
   let out = buf;
   if (v && v.hue) out = recolorDeck(out, v.hue);
@@ -368,4 +381,4 @@ async function applyVariant(buf, v, o = {}) {
   return out;
 }
 
-module.exports = { mirrorDeck, flipImages, recolorDeck, dominantHue, pickVariant, applyVariant, shiftHex, mirrorPaths, closeOf };
+module.exports = { mirrorSlides, mirrorDeck, flipImages, recolorDeck, dominantHue, pickVariant, applyVariant, shiftHex, mirrorPaths, closeOf };

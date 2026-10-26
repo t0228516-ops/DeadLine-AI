@@ -149,3 +149,11 @@ test('mirror: a transparent PNG (shape cut into its pixels) is flipped too, soft
   const opaque = V.mirrorDeck(withPng(2));
   assert.ok(!opaque.flip.includes('ppt/media/bar_m.png'));
 });
+
+test('mirrorSlides: only the listed slide is mirrored, the others stay as they were', () => {
+  const files = readZipAll(deckWith(sp(2, 1000000, 3000000, 'Title')));
+  const m = V.mirrorDeck(writeZipAll(files), { only: new Set(['ppt/slides/slide999.xml']) });
+  assert.strictEqual(offs(slide1(m.buf)).s2, 1000000, 'тізімде жоқ слайд өзгермейді');
+  const m2 = V.mirrorDeck(writeZipAll(files), { only: new Set(['ppt/slides/slide1.xml']) });
+  assert.strictEqual(offs(slide1(m2.buf)).s2, W - 1000000 - 3000000);
+});

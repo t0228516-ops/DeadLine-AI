@@ -245,6 +245,16 @@ async function prepareDeck(o = {}) {
       variant.mirror = false; variant.hue = 0;
     } finally { if (browser) await browser.close().catch(() => {}); }
   }
+  // бір макет қайталанса (шаблонда макет аз) — қайталанған слайд айналы: екі слайд бір-бірінің көшірмесі болып көрінбейді
+  const repeats = picks.map((p, i) => (picks.indexOf(p) < i ? i : -1)).filter((i) => i >= 0);
+  if (repeats.length && t.source === 'canva' && t.mirror !== false && process.env.LIBRARY_MIRROR_REPEATS !== '0') {
+    let browser = null;
+    try {
+      browser = await require('../renderer').launchBrowser(require('puppeteer'));
+      creditsBuf = await require('./variants').mirrorSlides(creditsBuf, repeats, await browser.newPage());
+      console.log(`[Library] repeated layouts mirrored: slides ${repeats.map((i) => i + 1).join(',')}`);
+    } catch (e) { console.warn(`[Library] repeat mirror skipped: ${e.message}`); } finally { if (browser) await browser.close().catch(() => {}); }
+  }
   // Credits-сіз нұсқа — толтыруға; мәтін оқылатын етіледі (кегль, контраст, әшекейден арақашықтық)
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
   if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
