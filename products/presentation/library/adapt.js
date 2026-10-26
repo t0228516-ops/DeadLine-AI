@@ -88,7 +88,7 @@ function folioCandidates(xml, W, H) {
   const key = (cx, cy) => `${Math.round((cx / W) * 20)}:${Math.round((cy / H) * 20)}`;
   const out = [];
   for (const e of els) {
-    if (!/^\s*0?\d{1,2}\s*$/.test(e.text) || e.sz > 40 * (H / 6858000)) continue;
+    if (!/^\s*(?:\p{L}+\.?\s+)?0?\d{1,2}\s*$/u.test(e.text) || e.sz > 40 * (H / 6858000)) continue;
     const b = e.box; const cx = b.x + b.w / 2; const cy = b.y + b.h / 2;
     if (!(cy > H * 0.85 || cy < H * 0.15) || b.w > W * 0.08) continue;
     out.push({ key: key(cx, cy), block: e.el });
@@ -103,7 +103,7 @@ function folioCandidates(xml, W, H) {
   for (const [a, b] of groupSpans(xml)) {
     const g = xml.slice(a, b);
     const text = [...g.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join('');
-    if (!/^\s*0?\d{1,2}\s*$/.test(text)) continue;
+    if (!/^\s*(?:\p{L}+\.?\s+)?0?\d{1,2}\s*$/u.test(text)) continue;
     const x = g.match(/<p:grpSpPr>\s*<a:xfrm\b[^>]*>\s*<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     if (!x) continue;
     const cx = +x[1] + +x[3] / 2; const cy = +x[2] + +x[4] / 2;
@@ -121,7 +121,7 @@ function renumberFolios(buf) {
   const files = readZipAll(buf);
   const { W, H } = slideSize(files);
   const slides = orderedSlides(files);
-  const per = slides.map((sp) => folioCandidates(String(files.get(sp)), W, H).filter((c) => /<a:t>\s*0?\d{1,2}\s*<\/a:t>/.test(c.block)));
+  const per = slides.map((sp) => folioCandidates(String(files.get(sp)), W, H).filter((c) => /<a:t>[^<]*\d{1,2}\s*<\/a:t>/.test(c.block)));
   const count = new Map();
   for (const list of per) for (const k of new Set(list.map((c) => c.key))) count.set(k, (count.get(k) || 0) + 1);
   let changed = false;
@@ -129,7 +129,7 @@ function renumberFolios(buf) {
     let xml = String(files.get(sp));
     for (const c of per[i]) {
       if ((count.get(c.key) || 0) < 3) continue;
-      const nb = c.block.replace(/<a:t>(\s*)(0?)(\d{1,2})(\s*)<\/a:t>/, (m, a, z, d, b) => `<a:t>${a}${z || d.length === 2 ? String(i + 1).padStart(2, '0') : String(i + 1)}${b}</a:t>`);
+      const nb = c.block.replace(/<a:t>([^<]*?)(0?)(\d{1,2})(\s*)<\/a:t>/, (m, a, z, d, b) => `<a:t>${a}${z || d.length === 2 ? String(i + 1).padStart(2, '0') : String(i + 1)}${b}</a:t>`);
       if (nb !== c.block) { xml = xml.replace(c.block, () => nb); changed = true; }
     }
     files.set(sp, xml);
@@ -171,6 +171,35 @@ function patchOf(id) {
   try { return JSON.parse(fs.readFileSync(path.join(DIR, `${id}.json`), 'utf8')); } catch { return null; }
 }
 
+/**
+ * Шеттегі кішкене жапсырма (бұрыштағы тақ/бренд сөз: «Tech», «2025»): қорабы ағылшын сөзіне ғана сай тар —
+ * қазақ сөзі сыймай сөз ортасынан бөлінеді. Слайдтың ішіне қарай (туралауына сай) кеңейтіледі.
+ */
+function widenEdgeLabels(xml, W, H) {
+  let out = xml;
+  const all = elements(xml).filter((x) => x.box && !x.inGroup);
+  for (const e of all) {
+    if (!e.box || e.inGroup || !e.text.trim() || e.text.length > 24 || /<p:ph\b/.test(e.el) || !/\p{L}{2}/u.test(e.text)) continue;
+    if ((e.el.match(/<a:p>/g) || []).length !== 1 || /\srot="(?!0")/.test(e.el)) continue;
+    const b = e.box; const want = W * 0.16;
+    if (b.w >= want || b.h > H * 0.12) continue;
+    const nearRight = b.x + b.w > W * 0.9; const nearLeft = b.x < W * 0.1;
+    const corner = b.y < H * 0.15 || b.y + b.h > H * 0.85;
+    if ((!nearRight && !nearLeft) || !corner) continue;
+    const algn = (e.el.match(/<a:pPr\b[^>]*\balgn="(\w+)"/) || [])[1] || 'l';
+    // оң жақтағы (оңға туралған) — сол жаққа; сол жақтағы — оң жаққа; ортаға туралған — екі жаққа
+    const nx = algn === 'ctr' ? Math.max(0, b.x + b.w / 2 - want / 2) : nearRight ? b.x + b.w - want : b.x;
+    const nw = Math.min(want, W - nx);
+    // кеңейген қорап басқа мәтінге тимейді
+    const hit = all.some((o) => o !== e && o.text.trim() && o.box.x < nx + nw && o.box.x + o.box.w > nx && o.box.y < b.y + b.h && o.box.y + o.box.h > b.y);
+    if (hit) continue;
+    const el2 = e.el.replace(/(<a:off x=")-?\d+(" y="-?\d+"\/>\s*<a:ext cx=")\d+/, `$1${Math.round(nx)}$2${Math.round(nw)}`);
+    // оң шетте тұрып солға туралған болса — оңға туралады (мәтін бұрынғы орнында, бұрышта қалсын)
+    out = out.replace(e.el, () => (nearRight && algn === 'l' ? el2.replace(/<a:pPr\b(?![^>]*algn=)/, '<a:pPr algn="r"').replace(/(<a:pPr\b[^>]*\balgn=")l"/, '$1r"') : el2));
+  }
+  return out;
+}
+
 /** Шаблонды бейімдеу (толық шаблон, слайд нөмірлері — шаблондағыдай) */
 function adaptDeck(buf, id, o = {}) {
   const files = readZipAll(buf);
@@ -180,7 +209,7 @@ function adaptDeck(buf, id, o = {}) {
   let changed = false;
   slides.forEach((sp, i) => {
     const xml = String(files.get(sp));
-    let out = xml;
+    let out = widenEdgeLabels(xml, W, H);
     const ops = patch && patch.slides && patch.slides[String(i + 1)];
     if (ops) out = applyOps(out, ops, W, H);
     if (out !== xml) { files.set(sp, out); changed = true; }
@@ -188,4 +217,4 @@ function adaptDeck(buf, id, o = {}) {
   return changed ? writeZipAll(files) : buf;
 }
 
-module.exports = { adaptDeck, describe, renumberFolios, folioCandidates, applyOps, elements, patchOf };
+module.exports = { widenEdgeLabels, adaptDeck, describe, renumberFolios, folioCandidates, applyOps, elements, patchOf };
