@@ -217,4 +217,81 @@ function adaptDeck(buf, id, o = {}) {
   return changed ? writeZipAll(files) : buf;
 }
 
-module.exports = { widenEdgeLabels, adaptDeck, describe, renumberFolios, folioCandidates, applyOps, elements, patchOf };
+/**
+ * Тақырыпқа жат «тұлға» әшекейі (Рим императорының мүсіні — Қазақ хандығы тақырыбында): алынып, орнына өз кітапханамыздан
+ * (design/decor.js — гравюра, қазақ ою-нақышы) тақырыпқа сай элемент қойылады. Түсі — алынған әшекейдің өз түсі (шаблон үйлесімі сақталады),
+ * өлшемі — сол қорапқа пропорциямен, асты сол жерде (мүсін тұғырда тұрғандай).
+ * Патч: "figures": [{ "media": "image3.png", "keep": "рим|грек|antique" }] — keep тақырыпқа сай болса, әшекей қалады.
+ * page — ашық puppeteer беті (webp/svg → түсті PNG).
+ */
+async function replaceFigures(buf, id, topic, page, o = {}) {
+  const patch = o.patch || patchOf(id);
+  const figs = ((patch && patch.figures) || []).filter((f) => !(f.keep && new RegExp(f.keep, 'iu').test(String(topic || ''))));
+  if (!figs.length || !page) return buf;
+  const D = require('../design/decor');
+  const files = readZipAll(buf);
+  const { W, H } = slideSize(files);
+  const used = new Set();
+  let n = 0;
+  for (const sp of orderedSlides(files)) {
+    const rp = sp.replace(/([^/]+)$/, '_rels/$1.rels');
+    let rels = String(files.get(rp) || '');
+    const target = (rid) => (rels.match(new RegExp(`Id="${rid}"[^>]*Target="([^"]+)"`)) || rels.match(new RegExp(`Target="([^"]+)"[^>]*Id="${rid}"`)) || [])[1];
+    let xml = String(files.get(sp));
+    for (const e of elements(xml)) {
+      if (!e.box || e.inGroup) continue;
+      const rid = (e.el.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
+      const t = rid && target(rid);
+      if (!t || !figs.some((f) => t.split('/').pop() === f.media)) continue;
+      const fig = figs.find((f) => t.split('/').pop() === f.media);
+      // тақырыптан әшекей табылмаса — шаблонның өз саласының сөздері (медицина шаблонында — медицина), сосын жалпы
+      const pick = D.pickDecor(topic, used, n) || (fig.fallback && D.pickDecor(fig.fallback, used, n)) || D.pickDecor('кітап білім тарих мұра ғасыр', used, n);
+      if (!pick) { xml = xml.replace(e.el, ''); continue; }
+      const orig = files.get('ppt/media/' + t.split('/').pop());
+      const res = await page.evaluate(async (src, origSrc) => {
+        const load = (u) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('img')); i.src = u; });
+        const [im, og] = await Promise.all([load(src), load(origSrc)]);
+        // алынған әшекейдің орташа түсі (мөлдір емес пикселдері) — жаңа элемент сол түске боялады
+        const sc = document.createElement('canvas'); sc.width = 32; sc.height = 32; const sg = sc.getContext('2d'); sg.drawImage(og, 0, 0, 32, 32);
+        const px = sg.getImageData(0, 0, 32, 32).data; let r = 0, g = 0, b = 0, k = 0;
+        for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 160) { r += px[i]; g += px[i + 1]; b += px[i + 2]; k++; }
+        const tint = k ? [r / k, g / k, b / k].map((v) => Math.round(Math.min(255, v * 1.08))) : [230, 220, 200];
+        const nw = im.naturalWidth || 480; const nh = im.naturalHeight || 480; const s = Math.min(1, 900 / Math.max(nw, nh));
+        const c = document.createElement('canvas'); c.width = Math.round(nw * s); c.height = Math.round(nh * s); const cg = c.getContext('2d');
+        cg.drawImage(im, 0, 0, c.width, c.height);
+        cg.globalCompositeOperation = 'source-in'; cg.fillStyle = `rgb(${tint.join(',')})`; cg.fillRect(0, 0, c.width, c.height);
+        return { uri: c.toDataURL('image/png'), w: c.width, h: c.height };
+      }, D.decorUri(pick.file), `data:image/png;base64,${Buffer.from(orig || '').toString('base64')}`).catch(() => null);
+      if (!res) continue;
+      const media = `ppt/media/dl_fig_${++n}.png`;
+      files.set(media, Buffer.from(res.uri.split(',')[1], 'base64'));
+      const nrid = `rIdDlFig${n}`;
+      rels = rels.replace('</Relationships>', `<Relationship Id="${nrid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${media.split('/').pop()}"/></Relationships>`);
+      // қорапқа пропорциямен (90%), асты мен ортасы сол жерде
+      // қораптың слайдта КӨРІНЕТІН бөлігі (мүсін көбіне слайдтың астынан шығып тұрады)
+      const bx0 = Math.max(0, e.box.x); const by0 = Math.max(0, e.box.y);
+      const b = { x: bx0, y: by0, w: Math.min(W, e.box.x + e.box.w) - bx0, h: Math.min(H, e.box.y + e.box.h) - by0 };
+      if (b.w <= 0 || b.h <= 0) continue;
+      const k = Math.min((b.w * 0.9) / res.w, (b.h * 0.85) / res.h);
+      const w = Math.round(res.w * k); const h = Math.round(res.h * k);
+      const x = Math.round(b.x + (b.w - w) / 2); const y = Math.round(b.y + b.h - h);
+      // Canva суреттің SVG нұсқасын да қосады (asvg:svgBlip) — көрсетушілер соны алады: ол да алынады, әйтпесе ескі мүсін көрініп тұрады
+      const el2 = e.el.replace(/(<a:blip\b[^>]*>)\s*<a:extLst>[\s\S]*?svgBlip[\s\S]*?<\/a:extLst>\s*(<\/a:blip>)/, '$1$2')
+        .replace(`r:embed="${rid}"`, `r:embed="${nrid}"`)
+        .replace(/<a:srcRect\b[^>]*\/>/, '').replace(/<a:fillRect\b[^>]*\/>/, '<a:fillRect/>')
+        .replace(/<a:off x="-?\d+" y="-?\d+"\/>(\s*)<a:ext cx="\d+" cy="\d+"\/>/, `<a:off x="${x}" y="${y}"/>$1<a:ext cx="${w}" cy="${h}"/>`)
+        .replace(/<a:path\b([^>]*)\bw="\d+"([^>]*)\bh="\d+"/, '<a:path$1w="' + w + '"$2h="' + h + '"').replace(/<a:path\b([^>]*)\bh="\d+"([^>]*)\bw="\d+"/, '<a:path$1h="' + h + '"$2w="' + w + '"');
+      // custGeom жолы ескі өлшемде — тіктөртбұрышқа ауыстырылады (жаңа элемент пішінге кесілмейді)
+      xml = xml.replace(e.el, () => el2.replace(/<a:custGeom>[\s\S]*?<\/a:custGeom>/, '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'));
+    }
+    files.set(sp, xml); files.set(rp, rels);
+  }
+  if (!n) return buf;
+  let ct = String(files.get('[Content_Types].xml') || '');
+  if (!/Extension="png"/i.test(ct)) { ct = ct.replace(/(<Types[^>]*>)/, '$1<Default Extension="png" ContentType="image/png"/>'); files.set('[Content_Types].xml', ct); }
+  try { require('./carve').collectGarbage(files); } catch { /* ескі сурет қалса да зиянсыз */ }
+  console.log(`[Library] figures: ${n} off-topic figure(s) → own decor`);
+  return writeZipAll(files);
+}
+
+module.exports = { replaceFigures, widenEdgeLabels, adaptDeck, describe, renumberFolios, folioCandidates, applyOps, elements, patchOf };

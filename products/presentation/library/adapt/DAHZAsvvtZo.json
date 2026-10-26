@@ -1,0 +1,15 @@
+{
+ "slides": {},
+ "figures": [
+  {
+   "media": "image48.png",
+   "keep": "көшпелі|дала|сақ|ғұн|түрік|түрк|хан|қазақ|жылқы|nomad|steppe|scyth|hun|turk|khan|kazakh|кочев|степ|саки|гунн|тюрк|казах",
+   "fallback": "тарих мұра ғасыр мемлекет"
+  },
+  {
+   "media": "image57.png",
+   "keep": "көшпелі|дала|сақ|ғұн|түрік|түрк|хан|қазақ|жылқы|nomad|steppe|scyth|hun|turk|khan|kazakh|кочев|степ|саки|гунн|тюрк|казах|ежелгі|археолог|ancient|archaeolog|древн|археолог",
+   "fallback": "тарих мұра ғасыр мемлекет"
+  }
+ ]
+}

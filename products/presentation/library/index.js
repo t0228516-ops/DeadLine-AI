@@ -206,6 +206,15 @@ async function prepareDeck(o = {}) {
   // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
   // бейімдеу: шаблонның бір рет түзетілген нұсқасы (бет нөмірлері, қорап өлшемдері, мәтінді жапқан иллюстрация) — library/adapt.js
   try { src = require('./adapt').adaptDeck(src, t.id); } catch (e) { console.warn(`[Library] adapt: ${e.message}`); }
+  // тақырыпқа жат тұлға-әшекей (мыс. Рим мүсіні қазақ тарихында) — өз кітапханамыздағы сай элементпен ауысады
+  const adaptPatch = require('./adapt').patchOf(t.id);
+  if (adaptPatch && adaptPatch.figures && adaptPatch.figures.length) {
+    let browser = null;
+    try {
+      browser = await require('../renderer').launchBrowser(require('puppeteer'));
+      src = await require('./adapt').replaceFigures(src, t.id, o.topic, await browser.newPage(), { patch: adaptPatch });
+    } catch (e) { console.warn(`[Library] figures: ${e.message}`); } finally { if (browser) await browser.close().catch(() => {}); }
+  }
   if (t.source === 'canva') {
     try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); }
     try { src = require('./titles').widenPillLabels(src); } catch (e) { console.warn(`[Library] pill labels: ${e.message}`); }

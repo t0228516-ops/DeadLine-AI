@@ -123,13 +123,15 @@ function mirrorElement(tag, el, ox, span, ctx, unit) {
   });
   if (tag === 'p:sp' && !unit && /<p:txBody>/.test(out)) out = out.replace(/<p:txBody>[\s\S]*?<\/p:txBody>/, (t) => alignShort(t, ctx.W));
   if (!flip && /<a:custGeom>/.test(out)) out = out.replace(/<a:custGeom>[\s\S]*?<\/a:custGeom>/, (g) => mirrorPaths(g));
+  // Canva суреттің SVG егізі (asvg:svgBlip) — көрсетушілер соны алады, ол айналмайды: пикселі айналатын суреттің SVG-сі алынады
+  const noSvg = (x) => x.replace(/(<a:blip\b[^>]*>)\s*<a:extLst>[\s\S]*?svgBlip[\s\S]*?<\/a:extLst>\s*(<\/a:blip>)/, '$1$2');
   if (fullBleed) {
     const rid = (out.match(/<a:blip\b[^>]*r:embed="([^"]+)"/) || [])[1];
-    if (rid) { ctx.flipRids.add(rid); out = swapLR(out); }
+    if (rid) { ctx.flipRids.add(rid); out = noSvg(swapLR(out)); }
   } else if (cut) {
     // мөлдір PNG: пикселдері айналады; фото болса (flipImages түсінен таниды) — жоқ, фотодағы жазу кері оқылмасын
     // (онда l↔r ауысқан кесінді фотоны сәл басқа жерінен көрсетеді — пішіні бұзылмайды)
-    ctx.softRids.add(rid0); ctx.flipRids.add(rid0); out = swapLR(out);
+    ctx.softRids.add(rid0); ctx.flipRids.add(rid0); out = noSvg(swapLR(out));
   }
   // пішіннің градиенті (flipH болмаса — өзі айналмайды)
   if (!flip) out = out.replace(/<(p:spPr|p:grpSpPr)>[\s\S]*?<\/\1>/, (x) => mirrorFills(x));
