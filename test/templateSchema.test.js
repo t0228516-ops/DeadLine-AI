@@ -159,3 +159,39 @@ test('placeholder: мұраланған орын мен кегль слайдқ�
   assert.match(out, /<a:rPr lang="kk-KZ" sz="4400"\/><a:t>Тақырып/);
   assert.match(out, /<a:rPr lang="kk-KZ" sz="1800"\/><a:t>Мәтін/);
 });
+
+test('слот жазушы: тақырыптағы сан карточка санына сай («төрт сала» + 3 карточка → қайта жазу, болмаса «үш»)', async () => {
+  const card = (k, id, part) => ({ key: `c${k}${part[0]}`, id, role: 'card', part, max: 60 });
+  const schema = { deck: { chrome: [], tags: [] }, slides: [{ index: 1, kind: 'content', slots: [{ key: 't', id: 0, role: 'title', max: 60 }, card(1, 1, 'heading'), card(2, 2, 'heading'), card(3, 3, 'heading'), card(1, 4, 'body'), card(2, 5, 'body'), card(3, 6, 'body')] }] };
+  const calls = [];
+  const llm = async (sys, user, label) => {
+    calls.push({ label, user });
+    return { slides: [{ index: 1, slots: { t: 'ЖИ төрт саланы өзгертіп жатыр', c1h: 'Денсаулық', c2h: 'Білім', c3h: 'Көлік', c1b: 'Суреттерді талдайды.', c2b: 'Жеке оқу жолын құрады.', c3b: 'Жол қауіпсіздігін арттырады.' } }] };
+  };
+  const r = await writeSlots({ schema, slides: [{ title: 'ЖИ' }], topic: 'ЖИ', language: 'Kazakh', llm });
+  assert.ok(calls.some((c) => c.label === 'template-slots-fix' && /names 4 items but the slide shows exactly 3/.test(c.user)), 'LLM-ге қайта жаздырылды');
+  assert.deepStrictEqual(r.plan[0].byId[0], ['ЖИ үш саланы өзгертіп жатыр'], 'LLM түзетпесе — сан детерминді түзелді');
+});
+
+test('слот жазушы: студент аты-жөнін бермесе — мұқабадағы «Presented by» орны бос қалмайды (жыл жазылады)', async () => {
+  const buf = tpl();
+  const sc = analyzeTemplate(buf);
+  const slides = [{ title: 'Кино тарихы' }, { title: 'Кино' }, { title: 'Дыбысты кино' }];
+  const r = await writeSlots({ schema: sc, slides, topic: 'Кино тарихы', language: 'Kazakh', coverMeta: {}, creditLines: coverCreditItems, llm: mockLlm() });
+  const out = fillTemplatePptx(buf, slides, { slotFill: r.plan, qa: false });
+  const t1 = [...readZipAll(out).get('ppt/slides/slide1.xml').matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]);
+  assert.ok(t1.some((x) => new RegExp(`${new Date().getFullYear()} Ж\\.?`, 'i').test(x)), JSON.stringify(t1));
+  assert.ok(!t1.some((x) => /MATTHEW|PRESENTATION BY/.test(x)));
+});
+
+test('слот жазушы: алғыс слайдының тар тақырыбына ұзын алғыс сыймаса — «Рахмет!» (бір сөз кесіліп қалмайды)', async () => {
+  const end = tb(100, 160, 260, 60, 48, 'Inter', 'THANK YOU!');
+  const buf = makePptx([cover, end]);
+  const sc = analyzeTemplate(buf);
+  assert.strictEqual(sc.slides[1].kind, 'end');
+  const llm = async () => ({ slides: [{ index: 1, slots: { t: 'Кино тарихы' } }, { index: 2, slots: { t: 'Назарларыңызға рахмет' } }] });
+  const r = await writeSlots({ schema: sc, slides: [{ title: 'Кино' }, { title: 'Рахмет' }], topic: 'Кино', language: 'Kazakh', llm });
+  const ts = sc.slides[1].slots.find((x) => x.role === 'title');
+  const v = r.plan[1].byId[ts.id][0];
+  assert.ok(/рахмет/i.test(v) && v.length <= ts.max * 1.1, `${v} (≤${ts.max})`);
+});

@@ -92,3 +92,15 @@ test('hideDeco: мөлдір безендіру уақытша алынып, о�
   assert.strictEqual(h.restore(h.xml), xml);
   assert.strictEqual(hideDeco(xml, new Set(['rId9'])).count, 0, 'басқа сурет жасырылмайды');
 });
+
+test('таблетка ішіндегі жазу сыймаса — кішірейеді не орнында қалады, бірақ таблеткадан сыртқа ығыспайды (таблетка бос қалмайды)', () => {
+  const holder = `<p:sp><p:nvSpPr><p:cNvPr id="30" name="Box"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${200 * E}" y="${400 * E}"/><a:ext cx="${300 * E}" cy="${60 * E}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:ln><a:solidFill><a:srgbClr val="F0A050"/></a:solidFill></a:ln></p:spPr></p:sp>`;
+  const long = 'Ауа тамақтану су жүрек нарық ауа тамыр құқық денсаулық білім';
+  const orig = holder + text('Sub', 210, 410, 280, 40, 24, 'Presentation');
+  const body = holder + text('Sub', 210, 410, 280, 40, 24, long);
+  const r = checkSlide(sld(orig), sld(body), { W, H });
+  const t = readText(r.xml.match(/<p:sp>(?:(?!<p:sp>)[\s\S])*?name="Sub"[\s\S]*?<\/p:sp>/)[0]);
+  const g = glyphRect(t);
+  assert.ok(g.y >= 400 - 8 && g.y <= 460, `жазу таблетканың ішінен басталады: y=${g.y}`);
+  assert.ok(yOf(r.xml, 'Sub') >= 400 - 8 && yOf(r.xml, 'Sub') <= 460, 'қорап таблеткадан сыртқа ығыспайды');
+});

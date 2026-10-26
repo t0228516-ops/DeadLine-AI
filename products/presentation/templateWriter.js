@@ -12,6 +12,7 @@
  * Нәтиже fillTemplatePptx(..., { slotFill }) үшін: әр слайдқа { byId: {id: [жолдар]}, logo: [сөздер]|null }.
  */
 const { linesForSlide } = require('./templateFill');
+const { countIn, setCount } = require('./countWords');
 
 const BATCH = 3;
 const clean = (t) => String(t == null ? '' : t).replace(/\s*(…|\.{3})\s*$/, '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
@@ -64,7 +65,7 @@ function slotLine(s) {
   const extra = s.role === 'accent' ? ' — 1 word (2 at most); together with "t" it must read as ONE heading: "t" first, then this word completes it; never repeat a word of "t"'
     : s.role === 'stat' && s.part === 'value' ? ' — a REAL, well-known figure for this slide (year, date, percentage, count, amount with unit); NEVER invent statistics — if unsure, use a year or a date'
       : s.role === 'stat' && s.part === 'label' ? ' — says what the figure is'
-        : s.role === 'card' && s.part === 'heading' ? ' — names exactly what its card text explains'
+        : s.role === 'card' && s.part === 'heading' ? ' — names exactly what its own card text (the same number) explains'
           : s.role === 'body' || (s.role === 'card' && s.part === 'body') ? ' — complete informative sentence(s) with concrete facts'
             : s.role === 'title' ? ' — states the point of the slide, no final period' : '';
   return `  "${s.key}": ${roleText(s)}, ${lim}${extra}`;
@@ -135,6 +136,16 @@ function slotProblem(s, text, language) {
   if (s.role === 'stat' && s.part === 'value' && !/\d|^[IVXLC]+\b/.test(t)) return 'a figure must contain a number';
   if (wantsCyr(language) && !hasCyr(t) && !(s.role === 'stat' && s.part === 'value') && /[a-z]{4,}/i.test(t) && !/^[A-Z][\w.+-]*(\s[A-Z0-9][\w.+-]*)*$/.test(t)) return 'not in the presentation language';
   return null;
+}
+
+/** Слайдтағы карточка саны (тақырып аталған санмен сәйкес болуы керек) */
+const cardCount = (sch) => sch.slots.filter((x) => x.role === 'card' && x.part === 'heading').length;
+
+/** Тақырып «төрт сала» дейді, слайдта 3 карточка — қате (null — дұрыс). */
+function countProblem(sch, s, text) {
+  if (s.role !== 'title' || sch.kind !== 'content') return null;
+  const c = cardCount(sch); const n = countIn(text);
+  return c >= 2 && n != null && n !== c ? `the heading names ${n} items but the slide shows exactly ${c}` : null;
 }
 
 /** Детерминді қорғаныс: LLM бермеген/қате слотқа жалпы мазмұннан мәтін. */
@@ -227,7 +238,7 @@ async function writeSlots(o) {
   const problemsOf = () => {
     const list = [];
     items.forEach(({ sch }, i) => {
-      for (const s of llmSlots(sch)) { const p = slotProblem(s, out[i].texts[s.key], language); if (p) list.push({ i, s, p }); }
+      for (const s of llmSlots(sch)) { const p = slotProblem(s, out[i].texts[s.key], language) || countProblem(sch, s, out[i].texts[s.key]); if (p) list.push({ i, s, p }); }
       if (sch.logo) {
         const w = out[i].logo || [];
         if (w.length !== sch.logo.words || w.some((x) => lettersOf(x).length > sch.logo.wordMax)) list.push({ i, s: { key: 'logo' }, p: `needs exactly ${sch.logo.words} word(s), each ≤ ${sch.logo.wordMax} letters` });
@@ -276,6 +287,7 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
         }
         report.fallback++;
       }
+      if (countProblem(sch, s, v)) v = setCount(v, cardCount(sch));   // «төрт сала» + 3 карточка → «үш сала»
       t[s.key] = fitToLimit(v || '', s.max);
     }
     if (sch.logo) {
@@ -289,6 +301,18 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
     }
   });
   report.problems = probs.map((x) => `${x.i + 1}:${x.s.key}:${x.p}`);
+
+  // ── 4б) алғыс слайды: тақырып орны тар болса «Назарларыңызға рахмет» кесіліп, бір сөз қалмасын — сыйса толық, болмаса «Рахмет!»
+  const THANKS = /^ru/i.test(language || '') ? ['Спасибо за внимание!', 'Спасибо!'] : /^en/i.test(language || '') ? ['Thank you!', 'Thanks!'] : ['Назарларыңызға рахмет!', 'Рахмет!'];
+  schema.slides.forEach((sch, i) => {
+    if (sch.kind !== 'end') return;
+    const ts = sch.slots.find((x) => x.role === 'title');
+    if (!ts) return;
+    const v = clean(out[i].texts[ts.key]);
+    if (/рахмет|спасибо|благодар|thank/i.test(v) && v.length <= ts.max * 1.1) return;
+    const pick = THANKS.find((x) => x.length <= ts.max * 1.1);
+    if (pick) out[i].texts[ts.key] = pick;
+  });
 
   // ── 5) авторлар (детерминді) ──────────────────────────────────────────
   const credits = (o.creditLines ? o.creditLines(o.coverMeta, language) : []).filter((c) => c && c.value);
@@ -315,6 +339,11 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
     const perf = queue.find((c) => c.kind === 'performed');
     const grp = queue.find((c) => c.kind === 'group');
     if (perf && grp && pairs.length) { perf.extra = `${grp.label}: ${grp.value}`; queue = queue.filter((c) => c !== grp); }
+    // студент аты-жөнін бермесе — мұқабадағы «Presented by» таблеткасы бос қалмасын: бірінші жұпқа жыл жазылады
+    if (!credits.length && sch.kind === 'cover' && pairs.length) {
+      const y = new Date().getFullYear();
+      queue = [{ kind: 'year', label: '', value: /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.` }];
+    }
     for (const p of pairs) {
       const c = take('performed') || take('checked') || queue.shift();
       if (p.label) t[p.label.key] = c ? caseLike(p.label.orig, c.label, 'label') : '';
@@ -328,7 +357,17 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
         t[infos[0].key] = queue.map(lineOf).join('\n');
         queue = [];
         for (const s of infos.slice(1)) t[s.key] = '';
-      } else for (const s of infos) t[s.key] = '';
+      } else if (infos.length) {
+        // аты-жөн жоқ — ең үлкен ақпарат орны (көбіне таблетка) бос қалмайды: мұқабаның ішкі тақырыбы, болмаса жыл
+        const src = items[i] && items[i].slide && clean(items[i].slide.subtitle);
+        const sub = sch.slots.find((x) => x.role === 'subtitle');
+        const y = new Date().getFullYear();
+        const year = /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.`;
+        const yearUsed = Object.values(t).some((v) => typeof v === 'string' && v.includes(String(y)));
+        const fill = src && !(sub && t[sub.key]) && src.length <= infos[0].max * 1.1 ? fitToLimit(src, infos[0].max) : yearUsed ? '' : year;
+        t[infos[0].key] = fill ? caseLike(infos[0].orig, fill, 'label') : '';
+        for (const s of infos.slice(1)) t[s.key] = '';
+      }
       if (queue.length) {
         const sub = sch.slots.find((s) => s.role === 'subtitle');
         const extra = queue.map(lineOf).join('\n');

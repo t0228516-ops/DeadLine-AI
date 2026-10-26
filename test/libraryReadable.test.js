@@ -64,7 +64,10 @@ test('small text over a photo gets a translucent backing; titles and text on sol
   const r = fixSlide(xml, { W: 720 * E, theme: {}, bg: null, inherited: [] });
   const small = r.xml.match(/<p:sp>(?:(?!<\/p:sp>)[\s\S])*Сұрақтарыңызды[\s\S]*?<\/p:sp>/)[0];
   const big = r.xml.match(/<p:sp>(?:(?!<\/p:sp>)[\s\S])*Назарларыңызға[\s\S]*?<\/p:sp>/)[0];
-  assert.match(small, /<p:spPr>[\s\S]*<a:srgbClr val="000000"><a:alpha val="55000"\/>/, 'white small text → dark translucent backing');
+  assert.match(small, /<p:spPr>[\s\S]*<a:srgbClr val="([0-9A-F]{6})"><a:alpha val="82000"\/>/, 'white small text → dark translucent backing');
+  const bk = small.match(/<a:srgbClr val="([0-9A-F]{6})"><a:alpha/)[1];
+  assert.ok(parseInt(bk.slice(0, 2), 16) + parseInt(bk.slice(2, 4), 16) + parseInt(bk.slice(4), 16) < 200, `backing is dark (${bk})`);
+  assert.match(small, /prst="roundRect"/, 'soft corners');
   assert.match(small, /lIns="73152"/);
   assert.doesNotMatch(big, /<a:alpha/, 'titles stay as designed');
 });

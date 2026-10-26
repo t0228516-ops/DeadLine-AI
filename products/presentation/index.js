@@ -207,8 +207,13 @@ async function swapLibraryPhotos(buf, slides, ctx) {
   let slots;
   try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
   const keep = new Set(ctx.keepMedia || []);
+  let tiny = [];
+  try { tiny = P.tinyPortraits(buf).filter((s) => !keep.has(s.media.split('/').pop())); } catch {}
   slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
-  if (!slots.length) return buf;
+  // мәтін астындағы сурет — дизайнның атмосфералық фоны (қараңғы, бұлыңғыр): оны суретті көрмей (ашық карта, ақ ғимарат) ауыстырсақ,
+  // ақ тақырып оқылмай қалады. Canva-да мұқабасы да ауыспайды; SlidesCarnival мұқабасы — ауысады (оның фоны мәтінмен бірге жобаланған)
+  slots = slots.filter((s) => !s.underText || (ctx.source !== 'canva' && s.slide === 0));
+  if (!slots.length && !tiny.length) return buf;
   if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let browser = null;
   try {
@@ -218,13 +223,21 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     const page = await browser.newPage();
     // текстура, карта, әшекей — фото емес, шаблонның өз безендіруі қалады
     const verdict = new Map();
-    for (const s of slots) {
+    for (const s of slots.concat(tiny)) {
       if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
     }
-    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 8;
+    // бөтен адамдардың кішкене суреттері (аватарлар) алынады — тақырыпқа жат беттер слайдта қалмасын
+    const strangers = tiny.filter((s) => verdict.get(s.media));
+    if (strangers.length) {
+      buf = P.removePictures(buf, strangers);
+      console.log(`[Library] photos: ${strangers.length} small stranger portrait(s) removed`);
+      if (!slots.length) return buf;
+    }
+    // слайдтағы барлық фото ауысады (4-ке дейін): ауыспай қалған шаблон фотосы тақырыпқа жат, ал бір макет екі рет келсе — екі слайдта бірдей фото
+    const max = Number(process.env.LIBRARY_PHOTO_MAX) || 12;
     const perSlide = new Map();
     slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
-      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 2) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
+      .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 4) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
     if (!slots.length) { console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
     const used = new Set();
     const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
@@ -684,6 +697,9 @@ async function generatePresentation(userInput, options = {}) {
   }
   if (isTemplateFill) {
     await onProgress('template', 'Шаблонға мәтін салынуда...');
+    // Баяндама мәтіні шаблон режимінде де: шаблон қорабына аз мәтін сыяды — студент оқитын толық мәтін .docx-те
+    const tplNotesTask = generateSpeakerNotes({ slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta })
+      .catch((e) => { console.warn(`[Notes] failed (continuing): ${e.message}`); return null; });
     try {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
       const qaReport = [];
@@ -693,9 +709,20 @@ async function generatePresentation(userInput, options = {}) {
         // бөлім слайдының реттік саны — презентациядағы нақты бөлім реті
         try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
-          topic: title || topic, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
+          topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
         });
-        fs.writeFileSync(pptxPath, require('./library').appendCredits(withPhotos, options.library));
+        let finalBuf = require('./library').appendCredits(withPhotos, options.library);
+        // Telegram 50 МБ шегіне жақын ауыр шаблон: суреттер кішірейеді (LIBRARY_SHRINK_MB, әдепкі 20 МБ-тан бастап)
+        if (finalBuf.length > (Number(process.env.LIBRARY_SHRINK_MB) || 20) * 1048576) {
+          let browser = null;
+          try {
+            browser = await require('./renderer').launchBrowser(require('puppeteer'));
+            const before = finalBuf.length;
+            finalBuf = await require('./library/photos').shrinkImages(finalBuf, await browser.newPage());
+            console.log(`[Library] images shrunk ${(before / 1e6).toFixed(1)} → ${(finalBuf.length / 1e6).toFixed(1)} MB`);
+          } catch (e) { console.warn(`[Library] shrink skipped: ${e.message}`); } finally { if (browser) await browser.close().catch(() => {}); }
+        }
+        fs.writeFileSync(pptxPath, finalBuf);
         console.log(`[Pipeline] Library ${options.library.id}: Credits slide appended`);
       }
       // соңғы тексерушінің нәтижесі үйрену жүйесіне: қай ақау қанша, нешеуі түзелді
@@ -712,6 +739,15 @@ async function generatePresentation(userInput, options = {}) {
       templateGeomScore = Math.max(45, 100 - unfixed * 12);
       console.log(`[Pipeline] Template health=${templateHealth} (unfixedQA=${unfixed} fallback=${w.fallback || 0} problems=${w.problems || 0}${oldRemaining ? ` oldRemaining=${oldRemaining}` : ''})`);
       console.log('[Pipeline] Template-Fill: PPTX = пайдаланушы шаблоны, тек мәтін ауыстырылды');
+      const notesRes = await tplNotesTask;
+      if (notesRes && notesRes.notes.length === slides.length && notesRes.ok) {
+        notesMeta = { ok: notesRes.ok, study: !!notesRes.study };
+        try {
+          speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
+          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta }));
+        } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
+        console.log(`[Pipeline] Template speaker notes: ${notesRes.ok}/${slides.length} slides, study guide=${notesMeta.study}`);
+      }
     } catch (err) {
       // Рендерге (сурет-слайд) түспейміз: клиентке өңделетін PPTX керек. Қате болса — кредит қайтарылады.
       console.warn('[Pipeline] Template-Fill failed:', err.message);

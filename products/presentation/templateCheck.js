@@ -240,6 +240,9 @@ function checkSlide(origXml, xml, o = {}) {
   const origRect = new Map();
   for (const t of orig.texts) origRect.set(t.name + '|' + Math.round(t.box.x) + '|' + Math.round(t.box.w), glyphRect(t));
   const keyOf = (t) => t.name + '|' + Math.round(t.box.x) + '|' + Math.round(t.box.w);
+  // толтыру қораптың енін өзгертсе (кілт сәйкеспейді) — аты бойынша (слайдта жалғыз болса)
+  const origByName = new Map();
+  for (const t of orig.texts) origByName.set(t.name, origByName.has(t.name) ? null : glyphRect(t));
 
   let out = xml;
   const gaveUp = new Set();
@@ -301,6 +304,11 @@ function checkSlide(origXml, xml, o = {}) {
       if (pinned.has(T.name)) continue;
       if (gaveUp.has(keyOf(T))) continue;
       if (T.rot) { gaveUp.add(keyOf(T)); issues.push({ code: pr.code, shape: T.name, fixed: false }); continue; }
+      // мәтін өз таблеткасының/карточкасының ішінде тұрса — сол ішінде қалады (сыртқа шығарса, таблетка бос қалады).
+      // Қорап таблеткадан кең болуы мүмкін (Canva): шаблондағы нақты әріптері қай пішіннің ішінде тұрғаны да ескеріледі
+      const or0 = origRect.get(keyOf(T)) || origByName.get(T.name);
+      const home = holders.find((h) => contains(h.r, T.box, 8))
+        || (or0 && things.find((th) => !/<a:blip\b/.test(th.block) && area(th.r) < SW * SH * 0.4 && area(th.r) >= area(or0) * 0.8 && fracOf(or0, th.r) >= 0.6));
       const maxSz = Math.max(...T.paras.map((p) => p.sz));
       const minS = maxSz >= 30 ? Math.max(0.45, 20 / maxSz) : Math.max(0.7, Math.min(1, 9 / maxSz));
       const best = { cost: Infinity };
@@ -333,6 +341,7 @@ function checkSlide(origXml, xml, o = {}) {
             if (Math.abs(dy) > SH * 0.35) continue;
             const r = glyphRect(T, s, dy, dx);
             if (problemOf(v, r)) continue;                                       // анықтаумен БІРДЕЙ ереже
+            if (home && (dy || dx) && !contains(home.r, r, 8)) continue;
             const cost = (1 - s) + Math.abs(dy) / SH * 2 + Math.abs(dx) / SW * 2;
             if (cost < best.cost) Object.assign(best, { cost, s, dy, dx });
           }

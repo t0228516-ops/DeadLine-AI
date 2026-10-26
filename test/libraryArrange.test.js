@@ -73,3 +73,19 @@ test('fitScore: plain points avoid a figures slide (it would force invented numb
   assert.ok(A.fitScore(plain, { form: 'points', count: 3 }) > A.fitScore(figs, { form: 'points', count: 3 }));
   assert.ok(A.fitScore(figs, { form: 'figures', count: 3 }) > 0);
 });
+
+test('fitScore: a title-only slide never carries content, only a section divider', () => {
+  const bare = { slide: 9, role: 'text', cards: 0, labels: 0, figures: 0, bodies: 0, subtitle: false, photos: 0 };
+  for (const form of ['points', 'steps', 'explain', 'compare']) assert.strictEqual(A.fitScore(bare, { form, count: 3 }), -Infinity, form);
+  assert.ok(A.fitScore(bare, { form: 'section' }) > 0);
+  const picks = A.matchPicks(t, meta.concat(bare), [{ form: 'explain' }, { form: 'explain' }, { form: 'explain' }], { agenda: false, closing: false });
+  assert.ok(!picks.includes(8), 'тек тақырыпты слайд алынбады');
+});
+
+test('storyFrom: the heading count follows the slide (4 planned, 3 cards → «үш»)', () => {
+  const plan = { title: 'ЖИ', shapes: [{ heading: 'ЖИ төрт саланы өзгертіп жатыр', form: 'points', count: 4, purpose: '', points: ['a', 'b', 'c', 'd'] }] };
+  const s = A.storyFrom(plan, [0, 2], meta, { cover: 1 }, { agenda: false, closing: false });
+  assert.match(s.slideTopics[1], /^ЖИ үш саланы өзгертіп жатыр/);
+  assert.match(s.slideTopics[1], /Key points: a; b; c\./);
+  assert.match(s.slideTopics[1], /Exactly 3 items/);
+});

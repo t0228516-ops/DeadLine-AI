@@ -37,15 +37,19 @@ function isPhotoBytes(name, buf) {
   return !!st && st.transparent < 0.2 && st.colors >= 40;
 }
 
-/** Бір слайдтағы <p:pic> блоктары: rId, орын/өлшем (EMU) */
+/** Бір слайдтағы фото блоктары: <p:pic> және Canva-ның суретпен толтырылған пішіні (<p:sp> + blipFill): rId, орын/өлшем (EMU) */
 function picsOf(xml) {
   const out = [];
-  for (const m of String(xml).matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g)) {
+  for (const m of String(xml).matchAll(/<p:pic>[\s\S]*?<\/p:pic>|<p:sp>[\s\S]*?<\/p:sp>/g)) {
     const block = m[0];
+    if (block.startsWith('<p:sp>') && !/<p:spPr>(?:(?!<\/p:spPr>)[\s\S])*<a:blipFill/.test(block)) continue;
     const rid = (block.match(/<a:blip [^>]*r:embed="([^"]+)"/) || [])[1];
     const x = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     if (!rid || !x || /<a:tile\b/.test(block)) continue;
-    out.push({ rid, x: +x[1], y: +x[2], w: +x[3], h: +x[4] });
+    // дөңгелек пішін (ellipse не тек қисықтардан тұратын custGeom) — аватарға тән
+    const round = /<a:prstGeom prst="ellipse"/.test(block)
+      || (/<a:custGeom>/.test(block) && (block.match(/<a:cubicBezTo>/g) || []).length >= 4 && !/<a:lnTo>/.test(block));
+    out.push({ rid, x: +x[1], y: +x[2], w: +x[3], h: +x[4], ...(round ? { round: true } : {}) });
   }
   return out;
 }
@@ -54,22 +58,46 @@ function picsOf(xml) {
  * @param {Buffer} buf
  * @returns {Array<{slide:number, rid:string, w:number, h:number, area:number}>} slide — 0-негізді
  */
-function photoSlots(buf) {
+/** Мәтіні бар пішіндердің орны (EMU) — суреттің үстінде мәтін тұр ма, соны білу үшін */
+function textBoxesOf(xml) {
+  const out = [];
+  for (const m of String(xml).matchAll(/<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g)) {
+    if (!/<a:t>[^<]*\S[^<]*<\/a:t>/.test(m[0])) continue;
+    const x = m[0].match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+    if (x) out.push({ x: +x[1], y: +x[2], w: +x[3], h: +x[4] });
+  }
+  return out;
+}
+
+/** Мәтін қорабының кемінде жартысы сурет ішінде ме (сурет — мәтіннің фоны) */
+function underText(p, boxes) {
+  return boxes.some((b) => {
+    const iw = Math.min(p.x + p.w, b.x + b.w) - Math.max(p.x, b.x);
+    const ih = Math.min(p.y + p.h, b.y + b.h) - Math.max(p.y, b.y);
+    return iw > 0 && ih > 0 && (iw * ih) / Math.max(1, b.w * b.h) >= 0.5;
+  });
+}
+
+function photoSlots(buf, o = {}) {
+  const minArea = o.minArea != null ? o.minArea : MIN_AREA;
   const files = readZipAll(buf);
   const { W, H } = slideSize(files);
   const out = [];
   orderedSlides(files).forEach((sp, i) => {
     const rels = relsMap(files.get(relsPathOf(sp)));
     const seen = new Set();
-    for (const p of picsOf(files.get(sp))) {
+    // масштабталған топтың ішіндегі сурет — нақты өлшемімен (әйтпесе кішкене аватар «үлкен фото» болып көрінеді)
+    const geo = require('./carve').normalizeGroups(String(files.get(sp)));
+    const boxes = textBoxesOf(geo);
+    for (const p of picsOf(geo)) {
       const r = rels[p.rid];
       if (!r || seen.has(p.rid)) continue;
       const media = resolvePath(sp, r.target);
       const data = files.get(media);
       const area = (p.w * p.h) / (W * H);
-      if (area < MIN_AREA || !isPhotoBytes(media, data)) continue;
+      if (area < minArea || !isPhotoBytes(media, data)) continue;
       seen.add(p.rid);
-      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data) });
+      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data), underText: underText(p, boxes), round: !!p.round });
     }
   });
   return out;
@@ -148,6 +176,99 @@ function replacePhotos(buf, list) {
 }
 
 /**
+ * Шаблонның бөтен адамдары: кішкене (слайдтың < 2,5%-ы), дөңгелек фото-аватарлар (команда, пікір, «кім айтты»).
+ * Шаршы кішкене фото (уақыт сызығының суреттері) — мазмұн, алынбайды.
+ * Тақырыпқа сай кішкене фото табу қиын әрі қымбат — олар слайдтан алынады (иконка, әшекей, логотип — фото емес, қалады).
+ * @returns {Array<{slide:number, rid:string, media:string}>} — removeTiny-ге (looksLikePhoto тексерісінен кейін)
+ */
+function tinyPortraits(buf) {
+  return photoSlots(buf, { minArea: 0.002 })
+    .filter((s) => s.area < 0.025 && s.round && Math.abs(s.w - s.h) <= Math.max(s.w, s.h) * 0.15);
+}
+
+/** Берілген (слайд, rId) суреттерін слайдтан алу; енді ешкімге керек емес медиа өшеді */
+function removePictures(buf, list) {
+  if (!list.length) return buf;
+  const files = readZipAll(buf);
+  const slides = orderedSlides(files);
+  const BLOCK = /<p:pic>(?:(?!<p:pic>)[\s\S])*?<\/p:pic>|<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g;
+  const rectOf = (b) => { const m = b.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/); return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null; };
+  for (const it of list) {
+    const sp = slides[it.slide];
+    if (!sp) continue;
+    const re = new RegExp(`r:embed="${it.rid}"`);
+    const gone = [];
+    let xml = String(files.get(sp)).replace(BLOCK, (b) => {
+      if (!(re.test(b) && (b.startsWith('<p:pic>') || /<p:spPr>(?:(?!<\/p:spPr>)[\s\S])*<a:blipFill/.test(b)) && !/<a:t>[^<]*[^\s<]/.test(b))) return b;
+      const r = rectOf(b); if (r) gone.push(r);
+      return '';
+    });
+    // аватардың жиегі (сақина, ақ дөңгелек): мәтінсіз, суретсіз, ортасы бір, өлшемі аватардан сәл ғана үлкен — бос шеңбер болып қалмасын
+    xml = xml.replace(BLOCK, (b) => {
+      if (/<a:t>[^<]*[^\s<]/.test(b) || /<a:blipFill/.test(b)) return b;
+      const r = rectOf(b);
+      if (!r) return b;
+      return gone.some((g) => Math.abs((r.x + r.w / 2) - (g.x + g.w / 2)) < g.w * 0.15 && Math.abs((r.y + r.h / 2) - (g.y + g.h / 2)) < g.h * 0.15
+        && r.w >= g.w * 0.9 && r.w <= g.w * 1.5 && r.h <= g.h * 1.5) ? '' : b;
+    });
+    files.set(sp, xml);
+  }
+  require('./carve').collectGarbage(files);
+  return writeZipAll(files);
+}
+
+/**
+ * Файл Telegram шегіне (50 МБ) жақындамасын: үлкен суреттер ≤ maxPx-ке кішірейеді, мөлдір емес PNG — JPEG болады
+ * (жаңа атпен; сілтемелер мен мазмұн түрлері жаңарады), мөлдір PNG — PNG күйінде тек кішірейеді. Слайдтағы орны мен кесуі өзгермейді.
+ * @param {Buffer} buf
+ * @param {object} page Chromium беті
+ * @param {{minBytes?:number, maxPx?:number, quality?:number}} [o] minBytes — осыдан кіші суретке тимейміз
+ * @returns {Promise<Buffer>}
+ */
+async function shrinkImages(buf, page, o = {}) {
+  const minBytes = o.minBytes || 700 * 1024; const maxPx = o.maxPx || 1920; const quality = o.quality || 0.85;
+  const files = readZipAll(buf);
+  let ct = files.get('[Content_Types].xml') || '';
+  const renamed = new Map();
+  for (const [name, data] of [...files]) {
+    if (!/^ppt\/media\/[^/]+\.(png|jpe?g)$/i.test(name) || data.length < minBytes) continue;
+    const png = Buffer.from(data).readUInt32BE(0) === 0x89504e47;
+    // альфа арнасы бар PNG көбіне іс жүзінде мөлдір емес (Canva): пикселдер тексеріледі — шын мөлдір болса ғана PNG қалады
+    const res = await page.evaluate(async (src, mayAlpha, maxPx, q) => {
+      const img = new Image(); img.src = src; await img.decode();
+      const k = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0, c.width, c.height);
+      let alpha = false;
+      if (mayAlpha) { const d = g.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alpha = true; break; } }
+      if (alpha) return { png: true, b64: c.toDataURL('image/png').split(',')[1] };
+      const c2 = document.createElement('canvas'); c2.width = c.width; c2.height = c.height;
+      const g2 = c2.getContext('2d'); g2.fillStyle = '#fff'; g2.fillRect(0, 0, c2.width, c2.height); g2.drawImage(c, 0, 0);
+      return { png: false, b64: c2.toDataURL('image/jpeg', q).split(',')[1] };
+    }, `data:${png ? 'image/png' : 'image/jpeg'};base64,${Buffer.from(data).toString('base64')}`, png && pngHasAlpha(data), maxPx, quality).catch(() => null);
+    if (!res) continue;
+    const keepPng = res.png; const b64 = res.b64;
+    const out = Buffer.from(b64, 'base64');
+    if (out.length >= data.length * 0.9) continue;                          // ұтыс аз — түпнұсқа қалады
+    if (png && !keepPng) {
+      const jn = name.replace(/\.png$/i, '_s.jpeg');
+      files.delete(name); files.set(jn, out); renamed.set(name.split('/').pop(), jn.split('/').pop());
+    } else files.set(name, out);
+  }
+  if (renamed.size) {
+    for (const [n, d] of [...files]) {
+      if (!n.endsWith('.rels')) continue;
+      const x = String(d).replace(/Target="([^"]*\/)?([^"/]+)"/g, (m, dir, f) => (renamed.has(f) ? `Target="${dir || ''}${renamed.get(f)}"` : m));
+      if (x !== String(d)) files.set(n, x);
+    }
+    if (!/Extension="jpeg"/i.test(ct)) ct = ct.replace(/(<Types[^>]*>)/, '$1<Default Extension="jpeg" ContentType="image/jpeg"/>');
+    files.set('[Content_Types].xml', ct);
+  }
+  return writeZipAll(files);
+}
+
+/**
  * Суреттің пиксель сипаты (Chromium canvas, 64×64): фото ме, әлде текстура/иллюстрация ма.
  *   lumStd  — жарықтық ауытқуы (қағаз, бір түсті фон — өте аз)
  *   top8    — ең жиі 8 түс (4 бит/арна) қанша пиксельді алады (жалпақ иллюстрация, карта, әшекей — көп)
@@ -221,4 +342,4 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+module.exports = { picsOf, underText, shrinkImages, tinyPortraits, removePictures, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
