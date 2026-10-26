@@ -249,14 +249,15 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     if (!slots.length) { leftover(new Set()); console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
     const used = new Set();
     const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
-    const found = await mapLimit(slots, 3, async (slot) => {
+    // broad: слайдқа дәл фото табылмаса — тақырыптың жалпы көрінісі (мыс. «Kazakh steppe»): үлкен фото орны бос түсті тіктөртбұрыш болып қалмасын
+    const search = async (slot, broad) => {
       const slide = slides[slot.slide] || {};
       const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
-      const query = isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
+      const query = !broad && isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
       if (!query) return null;
-      const text = [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
+      const text = broad ? '' : [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
         .map((x) => (typeof x === 'string' ? x : (x && (x.label || x.text)) || '')).filter(Boolean).join(' · ');
-      const slideCtx = { topic: ctx.topic, title: slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
+      const slideCtx = { topic: ctx.topic, title: broad ? ctx.topic : slide.title || ctx.topic, query, text, cover: slot.slide === 0, background: slot.area > 0.5 };
       try {
         const vision = makeVisionChooser({ ...slideCtx, maxCalls: 5 });
         if (vision) {
@@ -267,7 +268,25 @@ async function swapLibraryPhotos(buf, slides, ctx) {
         const dataUri = await fetchImageWithFallback(query, ctx.topic, used, [], { free: !!ctx.free, judge: makePhotoJudge(slideCtx) });
         return dataUri ? { ...slot, dataUri, focus: '' } : null;
       } catch (e) { console.warn(`[Library] photo slide ${slot.slide + 1}: ${e.message}`); return null; }
-    });
+    };
+    const found = await mapLimit(slots, 3, (slot) => search(slot, false));
+    const big = slots.map((sl, i) => (!found[i] && sl.area >= 0.08 ? i : -1)).filter((i) => i >= 0);
+    if (big.length) {
+      const again = await mapLimit(big, 3, (i) => search(slots[i], true));
+      big.forEach((i, k) => { if (again[k]) found[i] = again[k]; });
+      console.log(`[Library] photos: broad search filled ${again.filter(Boolean).length}/${big.length} large slot(s)`);
+    }
+    // тақырыпқа жат шаблонда әлі бос қалған үлкен тіктөртбұрыш фото — осы презентацияда табылған фотоның бірі (басқа кесумен):
+    // түсті бос тіктөртбұрыш «сурет түспей қалғандай» көрінеді, ал қайталанған тақырыптық фото — жоқ
+    const gotList = found.filter(Boolean);
+    if (neutralize && gotList.length) {
+      let k = 0;
+      slots.forEach((sl, i) => {
+        if (found[i] || sl.area < 0.08 || sl.alpha || sl.round) return;
+        const src = gotList[k++ % gotList.length];
+        found[i] = { ...sl, dataUri: src.dataUri, focus: '' };
+      });
+    }
     const hits = found.filter(Boolean);
     if (!hits.length) { leftover(new Set()); console.log(`[Library] photos: 0/${slots.length} found — template photos ${neutralize ? 'toned out' : 'kept'}`); return buf; }
     const list = [];

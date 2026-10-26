@@ -57,7 +57,7 @@
    "stats": [],
    "quote": [],
    "closing": null,
-   "credits": null,
+   "credits": 10,
    "recolor": {
     "from": 30,
     "to": [
