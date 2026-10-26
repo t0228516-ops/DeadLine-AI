@@ -232,3 +232,32 @@ test('catalog: no slide with a table is used — table cells are not filled and 
     for (const n of roles) assert.ok(!/<a:tbl>/.test(String(files.get(slides[n - 1]))), `${t.id} slide ${n}`);
   }
 });
+
+test('chooseTemplate: a grave topic never gets a cartoon/school template; the waste template only goes to waste topics', () => {
+  const L = require('../products/presentation/library');
+  for (let i = 0; i < 200; i++) {
+    const t = L.chooseTemplate({ topic: 'Семей ядролық полигонының зардаптары', slideCount: 10 });
+    assert.ok(!['school', 'playful', 'illustrated', 'botanical'].includes(t.style) && !t.decor, t.id);
+    assert.notStrictEqual(L.chooseTemplate({ topic: 'Климаттың өзгеруі және табиғат', slideCount: 8 }).id, 'DAHBpEwNn2I');
+  }
+});
+
+test('chooseTemplate: a long deck goes to templates with enough distinct layouts (while the choice stays wide)', () => {
+  const L = require('../products/presentation/library');
+  const seen = new Set();
+  for (let i = 0; i < 300; i++) {
+    const t = L.chooseTemplate({ topic: 'Жасанды интеллекттің медицинадағы қолданылуы', slideCount: 12 });
+    assert.ok(L.layoutsOf(t) >= 7, `${t.id}: ${L.layoutsOf(t)}`);
+    seen.add(t.id);
+  }
+  assert.ok(seen.size >= 4, [...seen].join(','));
+});
+
+test('arrange: the cover (its year looks like a figure) is never picked as a content slide', () => {
+  const A = require('../products/presentation/library/arrange');
+  const meta = [{ slide: 1, role: 'cover', cards: 0, figures: 2, bodies: 1, labels: 0, subtitle: true, photos: 1 },
+    { slide: 2, role: 'text', cards: 3, figures: 0, bodies: 0, labels: 3, subtitle: false, photos: 0 },
+    { slide: 3, role: 'text', cards: 0, figures: 0, bodies: 1, labels: 0, subtitle: true, photos: 1 }];
+  const picks = A.matchPicks({ cover: 1 }, meta, [{ form: 'figures', count: 2 }, { form: 'points', count: 3 }, { form: 'explain', count: 1 }], { agenda: false, closing: false });
+  assert.ok(!picks.slice(1).includes(0), picks.join(','));
+});

@@ -300,6 +300,9 @@ async function imageStats(page, bytes) {
  */
 function looksLikePhoto(st) {
   if (!st) return false;
+  // пішінге кесілген фото (Canva: алтыбұрыш, қиғаш шетті фото — пішіні мөлдір PNG-де): мөлдір бұрыштары бар, бірақ түсі өте көп әрі біркелкі таралған.
+  // Жаңа фото сол пішінге кесіледі (composite альфаны сақтайды)
+  if (st.opaque >= 0.7 && st.opaque < 0.88) return st.colors >= 200 && st.top8 <= 0.45 && st.lumStd >= 25;
   if (st.opaque < 0.88) return false;
   if (st.lumStd < 15) return false;
   if (st.sat > 0.08 && st.colors <= 35 && st.lumStd < 40) return false;

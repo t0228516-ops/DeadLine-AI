@@ -91,6 +91,8 @@ test('looksLikePhoto: paper, flat maps and cut-out ornaments stay; colour and B&
   assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 56, top8: 0.87, colors: 15, sat: 0.01 }), true, 'ақ-қара фото');
   assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 4.6, top8: 1, colors: 9, sat: 0.1 }), false, 'қағаз');
   assert.strictEqual(P.looksLikePhoto({ opaque: 1, lumStd: 29, top8: 0.83, colors: 19, sat: 0.5 }), false, 'жалпақ карта');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 0.83, lumStd: 67, top8: 0.31, colors: 221, sat: 0.57 }), true, 'алтыбұрышқа кесілген фото');
+  assert.strictEqual(P.looksLikePhoto({ opaque: 0.83, lumStd: 38, top8: 0.61, colors: 98, sat: 0.95 }), false, 'қиғаш шетті панель (мөлдір PNG)');
   assert.strictEqual(P.looksLikePhoto({ opaque: 0.82, lumStd: 32, top8: 0.68, colors: 91, sat: 0.4 }), false, 'мөлдір фонды әшекей');
   assert.strictEqual(P.looksLikePhoto(null), false);
 });
