@@ -155,3 +155,40 @@ test('shrinkImages: a big opaque PNG becomes a smaller JPEG (links and content t
     assert.ok(f2.has(media[1]) && f2.get(media[1]).readUInt32BE(0) === 0x89504e47, 'мөлдір PNG — PNG күйінде');
   } finally { await browser.close(); }
 });
+
+test('photos: small round stranger avatars are found for removal (scaled groups measured at real size); square timeline photos are not', () => {
+  const P = require('../products/presentation/library/photos');
+  const circ = '<a:custGeom><a:pathLst><a:path w="100" h="100"><a:moveTo><a:pt x="50" y="0"/></a:moveTo><a:cubicBezTo><a:pt x="0" y="0"/><a:pt x="0" y="0"/><a:pt x="0" y="50"/></a:cubicBezTo><a:cubicBezTo><a:pt x="0" y="0"/><a:pt x="0" y="0"/><a:pt x="50" y="100"/></a:cubicBezTo><a:cubicBezTo><a:pt x="0" y="0"/><a:pt x="0" y="0"/><a:pt x="100" y="50"/></a:cubicBezTo><a:cubicBezTo><a:pt x="0" y="0"/><a:pt x="0" y="0"/><a:pt x="50" y="0"/></a:cubicBezTo><a:close/></a:path></a:pathLst></a:custGeom>';
+  const pic = (geom, rid) => `<p:sp><p:nvSpPr><p:cNvPr id="5" name="a"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="4000000"/></a:xfrm>${geom}<a:blipFill><a:blip r:embed="${rid}"/><a:stretch/></a:blipFill></p:spPr></p:sp>`;
+  // топ 5 есе кішірейтеді: ішіндегі 4 000 000 EMU сурет слайдта 800 000 EMU (≈0,8%)
+  const grp = (body) => `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="9" name="g"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="1000000" y="1000000"/><a:ext cx="1600000" cy="1600000"/><a:chOff x="0" y="0"/><a:chExt cx="8000000" cy="8000000"/></a:xfrm></p:grpSpPr>${body}</p:grpSp>`;
+  const files = readZipAll(FIX);
+  const media = [...files.keys()].filter((n) => /^ppt\/media\/.+\.png$/.test(n));
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(20000, 7)]);
+  files.set(media[0].replace(/\.png$/, '.jpg'), jpg);
+  const rels = files.get('ppt/slides/_rels/slide1.xml.rels');
+  files.set('ppt/slides/_rels/slide1.xml.rels', rels.replace('</Relationships>', `<Relationship Id="rIdAv" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${media[0].split('/').pop().replace(/\.png$/, '.jpg')}"/></Relationships>`));
+  const xml = String(files.get('ppt/slides/slide1.xml'));
+  files.set('ppt/slides/slide1.xml', xml.replace('</p:spTree>', grp(pic(circ, 'rIdAv')) + '</p:spTree>'));
+  const buf = require('../products/presentation/templateFill').writeZipAll(files);
+  const tiny = P.tinyPortraits(buf);
+  assert.ok(tiny.some((s) => s.rid === 'rIdAv' && s.round), 'дөңгелек аватар табылды');
+  const out = P.removePictures(buf, tiny.filter((s) => s.rid === 'rIdAv'));
+  assert.ok(!String(readZipAll(out).get('ppt/slides/slide1.xml')).includes('rIdAv"/>'), 'аватар алынды');
+  const square = String(files.get('ppt/slides/slide1.xml')).replace(circ, '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>');
+  files.set('ppt/slides/slide1.xml', square);
+  assert.ok(!P.tinyPortraits(require('../products/presentation/templateFill').writeZipAll(files)).some((s) => s.rid === 'rIdAv'), 'шаршы фото — мазмұн, алынбайды');
+});
+
+test('canva credits: the pill that held removed text and the arrow inside it are removed too', () => {
+  const pill = '<p:sp><p:nvSpPr><p:cNvPr id="70" name="pill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="1000000" y="4000000"/><a:ext cx="3000000" cy="800000"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="333366"/></a:solidFill></p:spPr></p:sp>'
+    + '<p:sp><p:nvSpPr><p:cNvPr id="71" name="arrow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="1100000" y="4200000"/><a:ext cx="300000" cy="300000"/></a:xfrm><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom></p:spPr></p:sp>'
+    + '<p:sp><p:nvSpPr><p:cNvPr id="72" name="pilltext"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="1500000" y="4100000"/><a:ext cx="2300000" cy="600000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1200"/><a:t>small note</a:t></a:r></a:p></p:txBody></p:sp>';
+  const files = readZipAll(carveDeck(FIX, [0]));
+  const sp = orderedSlides(files)[0];
+  files.set(sp, String(files.get(sp)).replace('</p:spTree>', pill + '</p:spTree>'));
+  const out = L.canvaCredits(require('../products/presentation/templateFill').writeZipAll(files), -1);
+  const xml = String(readZipAll(out).get(orderedSlides(readZipAll(out))[0]));
+  assert.ok(xml.includes('Designed with Canva'));
+  assert.ok(!xml.includes('name="pill"') && !xml.includes('name="arrow"'), 'бос таблетка мен белгіше алынды');
+});

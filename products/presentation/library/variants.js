@@ -129,7 +129,7 @@ function mirrorTree(inner, ox, span, ctx) {
     re.lastIndex = end;
   }
   // бір жолда қатар тұрған мәтін қораптары («Fiscal» + «Policy») — бір бүтін: сөз реті ауыспайды
-  const boxes = items.filter((it) => it.tag === 'p:sp' && /<a:t>[^<]*\S/.test(it.el) && !/<a:blipFill/.test(it.el)).map((it) => {
+  const boxes = items.filter((it) => it.tag === 'p:sp' && /<a:t>[^<]*[^\s<]/.test(it.el) && !/<a:blipFill/.test(it.el)).map((it) => {
     const mm = it.el.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     return mm ? { it, x: +mm[1], y: +mm[2], w: +mm[3], h: +mm[4] } : null;
   }).filter(Boolean).sort((a, b) => a.x - b.x);

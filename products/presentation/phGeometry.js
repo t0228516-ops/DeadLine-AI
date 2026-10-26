@@ -77,7 +77,7 @@ function materializeTextBoxes(files, xml) {
   const sz = def ? +def : 1800;
   let out = xml;
   for (const sp of tagBlocks(xml, 'p:sp')) {
-    if (/<p:ph\b/.test(sp) || !/<p:txBody>/.test(sp) || !/<a:t>[^<]*\S/.test(sp)) continue;
+    if (/<p:ph\b/.test(sp) || !/<p:txBody>/.test(sp) || !/<a:t>[^<]*[^\s<]/.test(sp)) continue;
     if (/<a:(?:rPr|endParaRPr|defRPr)[^>]*? sz="/.test(sp)) continue;
     const nb = runSz(sp, sz);
     if (nb !== sp) out = out.replace(sp, () => nb);

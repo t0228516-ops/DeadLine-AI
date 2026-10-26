@@ -207,10 +207,13 @@ async function swapLibraryPhotos(buf, slides, ctx) {
   let slots;
   try { slots = P.photoSlots(buf); } catch (e) { console.warn(`[Library] photo slots: ${e.message}`); return buf; }
   const keep = new Set(ctx.keepMedia || []);
+  let tiny = [];
+  try { tiny = P.tinyPortraits(buf).filter((s) => !keep.has(s.media.split('/').pop())); } catch {}
   slots = slots.filter((s) => !keep.has(s.media.split('/').pop()));
-  // Canva: мәтін астындағы сурет — дизайнның атмосфералық фоны (қараңғы, бұлыңғыр); оны фотомен (карта, ашық сурет) ауыстырсақ мәтін оқылмайды
-  if (ctx.source === 'canva') slots = slots.filter((s) => !s.underText);
-  if (!slots.length) return buf;
+  // мәтін астындағы сурет — дизайнның атмосфералық фоны (қараңғы, бұлыңғыр): оны суретті көрмей (ашық карта, ақ ғимарат) ауыстырсақ,
+  // ақ тақырып оқылмай қалады. Canva-да мұқабасы да ауыспайды; SlidesCarnival мұқабасы — ауысады (оның фоны мәтінмен бірге жобаланған)
+  slots = slots.filter((s) => !s.underText || (ctx.source !== 'canva' && s.slide === 0));
+  if (!slots.length && !tiny.length) return buf;
   if (ctx.onProgress) await ctx.onProgress('images', 'Тақырыпқа сай суреттер ауыстырылуда...');
   let browser = null;
   try {
@@ -220,8 +223,15 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     const page = await browser.newPage();
     // текстура, карта, әшекей — фото емес, шаблонның өз безендіруі қалады
     const verdict = new Map();
-    for (const s of slots) {
+    for (const s of slots.concat(tiny)) {
       if (!verdict.has(s.media)) verdict.set(s.media, P.looksLikePhoto(await P.imageStats(page, files.get(s.media)).catch(() => null)));
+    }
+    // бөтен адамдардың кішкене суреттері (аватарлар) алынады — тақырыпқа жат беттер слайдта қалмасын
+    const strangers = tiny.filter((s) => verdict.get(s.media));
+    if (strangers.length) {
+      buf = P.removePictures(buf, strangers);
+      console.log(`[Library] photos: ${strangers.length} small stranger portrait(s) removed`);
+      if (!slots.length) return buf;
     }
     // слайдтағы барлық фото ауысады (4-ке дейін): ауыспай қалған шаблон фотосы тақырыпқа жат, ал бір макет екі рет келсе — екі слайдта бірдей фото
     const max = Number(process.env.LIBRARY_PHOTO_MAX) || 12;

@@ -292,7 +292,8 @@ function canvaCredits(buf, idx) {
   const all = orderedSlides(files);
   const sp = all[idx < 0 ? all.length + idx : idx];
   if (!sp) return buf;
-  let xml = String(files.get(sp));
+  // топ ішіндегі пішіндер — слайд координаттарында (бос таблетканы табу үшін)
+  let xml = require('./carve').normalizeGroups(String(files.get(sp)));
   const rp = sp.replace(/([^/]+)$/, '_rels/$1.rels');
   let rels = files.get(rp) || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
   const rid = 'rIdDlCanvaLink';
@@ -321,11 +322,32 @@ function canvaCredits(buf, idx) {
     return block.replace(/(<a:(?:rPr|endParaRPr|defRPr)\b[^>]*?)\s(?:sz|spc)="-?\d+"/g, '$1').replace(/(<a:(?:rPr|endParaRPr|defRPr)\b[^>]*?)\s(?:sz|spc)="-?\d+"/g, '$1').replace(/<a:(rPr|endParaRPr|defRPr)\b/g, `<a:$1 sz="${Math.round(pt) * 100}"`);
   };
   let titlePt = 60;
+  const rectOf = (b) => { const m = b.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/); return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null; };
+  const removed = [];
   ranked.forEach((b, i) => {
     if (i === 0) xml = xml.replace(b, () => { const out = fit(setText(b, 'Designed with Canva'), 19, 60); titlePt = size(out) / 100; return out; });
     else if (i === 1) xml = xml.replace(b, () => fit(setText(b, 'www.canva.com', true), 15, Math.min(20, Math.max(9, titlePt * 0.6))));
-    else xml = xml.replace(b, '');
+    else { const r = rectOf(b); if (r) removed.push(r); xml = xml.replace(b, ''); }
   });
+  // алынған мәтіннің «таблеткасы» (мәтінсіз шағын пішін) мен оның ішіндегі белгішелер (→) бос қалмасын
+  const W = +((files.get('ppt/presentation.xml') || '').match(/<p:sldSz\b[^>]*cx="(\d+)"/) || [])[1] || 12192000;
+  const H = +((files.get('ppt/presentation.xml') || '').match(/<p:sldSz\b[^>]*cy="(\d+)"/) || [])[1] || 6858000;
+  const inside = (o, i, tol) => o.x <= i.x + tol && o.y <= i.y + tol && o.x + o.w >= i.x + i.w - tol && o.y + o.h >= i.y + i.h - tol;
+  const holders = [];
+  for (const m of xml.matchAll(/<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g)) {
+    const b = m[0]; const r = rectOf(b);
+    if (!r || /<a:t>[^<]*[^\s<]/.test(b) || /<a:blipFill/.test(b) || r.w * r.h > W * H * 0.25) continue;
+    // мәтін қорабы таблеткадан кең болуы мүмкін (Canva) — мәтін ортасы таблетканың ішінде болса жеткілікті
+    if (removed.some((t) => inside(r, t, Math.max(r.w, r.h) * 0.08) || inside(r, { x: t.x + t.w / 2, y: t.y + t.h / 2, w: 0, h: 0 }, 0))) holders.push({ b, r });
+  }
+  for (const h of holders) {
+    xml = xml.replace(h.b, '');
+    // таблетка ішіндегі кішкене безендіру (белгіше)
+    for (const m of [...xml.matchAll(/<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>|<p:pic>(?:(?!<p:pic>)[\s\S])*?<\/p:pic>/g)]) {
+      const r = rectOf(m[0]);
+      if (r && !/<a:t>[^<]*[^\s<]/.test(m[0]) && inside(h.r, r, 0)) xml = xml.replace(m[0], '');
+    }
+  }
   files.set(sp, xml);
   files.set(rp, rels);
   return writeZipAll(files);

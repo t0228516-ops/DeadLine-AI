@@ -46,7 +46,10 @@ function picsOf(xml) {
     const rid = (block.match(/<a:blip [^>]*r:embed="([^"]+)"/) || [])[1];
     const x = block.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/);
     if (!rid || !x || /<a:tile\b/.test(block)) continue;
-    out.push({ rid, x: +x[1], y: +x[2], w: +x[3], h: +x[4] });
+    // дөңгелек пішін (ellipse не тек қисықтардан тұратын custGeom) — аватарға тән
+    const round = /<a:prstGeom prst="ellipse"/.test(block)
+      || (/<a:custGeom>/.test(block) && (block.match(/<a:cubicBezTo>/g) || []).length >= 4 && !/<a:lnTo>/.test(block));
+    out.push({ rid, x: +x[1], y: +x[2], w: +x[3], h: +x[4], ...(round ? { round: true } : {}) });
   }
   return out;
 }
@@ -75,23 +78,26 @@ function underText(p, boxes) {
   });
 }
 
-function photoSlots(buf) {
+function photoSlots(buf, o = {}) {
+  const minArea = o.minArea != null ? o.minArea : MIN_AREA;
   const files = readZipAll(buf);
   const { W, H } = slideSize(files);
   const out = [];
   orderedSlides(files).forEach((sp, i) => {
     const rels = relsMap(files.get(relsPathOf(sp)));
     const seen = new Set();
-    const boxes = textBoxesOf(files.get(sp));
-    for (const p of picsOf(files.get(sp))) {
+    // масштабталған топтың ішіндегі сурет — нақты өлшемімен (әйтпесе кішкене аватар «үлкен фото» болып көрінеді)
+    const geo = require('./carve').normalizeGroups(String(files.get(sp)));
+    const boxes = textBoxesOf(geo);
+    for (const p of picsOf(geo)) {
       const r = rels[p.rid];
       if (!r || seen.has(p.rid)) continue;
       const media = resolvePath(sp, r.target);
       const data = files.get(media);
       const area = (p.w * p.h) / (W * H);
-      if (area < MIN_AREA || !isPhotoBytes(media, data)) continue;
+      if (area < minArea || !isPhotoBytes(media, data)) continue;
       seen.add(p.rid);
-      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data), underText: underText(p, boxes) });
+      out.push({ slide: i, rid: p.rid, w: p.w, h: p.h, area: +area.toFixed(3), media, alpha: /\.png$/i.test(media) && pngHasAlpha(data), underText: underText(p, boxes), round: !!p.round });
     }
   });
   return out;
@@ -167,6 +173,48 @@ function replacePhotos(buf, list) {
   // ауыстырылған ескі суреттер енді ешкімге керек емес — өшеді (файл кішірейеді)
   if (n) require('./carve').collectGarbage(files);
   return { buf: writeZipAll(files), replaced: n };
+}
+
+/**
+ * Шаблонның бөтен адамдары: кішкене (слайдтың < 2,5%-ы), дөңгелек фото-аватарлар (команда, пікір, «кім айтты»).
+ * Шаршы кішкене фото (уақыт сызығының суреттері) — мазмұн, алынбайды.
+ * Тақырыпқа сай кішкене фото табу қиын әрі қымбат — олар слайдтан алынады (иконка, әшекей, логотип — фото емес, қалады).
+ * @returns {Array<{slide:number, rid:string, media:string}>} — removeTiny-ге (looksLikePhoto тексерісінен кейін)
+ */
+function tinyPortraits(buf) {
+  return photoSlots(buf, { minArea: 0.002 })
+    .filter((s) => s.area < 0.025 && s.round && Math.abs(s.w - s.h) <= Math.max(s.w, s.h) * 0.15);
+}
+
+/** Берілген (слайд, rId) суреттерін слайдтан алу; енді ешкімге керек емес медиа өшеді */
+function removePictures(buf, list) {
+  if (!list.length) return buf;
+  const files = readZipAll(buf);
+  const slides = orderedSlides(files);
+  const BLOCK = /<p:pic>(?:(?!<p:pic>)[\s\S])*?<\/p:pic>|<p:sp>(?:(?!<p:sp>)[\s\S])*?<\/p:sp>/g;
+  const rectOf = (b) => { const m = b.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/); return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null; };
+  for (const it of list) {
+    const sp = slides[it.slide];
+    if (!sp) continue;
+    const re = new RegExp(`r:embed="${it.rid}"`);
+    const gone = [];
+    let xml = String(files.get(sp)).replace(BLOCK, (b) => {
+      if (!(re.test(b) && (b.startsWith('<p:pic>') || /<p:spPr>(?:(?!<\/p:spPr>)[\s\S])*<a:blipFill/.test(b)) && !/<a:t>[^<]*[^\s<]/.test(b))) return b;
+      const r = rectOf(b); if (r) gone.push(r);
+      return '';
+    });
+    // аватардың жиегі (сақина, ақ дөңгелек): мәтінсіз, суретсіз, ортасы бір, өлшемі аватардан сәл ғана үлкен — бос шеңбер болып қалмасын
+    xml = xml.replace(BLOCK, (b) => {
+      if (/<a:t>[^<]*[^\s<]/.test(b) || /<a:blipFill/.test(b)) return b;
+      const r = rectOf(b);
+      if (!r) return b;
+      return gone.some((g) => Math.abs((r.x + r.w / 2) - (g.x + g.w / 2)) < g.w * 0.15 && Math.abs((r.y + r.h / 2) - (g.y + g.h / 2)) < g.h * 0.15
+        && r.w >= g.w * 0.9 && r.w <= g.w * 1.5 && r.h <= g.h * 1.5) ? '' : b;
+    });
+    files.set(sp, xml);
+  }
+  require('./carve').collectGarbage(files);
+  return writeZipAll(files);
 }
 
 /**
@@ -294,4 +342,4 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { picsOf, underText, shrinkImages, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+module.exports = { picsOf, underText, shrinkImages, tinyPortraits, removePictures, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };

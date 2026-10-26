@@ -183,3 +183,15 @@ test('слот жазушы: студент аты-жөнін бермесе —
   assert.ok(t1.some((x) => new RegExp(`${new Date().getFullYear()} Ж\\.?`, 'i').test(x)), JSON.stringify(t1));
   assert.ok(!t1.some((x) => /MATTHEW|PRESENTATION BY/.test(x)));
 });
+
+test('слот жазушы: алғыс слайдының тар тақырыбына ұзын алғыс сыймаса — «Рахмет!» (бір сөз кесіліп қалмайды)', async () => {
+  const end = tb(100, 160, 260, 60, 48, 'Inter', 'THANK YOU!');
+  const buf = makePptx([cover, end]);
+  const sc = analyzeTemplate(buf);
+  assert.strictEqual(sc.slides[1].kind, 'end');
+  const llm = async () => ({ slides: [{ index: 1, slots: { t: 'Кино тарихы' } }, { index: 2, slots: { t: 'Назарларыңызға рахмет' } }] });
+  const r = await writeSlots({ schema: sc, slides: [{ title: 'Кино' }, { title: 'Рахмет' }], topic: 'Кино', language: 'Kazakh', llm });
+  const ts = sc.slides[1].slots.find((x) => x.role === 'title');
+  const v = r.plan[1].byId[ts.id][0];
+  assert.ok(/рахмет/i.test(v) && v.length <= ts.max * 1.1, `${v} (≤${ts.max})`);
+});

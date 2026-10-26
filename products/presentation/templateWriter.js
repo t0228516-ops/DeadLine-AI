@@ -302,6 +302,18 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
   });
   report.problems = probs.map((x) => `${x.i + 1}:${x.s.key}:${x.p}`);
 
+  // ── 4б) алғыс слайды: тақырып орны тар болса «Назарларыңызға рахмет» кесіліп, бір сөз қалмасын — сыйса толық, болмаса «Рахмет!»
+  const THANKS = /^ru/i.test(language || '') ? ['Спасибо за внимание!', 'Спасибо!'] : /^en/i.test(language || '') ? ['Thank you!', 'Thanks!'] : ['Назарларыңызға рахмет!', 'Рахмет!'];
+  schema.slides.forEach((sch, i) => {
+    if (sch.kind !== 'end') return;
+    const ts = sch.slots.find((x) => x.role === 'title');
+    if (!ts) return;
+    const v = clean(out[i].texts[ts.key]);
+    if (/рахмет|спасибо|благодар|thank/i.test(v) && v.length <= ts.max * 1.1) return;
+    const pick = THANKS.find((x) => x.length <= ts.max * 1.1);
+    if (pick) out[i].texts[ts.key] = pick;
+  });
+
   // ── 5) авторлар (детерминді) ──────────────────────────────────────────
   const credits = (o.creditLines ? o.creditLines(o.coverMeta, language) : []).filter((c) => c && c.value);
   const coverChrome = {};
@@ -345,7 +357,17 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
         t[infos[0].key] = queue.map(lineOf).join('\n');
         queue = [];
         for (const s of infos.slice(1)) t[s.key] = '';
-      } else for (const s of infos) t[s.key] = '';
+      } else if (infos.length) {
+        // аты-жөн жоқ — ең үлкен ақпарат орны (көбіне таблетка) бос қалмайды: мұқабаның ішкі тақырыбы, болмаса жыл
+        const src = items[i] && items[i].slide && clean(items[i].slide.subtitle);
+        const sub = sch.slots.find((x) => x.role === 'subtitle');
+        const y = new Date().getFullYear();
+        const year = /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.`;
+        const yearUsed = Object.values(t).some((v) => typeof v === 'string' && v.includes(String(y)));
+        const fill = src && !(sub && t[sub.key]) && src.length <= infos[0].max * 1.1 ? fitToLimit(src, infos[0].max) : yearUsed ? '' : year;
+        t[infos[0].key] = fill ? caseLike(infos[0].orig, fill, 'label') : '';
+        for (const s of infos.slice(1)) t[s.key] = '';
+      }
       if (queue.length) {
         const sub = sch.slots.find((s) => s.role === 'subtitle');
         const extra = queue.map(lineOf).join('\n');
