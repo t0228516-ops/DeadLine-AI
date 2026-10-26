@@ -49,8 +49,17 @@ const SUBJECT_RE = {
   economics: new RegExp(`${L}(экономика|экономикал|қаржы|нарық|инфляция|бизнес|кәсіпкер|банк|салық|маркетинг|менеджмент|экономи|финанс|рынок|инфляц|предприним|налог|econom|financ|market|business|bank|tax|marketing|management|inflation)`, 'iu'),
   chemistry: new RegExp(`${L}(химия|химиял|молекула|зертхана|реакция|хими|молекул|реакци|лаборатор|chemi|molecul|laborator)`, 'iu'),
   physics: new RegExp(`${L}(физика|электр|магнит|энергия|оптика|механика|физик|электри|энерги|механик|оптик|physic|electric|magnet|energy|mechanic|optic)`, 'iu'),
+  // қоқыс шаблонының суреттері (контейнер, қоқыс жәшігі) тек қалдық тақырыбына жарайды — жалпы экологияға (климат, полигон) емес
+  waste: new RegExp(`${L}(қоқыс|қалдық|қайта өңдеу|мусор|отход|переработ|утилизац|waste|recycl|garbage|trash|landfill)`, 'iu'),
   art: new RegExp(`${L}(өнер|бейнелеу|музыка|театр|кино|сәулет|мүсін|искусств|живопис|музык|театр|архитект|скульпт|painting|music|theat|cinema|architect|sculpt|museum|музей|мұражай)`, 'iu'),
 };
+
+// Ауыр тақырып (қасірет, соғыс, ядролық сынақ, репрессия): ойыншық, мультфильм, мектеп әшекейлі шаблон орынсыз
+const SERIOUS_RE = new RegExp(`${L}(ядролық|полигон|соғыс|майдан|ашаршылық|аштық|репрессия|қуғын-сүргін|геноцид|қасірет|апат|террор|холокост|ядерн|войн|голод|репресс|геноцид|катастроф|трагеди|теракт|nuclear|atomic|war\\b|famine|genocide|repression|disaster|tragedy|holocaust|terror)`, 'iu');
+const LIGHT_STYLES = new Set(['school', 'playful', 'illustrated', 'botanical']);
+
+/** Шаблонның мазмұн макеттерінің саны: мәтін слайдтары + бір сан слайды + бір дәйексөз (олар презентацияда бір реттен ғана шығады) */
+const layoutsOf = (t) => (t.text || []).length + ((t.stats || []).length ? 1 : 0) + ((t.quote || []).length ? 1 : 0);
 
 /** Тақырыптың пәндері (бірнеше болуы мүмкін, жоқ болса — бос) */
 function topicSubjects(topic) {
@@ -82,10 +91,22 @@ function chooseTemplate(o = {}) {
   // Canva қоймасы жақында істемеді — біраз уақыт Canva шаблонын таңдамаймыз (әр студент 3 сәтсіз әрекетті күтпесін)
   const noCanva = o.noCanva || Date.now() < canvaDownUntil;
   // пәнге байланған шаблон тек сол пәнге; қалғаны — тақырып тобы бойынша
-  const usable = CATALOG.templates.filter((t) => (!noCanva || t.source !== 'canva') && (!t.subjects || t.subjects.some((x) => subjects.includes(x))));
+  const serious = SERIOUS_RE.test(String(o.topic || ''));
+  const usable = CATALOG.templates.filter((t) => (!noCanva || t.source !== 'canva') && (!t.subjects || t.subjects.some((x) => subjects.includes(x)))
+    && !(serious && (LIGHT_STYLES.has(t.style) || t.decor)));
   const fit = usable.filter((t) => (t.subjects ? true : t.groups.some((g) => groups.includes(g))));
   const pool = (fit.length ? fit : usable.filter((t) => t.groups.includes('general')));
-  const fresh = pool.filter((t) => !avoid.has(t.id));
+  // макеті жеткілікті шаблон: көп слайдты презентацияда бір макет қайта-қайта шықпасын (екі қайталауға дейін рұқсат);
+  // таңдау тым тарылса (5-тен аз) — шек біртіндеп босайды, әйтпесе бір студентке үнемі бір шаблон түседі
+  const need = Number(o.slideCount) ? Math.max(1, Math.round(Number(o.slideCount)) - 3) : 0;
+  const roomy = (list) => {
+    for (let slack = 2; slack <= need; slack++) {
+      const r = list.filter((t) => layoutsOf(t) >= need - slack);
+      if (r.length >= Math.min(5, list.length)) return r;
+    }
+    return list;
+  };
+  const fresh = roomy(pool.filter((t) => !avoid.has(t.id)));
   // пәні дәл сай шаблон (әшекейі тақырыпқа қатысты) — бірінші кезекте (LIBRARY_SUBJECT_SHARE, әдепкі — әрқашан)
   const exact = fresh.filter((t) => t.subjects);
   const share = process.env.LIBRARY_SUBJECT_SHARE == null || process.env.LIBRARY_SUBJECT_SHARE === '' ? 1 : Number(process.env.LIBRARY_SUBJECT_SHARE);
@@ -183,7 +204,10 @@ async function prepareDeck(o = {}) {
     return prepareDeck({ ...o, avoid: [...(o.avoid || []), t.id], tries: (o.tries || 0) + 1, noCanva: o.noCanva || t.source === 'canva' });
   }
   // Canva: жол-жолымен бөлек қораптардағы ірі тақырып — бір қорап (әйтпесе мұқабада бір сөз ғана қалады)
-  if (t.source === 'canva') { try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); } }
+  if (t.source === 'canva') {
+    try { src = require('./titles').mergeStackedTitles(src); } catch (e) { console.warn(`[Library] titles: ${e.message}`); }
+    try { src = require('./titles').widenPillLabels(src); } catch (e) { console.warn(`[Library] pill labels: ${e.message}`); }
+  }
   const want = Math.max(4, Math.min(20, Number(o.slideCount) || 10));
   let n = want;
   let deckBuf = null; let creditsBuf = null; let picks = null;
@@ -221,11 +245,23 @@ async function prepareDeck(o = {}) {
       variant.mirror = false; variant.hue = 0;
     } finally { if (browser) await browser.close().catch(() => {}); }
   }
+  // бір макет қайталанса (шаблонда макет аз) — қайталанған слайд айналы: екі слайд бір-бірінің көшірмесі болып көрінбейді
+  const repeats = picks.map((p, i) => (picks.indexOf(p) < i ? i : -1)).filter((i) => i >= 0);
+  if (repeats.length && t.source === 'canva' && t.mirror !== false && process.env.LIBRARY_MIRROR_REPEATS !== '0') {
+    let browser = null;
+    try {
+      browser = await require('../renderer').launchBrowser(require('puppeteer'));
+      creditsBuf = await require('./variants').mirrorSlides(creditsBuf, repeats, await browser.newPage());
+      console.log(`[Library] repeated layouts mirrored: slides ${repeats.map((i) => i + 1).join(',')}`);
+    } catch (e) { console.warn(`[Library] repeat mirror skipped: ${e.message}`); } finally { if (browser) await browser.close().catch(() => {}); }
+  }
   // Credits-сіз нұсқа — толтыруға; мәтін оқылатын етіледі (кегль, контраст, әшекейден арақашықтық)
   deckBuf = carveDeck(creditsBuf, picks.map((_, i) => i));
   if (process.env.LIBRARY_READABLE !== '0') { try { deckBuf = require('./readable').makeReadable(deckBuf); } catch (e) { console.warn(`[Library] readable skipped: ${e.message}`); } }
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB${variant.mirror ? ' mirror' : ''}${variant.hue ? ` hue+${variant.hue}` : ''}`);
-  return { id: t.id, source: t.source, style: t.style, variant, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+  // шаблон осы пәнге арналған (медицина шаблоны — медицина тақырыбы): оның фотолары тақырыпқа сай, ауыспаса да қалады
+  const subjectFit = !!(t.subjects && t.subjects.some((x) => topicSubjects(o.topic).includes(x)));
+  return { id: t.id, source: t.source, style: t.style, variant, subjectFit, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
     outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 
@@ -365,4 +401,4 @@ function eligible(o = {}, env = process.env, rng = Math.random) {
   return rng() < share;
 }
 
-module.exports = { CATALOG, linkCredits, canvaCredits, creditsSlide, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
+module.exports = { CATALOG, SERIOUS_RE, layoutsOf, linkCredits, canvaCredits, creditsSlide, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };

@@ -300,6 +300,9 @@ async function imageStats(page, bytes) {
  */
 function looksLikePhoto(st) {
   if (!st) return false;
+  // пішінге кесілген фото (Canva: алтыбұрыш, қиғаш шетті фото — пішіні мөлдір PNG-де): мөлдір бұрыштары бар, бірақ түсі өте көп әрі біркелкі таралған.
+  // Жаңа фото сол пішінге кесіледі (composite альфаны сақтайды)
+  if (st.opaque >= 0.7 && st.opaque < 0.88) return st.colors >= 200 && st.top8 <= 0.45 && st.lumStd >= 25;
   if (st.opaque < 0.88) return false;
   if (st.lumStd < 15) return false;
   if (st.sat > 0.08 && st.colors <= 35 && st.lumStd < 40) return false;
@@ -342,4 +345,55 @@ async function composite(page, origBytes, origMedia, dataUri, focus) {
   return m ? Buffer.from(m[2], 'base64') : null;
 }
 
-module.exports = { picsOf, underText, shrinkImages, tinyPortraits, removePictures, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };
+const hashOf = (bytes) => require('crypto').createHash('sha1').update(bytes).digest('hex');
+
+/**
+ * Тақырыпқа жат шаблон фотосын түстік фонға айналдыру: фотоның өз түстерінен (үсті мен асты) жұмсақ градиент,
+ * пішіні (альфа) мен өлшемі сол — макет бұзылмайды, ал жарықтығы сақталғандықтан үстіндегі мәтін бұрынғыдай оқылады.
+ * hashes — ауыстырылмай қалған фотолардың байт хэштері (swapLibraryPhotos жинайды); сол байттағы әр медиа файл орнында ауысады.
+ */
+async function neutralizeMedia(buf, hashes, o = {}) {
+  hashes = new Set(hashes || []);
+  let extra = [];
+  if (o.lastSlide) { const all = photoSlots(buf); const last = Math.max(-1, ...all.map((p) => p.slide)); extra = all.filter((p) => p.slide === last && last === orderedSlides(readZipAll(buf)).length - 1); }
+  if (!hashes.size && !extra.length) return buf;
+  const files = readZipAll(buf);
+  let browser = null;
+  try {
+    let page = o.page;
+    if (!page) { browser = await require('../renderer').launchBrowser(require('puppeteer')); page = await browser.newPage(); }
+    // Credits слайды (жабу/мұқаба негізінде) өз фотосымен келеді — ол да тексеріледі
+    for (const p of extra) if (looksLikePhoto(await imageStats(page, files.get(p.media)).catch(() => null))) hashes.add(hashOf(files.get(p.media)));
+    const targets = [...files.keys()].filter((n) => /^ppt\/media\/[^/]+\.(png|jpe?g)$/i.test(n) && hashes.has(hashOf(files.get(n))));
+    if (!targets.length) return buf;
+    // түс — шаблонның өз негізгі реңі (сұр-қоңыр дақ емес, әдейі жасалған түсті пішін болып көрінсін); жарықтығы фотоның өзінікі
+    const hue = o.hue != null ? o.hue : (require('./variants').dominantHue(buf) ?? 220);
+    for (const name of targets) {
+      const png = /\.png$/i.test(name);
+      const mime = png ? 'image/png' : 'image/jpeg';
+      const out = await page.evaluate(async (src, type, hue) => {
+        const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('img')); i.src = src; });
+        const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+        const W = Math.max(1, Math.round(im.naturalWidth * k)), H = Math.max(1, Math.round(im.naturalHeight * k));
+        const sc = document.createElement('canvas'); sc.width = 24; sc.height = 24; const sg = sc.getContext('2d'); sg.drawImage(im, 0, 0, 24, 24);
+        const px = sg.getImageData(0, 0, 24, 24).data;
+        let sum = 0, n = 0;
+        for (let i = 0; i < px.length; i += 4) { if (px[i + 3] < 128) continue; sum += (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255; n++; }
+        const L = Math.round((n ? sum / n : 0.5) * 100);
+        const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+        const gr = g.createLinearGradient(0, 0, W * 0.35, H);
+        const hsl = (l, sat) => `hsl(${hue}, ${sat}%, ${Math.max(16, Math.min(84, l))}%)`;
+        gr.addColorStop(0, hsl(L + 12, 55)); gr.addColorStop(1, hsl(L - 10, 62));
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        if (type === 'image/png') { g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0, W, H); }
+        return c.toDataURL(type, 0.9);
+      }, `data:${mime};base64,${Buffer.from(files.get(name)).toString('base64')}`, mime, hue);
+      const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(out || '');
+      if (m) files.set(name, Buffer.from(m[2], 'base64'));
+    }
+    console.log(`[Library] photos: ${targets.length} off-topic template photo(s) toned into plain colour`);
+    return writeZipAll(files);
+  } finally { if (browser) await browser.close().catch(() => {}); }
+}
+
+module.exports = { hashOf, neutralizeMedia, picsOf, underText, shrinkImages, tinyPortraits, removePictures, looksLikePhoto, imageStats, slideSize, photoSlots, replacePhotos, coverCrop, pngHasAlpha, imageSize, composite };

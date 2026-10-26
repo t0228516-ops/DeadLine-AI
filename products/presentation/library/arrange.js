@@ -68,6 +68,7 @@ const titleOnly = (m) => m.role === 'text' && !itemsOf(m) && !m.bodies && !m.sub
 function fitScore(m, shape) {
   const k = itemsOf(m);
   const want = Math.max(1, Math.min(6, Number(shape.count) || 0));
+  if (m.role === 'cover' || m.role === 'agenda' || m.role === 'closing') return -Infinity;   // мұқабадағы жыл «сан» болып көрінсе де, ол мазмұн слайды емес
   if (shape.form !== 'section' && titleOnly(m)) return -Infinity;   // студент оқитын мәтінсіз слайд шықпасын
   switch (shape.form) {
     case 'quote': return m.role === 'quote' ? 10 : -Infinity;
@@ -104,7 +105,9 @@ function matchPicks(t, meta, shapes, fixed) {
       if (m.slide === middle[i - 1] || m.slide === middle[i + 1]) continue;   // бір макет қатар келмейді
       let s = fitScore(m, sh);
       if (s === -Infinity) continue;
-      s -= 5 * (used.get(m.slide) || 0);                         // бір макет көп қайталанбасын
+      // бір макет қайталанбасын: әлі қолданылмаған (сай келетін) макет болса, ол ең жақсы сайдан да алда тұрады —
+      // мәтін генераторы слайдтың нақты формасын біледі (storyFrom), сондықтан «4 пункт» бір абзацқа да сыяды
+      s -= 12 * (used.get(m.slide) || 0);
       if (s > bs) { bs = s; best = m; }
     }
     return best;

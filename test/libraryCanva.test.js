@@ -192,3 +192,15 @@ test('canva credits: the pill that held removed text and the arrow inside it are
   assert.ok(xml.includes('Designed with Canva'));
   assert.ok(!xml.includes('name="pill"') && !xml.includes('name="arrow"'), 'бос таблетка мен белгіше алынды');
 });
+
+test('widenPillLabels: a label box narrower than its pill grows to the pill (centred); a number on a long bar stays', () => {
+  const { widenSlide } = require('../products/presentation/library/titles');
+  const pic = (id, x, y, w, h) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="F${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:blipFill><a:blip r:embed="rId2"/></a:blipFill></p:spPr></p:sp>`;
+  const txt = (id, x, y, w, h, t) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="T${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="2000"/><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const xml = pic(2, 1000000, 1000000, 1700000, 470000) + txt(3, 1400000, 1080000, 900000, 300000, 'ORGAN')
+    + pic(4, 1000000, 3000000, 8800000, 1290000) + txt(5, 1260000, 3270000, 730000, 700000, '01');
+  const out = widenSlide(xml, 18288000, 10287000);
+  assert.match(out, /name="T3"[\s\S]*?<a:off x="1102000" y="1080000"\/><a:ext cx="1496000"/);
+  assert.match(out, /name="T3"[\s\S]*?algn="ctr"/);
+  assert.match(out, /name="T5"[\s\S]*?<a:off x="1260000" y="3270000"\/><a:ext cx="730000"/);
+});
