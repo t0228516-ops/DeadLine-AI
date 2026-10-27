@@ -147,7 +147,8 @@ const cardCount = (sch) => sch.slots.filter((x) => x.role === 'card' && x.part =
 
 /** Тақырып «төрт сала» дейді, слайдта 3 карточка — қате (null — дұрыс). */
 function countProblem(sch, s, text) {
-  if (s.role !== 'title' || sch.kind !== 'content') return null;
+  // тақырып та, оның үстіндегі/астындағы шағын жазу да («Негізгі үш тип» + 4 карточка)
+  if (!['title', 'subtitle', 'tag', 'accent', 'label'].includes(s.role) || sch.kind !== 'content') return null;
   const c = cardCount(sch); const n = countIn(text);
   return c >= 2 && n != null && n !== c ? `the heading names ${n} items but the slide shows exactly ${c}` : null;
 }
