@@ -344,7 +344,8 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
     const grp = queue.find((c) => c.kind === 'group');
     if (perf && grp && pairs.length) { perf.extra = `${grp.label}: ${grp.value}`; queue = queue.filter((c) => c !== grp); }
     // студент аты-жөнін бермесе — мұқабадағы «Presented by» таблеткасы бос қалмасын: бірінші жұпқа жыл жазылады
-    if (!credits.length && sch.kind === 'cover' && pairs.length) {
+    const yearStat = sch.kind === 'cover' && sch.slots.some((s) => s.role === 'stat' && /^\s*(19|20)\d\d\s*$/.test(String(s.orig || '')));
+    if (!credits.length && sch.kind === 'cover' && pairs.length && !yearStat) {
       const y = new Date().getFullYear();
       queue = [{ kind: 'year', label: '', value: /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.` }];
     }
@@ -386,7 +387,7 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
         const sub = sch.slots.find((x) => x.role === 'subtitle');
         const y = new Date().getFullYear();
         const year = /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.`;
-        const yearUsed = Object.values(t).some((v) => typeof v === 'string' && v.includes(String(y)));
+        const yearUsed = yearStat || Object.values(t).some((v) => typeof v === 'string' && v.includes(String(y)));
         const fill = src && !(sub && t[sub.key]) && src.length <= infos[0].max * 1.1 ? fitToLimit(src, infos[0].max) : yearUsed ? '' : year;
         t[infos[0].key] = fill ? caseLike(infos[0].orig, fill, 'label') : '';
         for (const s of infos.slice(1)) t[s.key] = '';

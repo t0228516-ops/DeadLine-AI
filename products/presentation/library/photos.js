@@ -368,10 +368,13 @@ async function neutralizeMedia(buf, hashes, o = {}) {
     if (!targets.length) return buf;
     // түс — шаблонның өз негізгі реңі (сұр-қоңыр дақ емес, әдейі жасалған түсті пішін болып көрінсін); жарықтығы фотоның өзінікі
     const hue = o.hue != null ? o.hue : (require('./variants').dominantHue(buf) ?? 220);
+    // осы презентацияда табылған тақырыптық фотолар: бос түсті қорап емес, солардың бірі шаблон реңіне боялып қойылады (duotone)
+    const pool = (o.photos || []).filter((x) => typeof x === 'string' && /^data:image\//.test(x));
+    let k = 0;
     for (const name of targets) {
       const png = /\.png$/i.test(name);
       const mime = png ? 'image/png' : 'image/jpeg';
-      const out = await page.evaluate(async (src, type, hue) => {
+      const out = await page.evaluate(async (src, type, hue, photo) => {
         const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('img')); i.src = src; });
         const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
         const W = Math.max(1, Math.round(im.naturalWidth * k)), H = Math.max(1, Math.round(im.naturalHeight * k));
@@ -384,14 +387,23 @@ async function neutralizeMedia(buf, hashes, o = {}) {
         const gr = g.createLinearGradient(0, 0, W * 0.35, H);
         const hsl = (l, sat) => `hsl(${hue}, ${sat}%, ${Math.max(16, Math.min(84, l))}%)`;
         gr.addColorStop(0, hsl(L + 12, 55)); gr.addColorStop(1, hsl(L - 10, 62));
-        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        if (photo) {
+          // фото — қорапты толтыратын кесу; сұр түске → шаблон реңі (жарықтығы сақталады) → түпнұсқа жарықтығына жақындатылады (мәтін оқылуы)
+          const ph = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('img')); i.src = photo; });
+          const s = Math.max(W / ph.naturalWidth, H / ph.naturalHeight);
+          g.filter = 'grayscale(1) contrast(0.9)';
+          g.drawImage(ph, (W - ph.naturalWidth * s) / 2, (H - ph.naturalHeight * s) / 2, ph.naturalWidth * s, ph.naturalHeight * s);
+          g.filter = 'none';
+          g.globalCompositeOperation = 'color'; g.fillStyle = gr; g.fillRect(0, 0, W, H);
+          g.globalCompositeOperation = 'source-over'; g.globalAlpha = 0.6; g.fillStyle = hsl(L, 50); g.fillRect(0, 0, W, H); g.globalAlpha = 1;
+        } else { g.fillStyle = gr; g.fillRect(0, 0, W, H); }
         if (type === 'image/png') { g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0, W, H); }
         return c.toDataURL(type, 0.9);
-      }, `data:${mime};base64,${Buffer.from(files.get(name)).toString('base64')}`, mime, hue);
+      }, `data:${mime};base64,${Buffer.from(files.get(name)).toString('base64')}`, mime, hue, pool.length ? pool[k++ % pool.length] : null);
       const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(out || '');
       if (m) files.set(name, Buffer.from(m[2], 'base64'));
     }
-    console.log(`[Library] photos: ${targets.length} off-topic template photo(s) toned into plain colour`);
+    console.log(`[Library] photos: ${targets.length} off-topic template photo(s) toned ${pool.length ? 'into on-topic duotone' : 'into plain colour'}`);
     return writeZipAll(files);
   } finally { if (browser) await browser.close().catch(() => {}); }
 }

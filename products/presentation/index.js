@@ -279,6 +279,7 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     // тақырыпқа жат шаблонда әлі бос қалған үлкен тіктөртбұрыш фото — осы презентацияда табылған фотоның бірі (басқа кесумен):
     // түсті бос тіктөртбұрыш «сурет түспей қалғандай» көрінеді, ал қайталанған тақырыптық фото — жоқ
     const gotList = found.filter(Boolean);
+    if (Array.isArray(ctx.photos)) ctx.photos.push(...gotList.map((x) => x.dataUri));
     if (neutralize && gotList.length) {
       let k = 0;
       slots.forEach((sl, i) => {
@@ -738,15 +739,15 @@ async function generatePresentation(userInput, options = {}) {
         try { fs.writeFileSync(pptxPath, require('./library/readable').numberSections(fs.readFileSync(pptxPath), options.library.roles)); } catch (e) { console.warn(`[Library] section numbers: ${e.message}`); }
         // шаблонның өз бет нөмірлері — біздің слайд ретімен (02, 05, 03 … емес)
         try { fs.writeFileSync(pptxPath, require('./library/adapt').renumberFolios(fs.readFileSync(pptxPath))); } catch (e) { console.warn(`[Library] folios: ${e.message}`); }
-        const neutral = new Set();
+        const neutral = new Set(options.library.toneHashes || []); const photos = [];
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
-          subjectFit: !!options.library.subjectFit, neutral,
+          subjectFit: !!options.library.subjectFit, neutral, photos,
         });
         let finalBuf = require('./library').appendCredits(withPhotos, options.library, language);
         // тақырыпқа жат шаблон фотосы (Credits слайдындағысы да) — сол жерінде, пішінімен түстік фонға айналады
         if (!options.library.subjectFit && options.library.swapPhotos !== false) {
-          finalBuf = await require('./library/photos').neutralizeMedia(finalBuf, neutral, { lastSlide: true })
+          finalBuf = await require('./library/photos').neutralizeMedia(finalBuf, neutral, { lastSlide: true, photos })
             .catch((e) => { console.warn(`[Library] neutralize: ${e.message}`); return finalBuf; });
         }
         // Telegram 50 МБ шегіне жақын ауыр шаблон: суреттер кішірейеді (LIBRARY_SHRINK_MB, әдепкі 20 МБ-тан бастап)

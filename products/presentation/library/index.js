@@ -272,7 +272,15 @@ async function prepareDeck(o = {}) {
   console.log(`[Library] ${t.id} (${t.style}) ← «${String(o.topic || '').slice(0, 50)}» groups=${topicGroups(o.topic).join(',')} slides=${picks.length}+credits ${(creditsBuf.length / 1e6).toFixed(1)}MB${variant.mirror ? ' mirror' : ''}${variant.hue ? ` hue+${variant.hue}` : ''}`);
   // шаблон осы пәнге арналған (медицина шаблоны — медицина тақырыбы): оның фотолары тақырыпқа сай, ауыспаса да қалады
   const subjectFit = !!(t.subjects && t.subjects.some((x) => topicSubjects(o.topic).includes(x)));
-  return { id: t.id, source: t.source, style: t.style, variant, subjectFit, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
+  // бейімдеу патчындағы tone: шаблонның әдейі күңгірттелген, тақырыпқа жат фото-фоны (сынып, дәліз) — статистикасы текстураға ұқсайды,
+  // сондықтан аты бойынша белгіленеді; тақырыпқа жат шаблонда ол да тақырыптық duotone-ға айналады
+  let toneHashes = [];
+  const toneKept = adaptPatch && adaptPatch.toneKeep && new RegExp(adaptPatch.toneKeep, 'iu').test(String(o.topic || ''));
+  if (!subjectFit && !toneKept && adaptPatch && Array.isArray(adaptPatch.tone) && adaptPatch.tone.length) {
+    const files = require('../templateFill').readZipAll(creditsBuf);
+    toneHashes = adaptPatch.tone.map((n) => files.get(`ppt/media/${n}`)).filter(Boolean).map((b) => require('./photos').hashOf(b));
+  }
+  return { id: t.id, source: t.source, style: t.style, variant, subjectFit, toneHashes, swapPhotos: t.swapPhotos !== false, keepMedia: t.keepMedia || [], slideCount: picks.length, deckBuf, creditsBuf, creditsIdx: picks.length,
     outline: arranged ? arranged.outline : null, roles: picks.map((p) => roleOf(t, p + 1)) };
 }
 
