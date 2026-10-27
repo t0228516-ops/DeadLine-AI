@@ -247,8 +247,9 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     slots = slots.filter((s) => verdict.get(s.media)).sort((a, b) => b.area - a.area)
       .filter((s) => { const n = perSlide.get(s.slide) || 0; if (n >= 4) return false; perSlide.set(s.slide, n + 1); return true; }).slice(0, max);
     if (!slots.length) { leftover(new Set()); console.log('[Library] photos: no replaceable photos (decor only)'); return buf; }
-    const used = new Set();
     const avoid = ctx.avoid instanceof Set ? ctx.avoid : new Set();
+    // студенттің бұрынғы презентацияларындағы фотолар — бұл жолы алынбайды (резервтік іздеу жолы avoid-ты білмейді)
+    const used = new Set(avoid);
     // broad: слайдқа дәл фото табылмаса — тақырыптың жалпы көрінісі (мыс. «Kazakh steppe»): үлкен фото орны бос түсті тіктөртбұрыш болып қалмасын
     const search = async (slot, broad) => {
       const slide = slides[slot.slide] || {};
@@ -279,6 +280,8 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     // тақырыпқа жат шаблонда әлі бос қалған үлкен тіктөртбұрыш фото — осы презентацияда табылған фотоның бірі (басқа кесумен):
     // түсті бос тіктөртбұрыш «сурет түспей қалғандай» көрінеді, ал қайталанған тақырыптық фото — жоқ
     const gotList = found.filter(Boolean);
+    // студент жадына: келесі презентациясында осы фотолар қайталанбайды (бір тақырыпты екі рет жасатса да)
+    if (Array.isArray(ctx.photoKeys)) ctx.photoKeys.push(...[...used].filter((x) => typeof x === 'string' && x && !avoid.has(x) && !ctx.photoKeys.includes(x)));
     if (Array.isArray(ctx.photos)) ctx.photos.push(...gotList.map((x) => x.dataUri));
     if (neutralize && gotList.length) {
       let k = 0;
@@ -742,7 +745,7 @@ async function generatePresentation(userInput, options = {}) {
         const neutral = new Set(options.library.toneHashes || []); const photos = [];
         const withPhotos = options.library.swapPhotos === false ? fs.readFileSync(pptxPath) : await swapLibraryPhotos(fs.readFileSync(pptxPath), slides, {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
-          subjectFit: !!options.library.subjectFit, neutral, photos,
+          subjectFit: !!options.library.subjectFit, neutral, photos, photoKeys,
         });
         let finalBuf = require('./library').appendCredits(withPhotos, options.library, language);
         // тақырыпқа жат шаблон фотосы (Credits слайдындағысы да) — сол жерінде, пішінімен түстік фонға айналады
