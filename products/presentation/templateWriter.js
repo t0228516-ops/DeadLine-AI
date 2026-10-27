@@ -348,15 +348,34 @@ ${list.map((x) => (x.s.key === 'logo' ? `  "logo": ${x.p}` : `${slotLine(x.s)}  
       const y = new Date().getFullYear();
       queue = [{ kind: 'year', label: '', value: /^ru/i.test(language || '') ? `${y} г.` : /^en/i.test(language || '') ? String(y) : `${y} ж.` }];
     }
+    const usedInfo = new Set();
     for (const p of pairs) {
       const c = take('performed') || take('checked') || queue.shift();
       if (p.label) t[p.label.key] = c ? caseLike(p.label.orig, c.label, 'label') : '';
       if (p.value) t[p.value.key] = c ? caseLike(p.value.orig, (p.label ? c.value : lineOf(c)) + (c.extra ? `\n${c.extra}` : ''), 'label') : '';
+      // белгі бар, мән орны жоқ («Presented by» + бөлек аты-жөн қорабы): мән ақпарат орнына кетеді (белгісіз), жоғалмайды
+      else if (p.label && c) {
+        const near = sch.kind === 'cover' && p.label.xRel != null && sch.slots.filter((x) => x.role === 'info' && !usedInfo.has(x.key) && x.xRel != null)
+          .map((x) => ({ x, d: Math.hypot(x.xRel - p.label.xRel, (x.yRel - p.label.yRel) * 2) })).sort((a, b) => a.d - b.d)[0];
+        if (near && near.d < 0.5) {
+          usedInfo.add(near.x.key);
+          // тар қорап: аты-жөн сөз ортасынан бөлінбесін — бос орыннан екі жолға
+          const w = String(c.value).split(/\s+/); let v = c.value;
+          if (v.length > near.x.max && w.length > 1) { const k = Math.ceil(w.length / 2); v = `${w.slice(0, k).join(' ')}\n${w.slice(k).join(' ')}`; }
+          t[near.x.key] = caseLike(near.x.orig, v, 'label');
+        } else queue.unshift({ kind: c.kind, label: '', value: c.value });
+        if (c.extra) queue.push({ kind: 'group', label: '', value: c.extra });
+      }
+    }
+    // мұқабадағы жыл-сан (шаблонның «2026»-сы) — LLM жазған кез келген жыл емес, ағымдағы жыл
+    if (sch.kind === 'cover') {
+      const y = String(new Date().getFullYear());
+      for (const s of sch.slots) if (s.role === 'stat' && /^\s*(19|20)\d\d\s*$/.test(String(s.orig || ''))) t[s.key] = y;
     }
     // жұп жоқ немесе жетпесе: титул ақпарат жолдары → (титулдағы) белгілер → subtitle-ге қосымша жол
     if (sch.kind === 'cover') {
       // қалған титул жолдары бір блокта, табиғи ретпен (орындаған → тексерген → топ → …) — ең үлкен ақпарат орнына
-      const infos = sch.slots.filter((s) => s.role === 'info').sort((a, b) => b.max - a.max);
+      const infos = sch.slots.filter((s) => s.role === 'info' && !usedInfo.has(s.key)).sort((a, b) => b.max - a.max);
       if (infos.length && queue.length) {
         t[infos[0].key] = queue.map(lineOf).join('\n');
         queue = [];

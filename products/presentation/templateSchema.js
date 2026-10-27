@@ -232,7 +232,7 @@ function analyzeTemplate(template) {
       const longest = Math.max(0, ...String(f.text).split(/\s+/).map((w) => w.replace(/[^\p{L}]/gu, '').length));
       const wordMax = Math.max(3, longest, Math.floor((f.box.w / 12700 - 14) / (f.sz * (f.sz >= 30 ? 0.5 : 0.72) * (f.style.cls === 'serif' || f.style.cls === 'script' ? 0.5 : 0.56) * (upper ? 1.22 : 1) * 1.04)));
       slots.push({ key: r.key, id: f.id, role: r.role, part: r.part || null, deck: !!r.deck, max: Math.min(max, 320), min, orig: f.text, sz: f.sz, script: f.style.cls === 'script', oneLine: f.oneLine,
-        ...(wordMax < 16 ? { wordMax } : {}) });
+        ...(wordMax < 16 ? { wordMax } : {}), ...(kind !== 'content' && f.box ? { xRel: f.box.x / W, yRel: f.box.y / H } : {}) });
     }
     // логотип (бас әріп + сөз)
     let logo = null;

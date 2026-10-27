@@ -398,6 +398,13 @@ async function takeDueRatePrompts(now = Date.now(), limit = 20) {
   return due.map((r) => ({ jobId: r.job_id, chatId: r.chat_id, kind: r.kind, dueAt: r.due_at }));
 }
 
+/** Соңғы кезеңде бұл адамға баға сұрауы кеткен бе, не ол бір презентацияны бағалаған ба (except — қазіргі топтама). */
+async function recentRateContact(chatId, since, except = []) {
+  const id = String(chatId); const skip = new Set(except.map(String));
+  return Object.values(db.rate_prompts).some((r) => String(r.chat_id) === id && r.sent && r.due_at >= since && !skip.has(String(r.job_id))) ||
+    Object.values(db.feedback).some((f) => String(f.chat_id) === id && f.rating && Number(f.created_at) >= since);
+}
+
 async function useCredit(chatId) {
   const u = db.users[String(chatId)];
   if (!u || (Number(u.credits) || 0) <= 0) return false;
@@ -850,6 +857,7 @@ module.exports = {
   setFeedback,
   scheduleRatePrompt,
   takeDueRatePrompts,
+  recentRateContact,
   useCredit,
   refundCredit,
   claimFreeDeck,

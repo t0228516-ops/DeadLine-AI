@@ -618,6 +618,18 @@ async function takeDueRatePrompts(now = Date.now(), limit = 20) {
   return r.rows.map((x) => ({ jobId: x.job_id, chatId: String(x.chat_id), kind: x.kind, dueAt: num(x.due_at) }));
 }
 
+/** Соңғы кезеңде бұл адамға баға сұрауы кеткен бе, не ол бір презентацияны бағалаған ба (except — қазіргі топтама). */
+async function recentRateContact(chatId, since, except = []) {
+  const r = await q(
+    `SELECT 1 FROM rate_prompts WHERE chat_id = $1 AND sent = TRUE AND due_at >= $2::bigint AND NOT (job_id = ANY($3::text[]))
+     UNION ALL
+     SELECT 1 FROM feedback WHERE chat_id = $1 AND rating IS NOT NULL AND created_at >= ${tw('feedback', 'created_at', '$2::bigint')}
+     LIMIT 1`,
+    [String(chatId), Number(since), except.map(String)]
+  );
+  return r.rows.length > 0;
+}
+
 async function useCredit(chatId) {
   // Атомарлы: бір мезгілде екі сұраныс келсе де баланс теріске кетпейді
   const r = await q(
@@ -1092,6 +1104,7 @@ module.exports = {
   setFeedback,
   scheduleRatePrompt,
   takeDueRatePrompts,
+  recentRateContact,
   useCredit,
   refundCredit,
   claimFreeDeck,

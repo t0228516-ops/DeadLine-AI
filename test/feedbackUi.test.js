@@ -53,6 +53,24 @@ test('JSON база: баға сұрауы кезегі — мерзімі же�
   assert.strictEqual(await db.scheduleRatePrompt({ jobId: 'jA', chatId: 1, dueAt: now }), true, 'cleanup ескі сұрауларды өшірді');
 });
 
+test('JSON база: recentRateContact — 24 сағатта сұралған не бағалаған адамға қайта сұрамау', async () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dl-rate2-'));
+  fs.mkdirSync(path.join(dir, 'storage'));
+  fs.copyFileSync(path.join(__dirname, '../storage/jsonDb.js'), path.join(dir, 'storage/jsonDb.js'));
+  const db = require(path.join(dir, 'storage/jsonDb.js'));
+  await db.initDB();
+  const now = Date.now(); const day = now - 24 * 3600e3;
+  await db.scheduleRatePrompt({ jobId: 'j1', chatId: 7, dueAt: now - 1000 });
+  await db.scheduleRatePrompt({ jobId: 'j2', chatId: 7, dueAt: now - 500 });
+  const batch = (await db.takeDueRatePrompts(now)).map((x) => x.jobId);
+  assert.strictEqual(await db.recentRateContact(7, day, batch), false, 'қазіргі топтама есепке алынбайды');
+  assert.strictEqual(await db.recentRateContact(7, day), true, 'кеткен сұрау — 24 сағат тыныштық');
+  assert.strictEqual(await db.recentRateContact(8, day), false);
+  await db.setFeedback('j9', 8, { rating: 4 });
+  assert.strictEqual(await db.recentRateContact(8, day), true, 'бағалаған адамға сұрамаймыз');
+});
+
 test('comment prompt is optional: inline "write / skip" buttons, never force_reply (the menu stays visible)', () => {
   const { commentKeyboard, parseCommentCallback } = require('../core/feedbackUi');
   const kb = commentKeyboard('jlx9k2ab3cd');

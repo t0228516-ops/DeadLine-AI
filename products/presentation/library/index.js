@@ -320,19 +320,21 @@ function linkCredits(buf, idx) {
 }
 
 /** Толтырылған колодаға түпнұсқа Credits слайдын қосу (атрибуция мен slidescarnival.com сілтемесі — рұқсаттың міндетті шарты) */
-function appendCredits(filledBuf, prep) {
+function appendCredits(filledBuf, prep, language) {
   const out = appendSlideFrom(filledBuf, prep.creditsBuf, prep.creditsIdx);
-  return prep.source === 'canva' ? canvaCredits(out, -1) : linkCredits(out, -1);
+  return prep.source === 'canva' ? canvaCredits(out, -1, language) : linkCredits(out, -1);
 }
 
 const CANVA_URL = 'https://www.canva.com';
+const THANKS = { kk: 'Назарларыңызға рахмет!', ru: 'Спасибо за внимание!', en: 'Thank you!' };
+const CANVA_LINE = 'Designed with Canva · www.canva.com';
 
 /**
- * Canva лицензиясының шарты: әр презентацияда «Designed with Canva» анық жазылған credits слайды.
- * Шаблонның жабу слайды алынады (дизайны сақталады), ең ірі мәтін → «Designed with Canva», келесісі → canva.com сілтемесі,
- * қалған мәтін қораптары алынады.
+ * Соңғы слайд — студент көрсете алатын қорытынды: шаблонның жабу слайды (дизайны сақталады), ең ірі мәтін → «Назарларыңызға рахмет!»,
+ * келесісі → шағын «Designed with Canva · www.canva.com» сілтемесі (атрибуция), қалған мәтін қораптары алынады.
  */
-function canvaCredits(buf, idx) {
+function canvaCredits(buf, idx, language) {
+  const thanks = THANKS[language] || THANKS.kk;
   const { readZipAll, writeZipAll } = require('../templateFill');
   const { orderedSlides } = require('../../../design-dna/structure');
   const files = readZipAll(buf);
@@ -372,8 +374,8 @@ function canvaCredits(buf, idx) {
   const rectOf = (b) => { const m = b.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/); return m ? { x: +m[1], y: +m[2], w: +m[3], h: +m[4] } : null; };
   const removed = [];
   ranked.forEach((b, i) => {
-    if (i === 0) xml = xml.replace(b, () => { const out = fit(setText(b, 'Designed with Canva'), 19, 60); titlePt = size(out) / 100; return out; });
-    else if (i === 1) xml = xml.replace(b, () => fit(setText(b, 'www.canva.com', true), 15, Math.min(20, Math.max(9, titlePt * 0.6))));
+    if (i === 0) xml = xml.replace(b, () => { const out = fit(setText(b, thanks), thanks.length, 60); titlePt = size(out) / 100; return out; });
+    else if (i === 1) xml = xml.replace(b, () => fit(setText(b, CANVA_LINE, true), CANVA_LINE.length, Math.min(12, Math.max(9, titlePt * 0.4))));
     else { const r = rectOf(b); if (r) removed.push(r); xml = xml.replace(b, ''); }
   });
   // алынған мәтіннің «таблеткасы» (мәтінсіз шағын пішін) мен оның ішіндегі белгішелер (→) бос қалмасын

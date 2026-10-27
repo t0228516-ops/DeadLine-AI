@@ -743,7 +743,7 @@ async function generatePresentation(userInput, options = {}) {
           topic: title || topic, source: options.library.source, free: !!options.free, avoid: new Set(Array.isArray(options.photoAvoid) ? options.photoAvoid : []), onProgress, keepMedia: options.library.keepMedia,
           subjectFit: !!options.library.subjectFit, neutral,
         });
-        let finalBuf = require('./library').appendCredits(withPhotos, options.library);
+        let finalBuf = require('./library').appendCredits(withPhotos, options.library, language);
         // тақырыпқа жат шаблон фотосы (Credits слайдындағысы да) — сол жерінде, пішінімен түстік фонға айналады
         if (!options.library.subjectFit && options.library.swapPhotos !== false) {
           finalBuf = await require('./library/photos').neutralizeMedia(finalBuf, neutral, { lastSlide: true })

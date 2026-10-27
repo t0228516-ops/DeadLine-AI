@@ -19,7 +19,7 @@ const {
   checkRateLimits, markGenerationAttempt, markGenerationSuccess,
   createJob, updateJob, getJob, getUserJobs, addHistory, getHistory,
   cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
-  scheduleRatePrompt, takeDueRatePrompts, logEvent, setUserProfile, logGen, adminData, addCredits,
+  scheduleRatePrompt, takeDueRatePrompts, recentRateContact, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
   getDesignMemory, pushDesignMemory,
 } = require('./db');
@@ -771,8 +771,13 @@ async function sendDueRatePrompts() {
   if (!global.__deadlineBot) return;
   let due = [];
   try { due = await takeDueRatePrompts(Date.now(), 20); } catch (e) { return console.warn('[Rate] take failed:', e.message); }
-  for (const p of due) {
+  // бір адамға тәулігіне ≤1 сұрау: топтамадан тек соңғы презентация, 24 сағатта сұралған/бағалаған болса — жоқ
+  const latest = new Map();
+  for (const p of due) if (!latest.has(p.chatId) || p.dueAt >= latest.get(p.chatId).dueAt) latest.set(p.chatId, p);
+  const batch = due.map((p) => p.jobId);
+  for (const p of latest.values()) {
     try {
+      if (await recentRateContact(p.chatId, Date.now() - 24 * 3600e3, batch)) continue;
       const job = await getJob(p.jobId);
       if (!job || job.status !== 'done') continue;               // жұмыс өшкен/құлаған — сұрамаймыз
       const fb = await getFeedbackForJob(p.jobId).catch(() => null);

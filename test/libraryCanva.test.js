@@ -17,12 +17,12 @@ const s3 = require('../products/presentation/library/s3');
 const FIX = fs.readFileSync(path.join(__dirname, 'fixture-canva.pptx'));
 const texts = (xml) => [...String(xml).matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]);
 
-test('canva credits: largest text says "Designed with Canva", the next links to canva.com, other text is removed', () => {
+test('canva credits: largest text thanks the audience, the next is a small "Designed with Canva" link, other text is removed', () => {
   const deck = carveDeck(FIX, [0, 0]);
   const out = L.canvaCredits(L.canvaCredits(deck, -1), -1);
   const files = readZipAll(out);
   const [first, last] = orderedSlides(files);
-  assert.deepStrictEqual(texts(files.get(last)).sort(), ['Designed with Canva', 'www.canva.com'].sort());
+  assert.deepStrictEqual(texts(files.get(last)).sort(), ['Назарларыңызға рахмет!', 'Designed with Canva · www.canva.com'].sort());
   const rels = files.get(last.replace(/([^/]+)$/, '_rels/$1.rels'));
   const link = Object.entries(relsMap(rels)).filter(([, r]) => r.target === 'https://www.canva.com');
   assert.strictEqual(link.length, 1, 'бір сілтеме');
@@ -43,7 +43,7 @@ test('canva credits: appendCredits picks the Canva form by source; credits slide
   const files = readZipAll(out);
   const sl = orderedSlides(files);
   assert.strictEqual(sl.length, 2);
-  assert.ok(texts(files.get(sl[1])).includes('Designed with Canva'));
+  assert.ok(texts(files.get(sl[1])).includes('Designed with Canva · www.canva.com'));
 });
 
 test('photos: Canva image shapes (p:sp with blipFill) are photo slots; plain shapes and tiled fills are not', () => {
