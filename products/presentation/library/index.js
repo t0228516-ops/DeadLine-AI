@@ -83,6 +83,12 @@ function topicGroups(topic) {
  * Шаблон таңдау: тақырып тобына сай (пәнге байланған шаблон — тек сол пәнге), студенттің соңғы кітапхана шаблондарынан (avoid) өзгеше.
  * @param {{topic?:string, avoid?:string[], rng?:()=>number, noCanva?:boolean}} o
  */
+// көзбен тексерілген шаблондар ғана (library/allow.json); тізім жоқ не LIBRARY_ALLOW_ALL=1 — бәрі
+const ALLOW = (() => {
+  if (process.env.LIBRARY_ALLOW_ALL === '1') return null;
+  try { const ids = require('./allow.json').ids; return Array.isArray(ids) && ids.length ? new Set(ids) : null; } catch { return null; }
+})();
+
 function chooseTemplate(o = {}) {
   const rng = o.rng || Math.random;
   const groups = topicGroups(o.topic);
@@ -92,7 +98,7 @@ function chooseTemplate(o = {}) {
   const noCanva = o.noCanva || Date.now() < canvaDownUntil;
   // пәнге байланған шаблон тек сол пәнге; қалғаны — тақырып тобы бойынша
   const serious = SERIOUS_RE.test(String(o.topic || ''));
-  const usable = CATALOG.templates.filter((t) => (!noCanva || t.source !== 'canva') && (!t.subjects || t.subjects.some((x) => subjects.includes(x)))
+  const usable = CATALOG.templates.filter((t) => (!ALLOW || o.id || ALLOW.has(t.id)) && (!noCanva || t.source !== 'canva') && (!t.subjects || t.subjects.some((x) => subjects.includes(x)))
     && !(serious && (LIGHT_STYLES.has(t.style) || t.decor)));
   const fit = usable.filter((t) => (t.subjects ? true : t.groups.some((g) => groups.includes(g))));
   const pool = (fit.length ? fit : usable.filter((t) => t.groups.includes('general')));

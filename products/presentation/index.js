@@ -1238,6 +1238,7 @@ async function generatePresentation(userInput, options = {}) {
     // Үйрену жүйесі үшін толтыру нәтижесі (шаблонның өзін server.js оқиды — тек клиент келіскенде)
     templateLearn: isTemplateFill && !options.library ? { fit: fitInfo, layoutPlanned } : null,
     libraryId: options.library ? options.library.id : null,
+    templateHealth,
     requirementsReport,
     templateReport,
     mode,

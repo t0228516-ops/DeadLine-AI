@@ -261,3 +261,15 @@ test('arrange: the cover (its year looks like a figure) is never picked as a con
   const picks = A.matchPicks({ cover: 1 }, meta, [{ form: 'figures', count: 2 }, { form: 'points', count: 3 }, { form: 'explain', count: 1 }], { agenda: false, closing: false });
   assert.ok(!picks.slice(1).includes(0), picks.join(','));
 });
+
+test('allow list: only reviewed templates are chosen unless LIBRARY_ALLOW_ALL=1', () => {
+  const { execFileSync } = require('child_process');
+  const out = execFileSync(process.execPath, ['-e', `
+    const L = require('./products/presentation/library');
+    const ids = new Set(require('./products/presentation/library/allow.json').ids);
+    let bad = 0;
+    for (let i = 0; i < 200; i++) { const t = L.chooseTemplate({ topic: ['Қазақ хандығы', 'Жүрек аурулары', 'Жасанды интеллект', 'Экология'][i % 4], rng: Math.random }); if (!ids.has(t.id)) bad++; }
+    console.log(bad);
+  `], { cwd: require('path').join(__dirname, '..'), env: { ...process.env, LIBRARY_ALLOW_ALL: '' } }).toString().trim();
+  assert.strictEqual(out, '0');
+});

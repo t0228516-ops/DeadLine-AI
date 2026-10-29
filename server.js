@@ -997,19 +997,18 @@ async function executeJob(jobId) {
           topic: job.payload?.topic || userInput, slideCount: job.payload?.slideCount, avoid: recentLibs,
           brief: userInput, language: job.payload?.language,
         });
-        referencePptx = library.deckBuf;
         pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
       } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
     }
-    const result = await withDeadline(generatePresentation(userInput, {
+    const genOpts = (lib) => ({
       ...avoid,
-      library,
+      library: lib,
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
-      mode: library ? 'template' : (job.payload?.mode || 'presentation'),
+      mode: lib ? 'template' : (job.payload?.mode || 'presentation'),
       materialText: job.payload?.materialText || null,
-      referencePptx,
+      referencePptx: lib ? lib.deckBuf : referencePptx,
       requirements: job.payload?.requirements || null,
       free: !!job.payload?.free,
       maxSlides: job.payload?.free ? FREE_MAX_SLIDES : null,
@@ -1039,7 +1038,24 @@ async function executeJob(jobId) {
           progress,
         });
       },
-    }), JOB_TIMEOUT_MS, 'generation');
+    });
+    let result;
+    try {
+      result = await withDeadline(generatePresentation(userInput, genOpts(library)), JOB_TIMEOUT_MS, 'generation');
+    } catch (e) {
+      if (!library) throw e;
+      console.warn(`[Library] ${library.id}: template generation failed (${e.message}) — own layouts`);
+      result = { failed: true };
+    }
+    // Сапа қақпасы: кітапхана шаблонымен шыққан презентация сапасы төмен болса (сыймаған/қабаттасқан мәтін т.б.) —
+    // клиентке жіберілмейді, боттың өз макеттерімен қайта жасалады
+    const MIN_HEALTH = Number(process.env.LIBRARY_MIN_HEALTH) || 90;
+    if (library && (result.failed || !(result.templateHealth >= MIN_HEALTH))) {
+      console.warn(`[Library] ${library.id}: health=${result.templateHealth ?? '—'} < ${MIN_HEALTH} — discarded, regenerating with own layouts`);
+      for (const f of [result.pptxPath, result.htmlPath, result.speechPath]) { if (f) { try { fs.unlinkSync(f); } catch {} } }
+      library = null;
+      result = await withDeadline(generatePresentation(userInput, genOpts(null)), JOB_TIMEOUT_MS, 'generation');
+    }
 
     // Move outputs into jobs dir for stable serving
     const destDir = path.join(JOBS_DIR, jobId);
