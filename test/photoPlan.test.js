@@ -52,3 +52,11 @@ test('photo plan: content slides the composition engine can show a photo on get 
   assert.ok(!p.indexes.has(2) && !p.indexes.has(4), 'сандар мен уақыт сызығына фото ізделмейді');
   if (p.planned[6] === 'closing') assert.ok(!p.indexes.has(6), 'closing-seal фотоны көрсетпейді');
 });
+
+test('imageQuery "NONE" (no photographable subject): no photo search for that slide', () => {
+  const { mayCarryPhoto } = require('../products/presentation/photoPlan');
+  const { isLatinQuery } = require('../products/presentation/images');
+  assert.strictEqual(mayCarryPhoto({ title: 'Мотивация құрылымы', bullets: ['a', 'b', 'c'], imageQuery: 'NONE' }), false);
+  assert.strictEqual(mayCarryPhoto({ title: 'Мотивация', bullets: ['a', 'b', 'c'], imageQuery: 'career counselor talking with student' }), true);
+  assert.strictEqual(isLatinQuery('NONE'), false, 'NONE іздеу сұранысы емес');
+});

@@ -247,6 +247,7 @@ function isLatinQuery(q) {
   const t = String(q || '').trim();
   if (t.length < 2) return false;
   if (/[\u0400-\u052F]/.test(t)) return false;
+  if (/^none$/i.test(t)) return false;          // «фото жоқ» белгісі — іздеу сұранысы емес
   return /[A-Za-z]{2,}/.test(t);
 }
 

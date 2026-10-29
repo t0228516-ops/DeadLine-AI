@@ -486,6 +486,7 @@ const COMPOSITION_RULES = `ART-DIRECTOR COMPOSITION (every slide needs a clear v
   • Named subject (a person, historical event, battle, artwork, building, city, organisation, scientific term): write its exact English name first, plus what kind of image fits — e.g. "Florence Nightingale portrait", "Battle of Balaclava painting", "Khoja Ahmed Yasawi mausoleum", "Max Weber portrait", "enzyme substrate molecular model". Real historical events get period paintings, archive photos or maps — never modern reenactors.
   • General subject: concrete scene with the key object — e.g. "elementary pupils raising hands classroom", "landfill aerial view", "geologist examining rock outcrop".
   Translate the slide idea into English yourself; required on EVERY slide, also on infographic/table slides with image "none" (the code may still give that slide a photo).
+  NO PHOTOGRAPHABLE SUBJECT: if no real photo could show THIS slide's point (a definition, a theory's logic, a classification, a formula, a pure concept like "motivation sphere structure" or "point defects in a crystal lattice" without a real lab image) — write exactly "NONE". The slide then gets a clean text/typographic layout instead of a loosely related stock photo. Use NONE only when even the "real scene where it happens" rule above gives nothing specific.
 - Do NOT output composition.mood, composition.accentColor or composition.decorative — the renderer chooses the colour theme and background decoration for the whole deck.
 - Do NOT write colour or "dark/black background" wording into imageQuery; describe the photographed scene only.`;
 
@@ -907,6 +908,7 @@ Fix only:
 - Too many bullets (>5) → keep the strongest 3-4
 - Each bullet >18 words → shorten to "Key term — full fact" (8-14 words after the dash, keep names/dates/numbers; never a bare label). Do NOT shorten bullets that are already within this length
 - full_background + overlay=none → add dark_gradient_bottom
+- imageQuery "NONE" (no photographable subject) → keep it as "NONE"
 - Vague imageQuery → rewrite in English naming the literal subject the photo must show (exact name for a person/event/place/artwork); remove lighting/mood/camera words; two subjects joined by "and" → keep only the one this slide is about
 - If a slide has a clear physical/scientific/historical subject, add or improve visualIntent so the 3D renderer can select a semantic model; never use generic words like "object" or "shape"
 - If 2+ stats with right_half/left_half image → change image to full_background

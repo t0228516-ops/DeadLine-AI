@@ -30,6 +30,8 @@ function photoFriendly(s) {
 
 function mayCarryPhoto(slide) {
   const s = slide || {};
+  // LLM «суретке түсетін нақты нәрсе жоқ» деді (абстракт ұғым) — жақын-жуық стоктық фото емес, фотосыз макет
+  if (/^\s*none\s*$/i.test(String(s.imageQuery || ''))) return false;
   // DeepSeek ырғақ үшін мазмұн слайдына да image:"none" қояды — макетті композиция қозғалтқышы өзі таңдайды, фото жарайтын слайд фотосыз қалмасын
   if (s.composition && s.composition.image === 'none' && !photoFriendly(s)) return false;
   if (validateInfographic(s.infographic)) return false;
