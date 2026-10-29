@@ -91,6 +91,7 @@ Rules:
 - If no catalogue subject clearly fits the slide, answer null. A weak or generic match is worse than nothing.
 - Never pick something that contradicts the topic (European knight or a jeweled European crown/tiara for Kazakh khans, Egyptian temple for a Kazakh khanate, a ship for a steppe topic).
 - Kazakh ornament / Kazakh symbol items only for slides about Kazakh history, culture, traditions, literature or people.
+- No figurative metaphors: a word used figuratively is not its object ("heart/core of the personality" is not an anatomical heart, "communication" is not a telephone, "engine of progress" is not a machine). Body parts and organs only for medicine/biology slides; tools and machines only when the slide is about that technology.
 - Each id at most once per deck. At most MAX slides get an item; prefer slides whose text names a concrete object.
 - The slide text may be in Kazakh, Russian or English; the catalogue is in English (some with a Kazakh word).
 Return JSON: {"picks":[{"slide":<number>,"id":"<catalogue id>"|null}]}`;
