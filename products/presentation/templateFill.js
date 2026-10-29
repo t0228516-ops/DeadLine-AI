@@ -195,7 +195,6 @@ function relsOf(xml) {
 }
 
 // ─── Мәтінді қорапқа ӨЛШЕП орналастыру қозғалтқышы ──────────────────────────
-const W_SANS = { low: 0.575, up: 0.703, dig: 0.573, sp: 0.272, pun: 0.336 };   // Inter Light өлшемінен
 const W_SERIF = { low: 0.515, up: 0.704, dig: 0.5, sp: 0.25, pun: 0.32 };      // Times өлшемінен
 const isSerifFace = (f) => /serif|times|georgia|cambria|garamond|didot|bodoni|playfair|jour|palatino|book|cormorant|baskerville|caslon|canela|lora|merriweather|libre|antiqua|roman/i.test(f || '') && !/sans/i.test(f || '');
 /** Кирилл қамтымайтын қаріптің орнына: кескінді (≥30pt) және serif қаріптер → Times; қалған мәтін (sans) → Arial (түпнұсқадағыдай sans көрінісі). */
@@ -596,12 +595,6 @@ function linesForSlide(slide) {
   return { title, body };
 }
 
-function chunkLines(lines, n) {
-  const groups = [];
-  const per = Math.ceil(lines.length / Math.max(n, 1));
-  for (let i = 0; i < n; i++) groups.push(lines.slice(i * per, Math.min((i + 1) * per, lines.length)));
-  return groups;
-}
 
 function slideSize(files) {
   const pres = files.get('ppt/presentation.xml') || '';

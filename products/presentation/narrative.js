@@ -37,9 +37,6 @@ function slideTitle(s) {
   return String(s && s.title || '').trim();
 }
 
-function isCover(s, i) {
-  return i === 0 || /мұқаба|cover|титул|title slide/i.test(slideTitle(s));
-}
 
 function isClosing(s, i, n) {
   return i === n - 1 || /қорытынды|conclusion|резюме|summary|әдебиет|reference|takeaway/i.test(slideTitle(s));

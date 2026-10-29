@@ -205,8 +205,6 @@ const inter = (a, b) => {
 };
 const contains = (o, i, tol = 4) => o.x <= i.x + tol && o.y <= i.y + tol && o.x + o.w >= i.x + i.w - tol && o.y + o.h >= i.y + i.h - tol;
 const area = (r) => r.w * r.h;
-/** Шаблонда әуелден бар әдейі қабаттасу: кішісінің ≥30%-ы жабылған. */
-const designed = (a, b) => { const v = inter(a, b); return v > 0 && v >= 0.3 * Math.min(area(a), area(b)); };
 /** Қабаттасу үлесі (кішісінің ауданынан). */
 const fracOf = (a, b) => { const v = inter(a, b); return v > 0 ? v / Math.max(1, Math.min(area(a), area(b))) : 0; };
 /** Кедергіге тию: шаблонда рұқсат етілген үлестен +12%-дан асса ғана. */

@@ -1,3 +1,4 @@
+// @ts-check
 'use strict';
 /**
  * PHOTO PLAN — ask the stock-photo APIs only for the slides that will actually SHOW a photo.

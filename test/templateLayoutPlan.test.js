@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const P = require('../products/presentation/templateLayoutPlan');
 const T = require('../products/presentation/templateFill');
-const { orderedSlides, tagBlocks } = require('../design-dna/structure');
+const { tagBlocks } = require('../design-dna/structure');
 
 const sp = (id, x, y, w, h, sz, txt) => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="s${id}"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="${sz}"/><a:t>${txt}</a:t></a:r></a:p></p:txBody></p:sp>`;
 const pic = (id, x, y, w, h) => `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="p${id}"/></p:nvPicPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm></p:spPr></p:pic>`;

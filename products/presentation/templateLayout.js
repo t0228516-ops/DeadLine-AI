@@ -14,7 +14,6 @@ const { xfrmOf } = require('../../design-dna/structure');
 
 const GAP = 110000;            // ~0.12" көршіге дейінгі ара
 const TOL = 20000;
-const MARGIN_BOTTOM = 300000;  // слайд төменгі шетінен қалатын өріс
 const MAX_SHIFT = 760000;      // кедергіні жылжытудың ең үлкен қашықтығы (~0.83")
 const MAX_WIDEN = 0.4;         // қорап енін ең көбі +40% үлкейтеміз
 

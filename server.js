@@ -12,10 +12,10 @@ const http = require('http');
 
 const { generatePresentation } = require('./products/presentation/index');
 const { generateReferat } = require('./products/referat/index');
-const { analyzeMaterialFile, materialsToText } = require('./core/materials');
+const { analyzeMaterialFile } = require('./core/materials');
 const { ratingKeyboard, ratePromptText, rateDueAt } = require('./core/feedbackUi');
 const {
-  initDB, getUser, registerUser, useCredit, refundCredit, releaseFreeDeck, freeFunnel,
+  initDB, getUser, registerUser, useCredit, refundCredit, releaseFreeDeck,
   checkRateLimits, markGenerationAttempt, markGenerationSuccess,
   createJob, updateJob, getJob, getUserJobs, addHistory, getHistory,
   cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,

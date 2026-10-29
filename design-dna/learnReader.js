@@ -28,7 +28,6 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const hex = (h) => '#' + String(h).slice(0, 6).toLowerCase();
 
 // ─── XML ағашы ────────────────────────────────────────────────────────────
-const CHILD_TAGS = ['p:grpSp', 'p:sp', 'p:pic', 'p:cxnSp', 'p:graphicFrame'];
 const OPEN_RE = /<(p:grpSp|p:sp|p:pic|p:cxnSp|p:graphicFrame)(?=[\s>/])/g;
 
 /** Контейнердің ТІКЕЛЕЙ балалары (ішкі топтар бір блок болып қайтады). */

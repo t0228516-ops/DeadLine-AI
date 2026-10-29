@@ -1,3 +1,4 @@
+// @ts-check
 'use strict';
 
 /**
@@ -453,7 +454,8 @@ function lexicalFit(cands, query) {
  * Суретті табады ЖӘНЕ жүктейді. Жүктеу сәтсіз болса — келесі кандидатқа/провайдерге/сұраныс нұсқасына өтеді.
  * opts.judge берілсе: әр топтама алдымен тексеріледі (сипаттамасы слайдқа сай ма) — сай келмесе алынбайды.
  * @param {string} query
- * @param {{used?: Set<string>, free?: boolean, budget?: {left:number}, judge?: (cands: object[], q: string) => Promise<number[]|null>}} [opts]
+ * @typedef {((cands: object[], q: string) => Promise<number[]|null>) & {live?: () => boolean, scoreOf?: (c: object) => number}} PhotoJudge
+ * @param {{used?: Set<string>, free?: boolean, budget?: {left:number}, judge?: PhotoJudge}} [opts]
  *   used — осы презентацияда алынған URL-дер (қайталанбау үшін); free — тегін колода (резервті жемейді);
  *   budget — осы фотоға рұқсат етілген API іздеу саны (кэш тегін), бірнеше шақыру арасында ортақ;
  *   judge — кандидаттардан сайларының индекстерін (ең жақсысы бірінші) қайтарады; null → сөздік резерв тексеру
@@ -609,10 +611,10 @@ function withTimeout(promise, ms, label) {
  * ең жақсысы толық өлшемде жүктеледі және нақты өлшемі орынға сай екені тексеріледі.
  * Сай сурет болмаса — келесі нұсқа (ең көбі opts.maxVariants, мерзім ішінде), сосын null (шақырушы AI суретке/суретсізге өтеді).
  * @param {string} query
- * @param {{used?:Set<string>, avoid?:Set<string>, free?:boolean, budget?:{left:number}, vision:Function, maxVariants?:number,
+ * @param {{used?:Set<string>, avoid?:Set<string>, free?:boolean, budget?:{left:number}, vision?:Function, maxVariants?:number, archive?:boolean,
  *          place?:'bg'|'frame', deadline?:number}} opts
  *   avoid — осы студенттің бұрынғы презентацияларындағы суреттер (canonKey): басқа таңдау болса қайталанбайды
- * @returns {Promise<{dataUri:string,url:string,key:string,credit:string,source:string,desc:string,focus:string,fit:number,appeal:number}|null|{failed:true}>}
+ * @returns {Promise<{dataUri:string,url:string,key:string,credit:string,license:string,source:string,desc:string,focus:string,fit:number,appeal:number}|null|{failed:true}>}
  *   {failed:true} → vision шақыруы сәтсіз (желі/кілт): шақырушы мәтіндік тексеру жолына өтеді
  */
 async function findImageVision(query, opts = {}) {

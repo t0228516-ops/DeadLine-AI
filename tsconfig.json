@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["core/**/*.js", "products/**/*.js", "storage/**/*.js", "server.js", "bot.js"],
+  "exclude": ["node_modules", "**/*.legacy.js", "products/presentation/assets/**"]
+}

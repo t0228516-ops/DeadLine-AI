@@ -24,7 +24,7 @@ const { pickDeckDecor } = require('./design/decorPick');
 const { attachVisuals }            = require('./visual');
 const { renderHtmlToPngs }        = require('./renderer');
 const { exportToPptx }            = require('./pptxExporter');
-const { runQualityLoop, renderWarningsToIssues } = require('./quality');
+const { runQualityLoop } = require('./quality');
 const { repairDeckComposition, hintsFromOverflowWarnings } = require('./composition');
 const { createCostTracker, setActiveCostTracker } = require('../../core/cost');
 const { deepseekJson } = require('../../core/llm');
@@ -51,17 +51,6 @@ function simplifyQuery(query) {
 }
 
 // Толық brief емес, тек қысқа кілт сөз (толық brief Unsplash-та 414 қатесін береді)
-function shortTopicKeyword(topic) {
-  if (!topic || typeof topic !== 'string') return '';
-  const quoted = topic.match(/[«"“]([^»"”']{4,60})[»"”']/);
-  if (quoted) return quoted[1].trim();
-  const line = topic.split(/[\n\r]+/).map(s => s.trim()).find(s =>
-    s.length >= 4 && s.length <= 80 &&
-    !/^\d+-?слайд/i.test(s) && !/Тексерген|Орындаған|Топ:/i.test(s)
-  );
-  if (line) return line.replace(/^Тақырып\s*[:：]\s*/i, '').slice(0, 60);
-  return topic.slice(0, 40);
-}
 
 const LAST_FIT = Number(process.env.PHOTO_LAST_RESORT_FIT) || 5;
 async function bestSeen(seen, ctx, place) {

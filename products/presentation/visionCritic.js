@@ -14,7 +14,6 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 const { recordApiUsage } = require('../../core/cost');
 const { repairSlideComposition, ensureComposition } = require('./composition');
 
