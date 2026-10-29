@@ -89,3 +89,11 @@ test('fallbackQueries: қазақша тақырып Pexels-ке жіберіл�
   const en = fallbackQueries('', 'Renewable energy. 10 slides', []);
   assert.ok(en[0].startsWith('Renewable energy'));
 });
+
+test('sameScene: another photo of the same hall is a repeat; a different subject is not', () => {
+  const { sameScene } = require('../products/presentation/images');
+  const seen = [{ desc: 'Interior of the parliament assembly hall with wooden desks', credit: 'John' }];
+  assert.strictEqual(sameScene({ desc: 'Parliament assembly hall interior, wooden desks and seats', credit: 'Ann' }, seen), true);
+  assert.strictEqual(sameScene({ desc: 'Voter casting a ballot at a polling station', credit: 'John' }, seen), false);
+  assert.strictEqual(sameScene({ desc: 'hall', credit: 'John' }, seen), false, 'сипаттама тым қысқа — шешпейміз');
+});

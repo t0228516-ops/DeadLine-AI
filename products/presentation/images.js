@@ -478,10 +478,13 @@ async function findImage(query, opts = {}) {
     // (бұрын бірінші мақұлданған көздің бірінші суреті алынатын, келесі көздегі 10 балдық сурет қаралмайтын).
     const pool = [];
     for (const name of order) {
+      if (isSlow(name)) continue;
       let cands = [];
       try {
-        cands = await searchProvider(name, q, budget);
+        cands = await withTimeout(searchProvider(name, q, budget), PROVIDER_TIMEOUT_MS, name);
+        noteSearch(name, true);
       } catch (err) {
+        noteSearch(name, false, err);
         console.warn(`[Image:${name}] search failed (${err.response?.status || err.code || err.message}) q="${q.slice(0, 40)}"`);
         continue;
       }
@@ -545,7 +548,16 @@ function interleave(lists) {
 
 const VISION_BATCH = Number(process.env.PHOTO_VISION_BATCH) || 12;
 const OPEN_SEARCHES_PER_PHOTO = Number(process.env.OPEN_SEARCHES_PER_PHOTO) || 8;
-const PROVIDER_TIMEOUT_MS = Number(process.env.IMAGE_PROVIDER_TIMEOUT_MS) || 10000;
+const PROVIDER_TIMEOUT_MS = Number(process.env.IMAGE_PROVIDER_TIMEOUT_MS) || 5000;
+// баяу көз: қатарынан 3 рет уақыт шегінен асса — 30 минут сұралмайды (әр слайд 5–10 с бос күтпесін)
+const slowStreak = {}; const slowUntil = {};
+const isSlow = (name) => (slowUntil[name] || 0) > Date.now();
+function noteSearch(name, ok, err) {
+  const timedOut = !ok && /timeout|ECONNABORTED|ETIMEDOUT|ECONNRESET/i.test(String((err && (err.code || err.message)) || ''));
+  if (ok || !timedOut) { slowStreak[name] = 0; return; }
+  slowStreak[name] = (slowStreak[name] || 0) + 1;
+  if (slowStreak[name] >= 3) { slowUntil[name] = Date.now() + 30 * 60e3; slowStreak[name] = 0; console.warn(`[Image:${name}] slow — paused 30 min`); }
+}
 
 /** Бір суреттің әртүрлі URL-дері (Openverse арқылы Wikimedia, ?w= параметрлі Unsplash) бір кілтке келеді */
 function canonKey(url) {
@@ -567,6 +579,22 @@ function fitsPlace(meta, place) {
   if (place === 'bg') return meta.w >= 1536 && !(meta.h && meta.w / meta.h < 1.15);
   return meta.w >= MIN_W;
 }
+
+/** Бір көріністің басқа фотосы ма (сипаттама сөздері ≥60% ортақ, не автор мен сипаттама екеуі де ұқсас): бір колодада қатар шықпасын */
+const descWords = (t) => new Set(String(t || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2));
+function sameScene(c, seen) {
+  const a = descWords(c.desc);
+  if (a.size < 3) return false;
+  return seen.some((x) => {
+    const b = descWords(x.desc);
+    if (b.size < 3) return false;
+    let n = 0; for (const w of a) if (b.has(w)) n++;
+    const j = n / Math.min(a.size, b.size);
+    return j >= 0.6 || (j >= 0.4 && x.credit && c.credit && x.credit === c.credit);
+  });
+}
+/** Колодада алынған суреттердің сипаттамасы (used ішінде сақталады — бір колодаға ортақ Set) */
+const scenesOf = (used) => [...used].filter((k) => typeof k === 'string' && k.startsWith('scene:')).map((k) => { try { return JSON.parse(k.slice(6)); } catch { return null; } }).filter(Boolean);
 
 function withTimeout(promise, ms, label) {
   let t;
@@ -606,8 +634,9 @@ async function findImageVision(query, opts = {}) {
   let attempts = 0;
   for (const q of variants) {
     if (opts.deadline && Date.now() > opts.deadline) { console.log(`[Image] vision: deadline reached for "${String(query).slice(0, 50)}"`); break; }
-    const lists = await Promise.all(order.map((name) => withTimeout(searchProvider(name, q, KEYED[name] ? budget : openBudget), PROVIDER_TIMEOUT_MS, name)
-      .catch((err) => { console.warn(`[Image:${name}] search failed (${err.response?.status || err.code || err.message}) q="${q.slice(0, 40)}"`); return []; })));
+    const lists = await Promise.all(order.filter((name) => !isSlow(name)).map((name) => withTimeout(searchProvider(name, q, KEYED[name] ? budget : openBudget), PROVIDER_TIMEOUT_MS, name)
+      .then((r) => { noteSearch(name, true); return r; })
+      .catch((err) => { noteSearch(name, false, err); console.warn(`[Image:${name}] search failed (${err.response?.status || err.code || err.message}) q="${q.slice(0, 40)}"`); return []; })));
     const seenKey = new Set();
     let pool = interleave(lists).filter((c) => {
       const k = canonKey(c.url);
@@ -615,6 +644,8 @@ async function findImageVision(query, opts = {}) {
       seenKey.add(k);
       return !taken(c) && !(c.w && c.w < MIN_W) && fitsPlace(c, place) && !tooDark(c);
     });
+    const seenScenes = scenesOf(used);
+    if (seenScenes.length) { const other = pool.filter((c) => !sameScene(c, seenScenes)); if (other.length) pool = other; }
     // студенттің бұрынғы суреттері — басқа таңдау жеткілікті болса шығарылады
     const fresh = pool.filter((c) => !avoid.has(canonKey(c.url)));
     if (fresh.length >= 4) pool = fresh;
@@ -630,6 +661,7 @@ async function findImageVision(query, opts = {}) {
       attempts += 1;
       const key = canonKey(c.url);
       used.add(c.url); used.add(key); // параллель слайдтар бір суретті алмауы үшін — жүктемес бұрын белгілейміз
+      if (c.desc) used.add('scene:' + JSON.stringify({ desc: String(c.desc).slice(0, 200), credit: c.credit || '' }));
       const dataUri = await downloadCached(c.url);
       if (!dataUri) continue;
       const meta = imageMeta(dataUri);
@@ -693,6 +725,7 @@ function fallbackQueries(query, topic, deckQueries = []) {
 
 module.exports = {
   imageStats,
+  sameScene,
   providerOrder,
   isLatinQuery,
   fallbackQueries,

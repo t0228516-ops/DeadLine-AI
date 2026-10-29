@@ -281,7 +281,7 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     // түсті бос тіктөртбұрыш «сурет түспей қалғандай» көрінеді, ал қайталанған тақырыптық фото — жоқ
     const gotList = found.filter(Boolean);
     // студент жадына: келесі презентациясында осы фотолар қайталанбайды (бір тақырыпты екі рет жасатса да)
-    if (Array.isArray(ctx.photoKeys)) ctx.photoKeys.push(...[...used].filter((x) => typeof x === 'string' && x && !avoid.has(x) && !ctx.photoKeys.includes(x)));
+    if (Array.isArray(ctx.photoKeys)) ctx.photoKeys.push(...[...used].filter((x) => typeof x === 'string' && x && !x.startsWith('scene:') && !avoid.has(x) && !ctx.photoKeys.includes(x)));
     if (Array.isArray(ctx.photos)) ctx.photos.push(...gotList.map((x) => x.dataUri));
     if (neutralize && gotList.length) {
       let k = 0;
