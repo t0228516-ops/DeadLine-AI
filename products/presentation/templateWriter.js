@@ -143,12 +143,19 @@ function slotProblem(s, text, language) {
 }
 
 /** Слайдтағы карточка саны (тақырып аталған санмен сәйкес болуы керек) */
-const cardCount = (sch) => sch.slots.filter((x) => x.role === 'card' && x.part === 'heading').length;
+const cardCount = (sch) => {
+  const cards = sch.slots.filter((x) => x.role === 'card' && x.part === 'heading').length;
+  if (cards >= 2) return cards;
+  // карточка жоқ — тізім пункттері (ұзын белгілер; сайт/пошта мекенжайы емес), кемінде үшеуі
+  const items = sch.slots.filter((x) => x.role === 'label' && String(x.orig || '').length >= 15 && !/www\.|@|https?:/i.test(x.orig || '')).length;
+  return items >= 3 ? items : cards;
+};
 
 /** Тақырып «төрт сала» дейді, слайдта 3 карточка — қате (null — дұрыс). */
 function countProblem(sch, s, text) {
   // тақырып та, оның үстіндегі/астындағы шағын жазу да («Негізгі үш тип» + 4 карточка)
   if (!['title', 'subtitle', 'tag', 'accent', 'label'].includes(s.role) || sch.kind !== 'content') return null;
+  if (s.role === 'label' && String(s.orig || '').length >= 15) return null;      // тізімнің өз пункті — санаушы емес
   const c = cardCount(sch); const n = countIn(text);
   return c >= 2 && n != null && n !== c ? `the heading names ${n} items but the slide shows exactly ${c}` : null;
 }
