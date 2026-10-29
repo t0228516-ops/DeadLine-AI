@@ -989,7 +989,10 @@ async function executeJob(jobId) {
     const { recentLibs, ...avoid } = designMemory.avoidOptions(memory);
     // Шаблон кітапханасы (SlidesCarnival, рұқсатпен): студент өз шаблонын жүктемесе, бот кейде дайын шаблонды өзі таңдайды
     let library = null;
+    // ұзын презентация (12-ден көп слайд) — шаблонның 8–10 макеті жетпей, мәтін қораптарға шатасып түседі: боттың өз макеттері
+    const LIB_MAX_SLIDES = Number(process.env.LIBRARY_MAX_SLIDES) || 12;
     if (!referencePptx && (job.payload?.mode || 'presentation') === 'presentation'
+      && !(Number(job.payload?.slideCount) > LIB_MAX_SLIDES)
       && libraryCore.eligible({ tester: !!job.payload?.tester, admin: isAdminId(chatId) })) {
       try {
         await updateJob(jobId, { phase: 'content', detail: 'Презентация құрылымы жоспарлануда...', progress: 12 }).catch(() => {});
