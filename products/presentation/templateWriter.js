@@ -29,7 +29,7 @@ function caseLike(orig, text, role) {
 
 /** Сөз шекарасынан лимитке дейін қысқарту (сөз ортасынан ЕШҚАШАН). */
 const TAIL = /^(және|мен|бен|пен|мен|да|де|та|те|үшін|арқылы|бойынша|туралы|сияқты|ал|бірақ|немесе|и|в|на|с|по|для|и|или|but|and|or|of|the|to|in|for)$/iu;
-function fitToLimit(text, max, slack = 1.25) {
+function fitToLimit(text, max, slack = Number(process.env.SLOT_SLACK) || 1.1) {
   const t = clean(text);
   if (!max || t.length <= Math.floor(max * slack)) return t;
   const words = t.split(/\s+/);
@@ -204,6 +204,8 @@ async function writeSlots(o) {
     } catch (e) { report.llmFailed++; console.warn(`[TemplateWriter] deck LLM failed: ${e.message}`); }
     // қорғаныс: брендке — презентацияның қысқа атауы; қалғаны бос (ағылшын мәтін қалмайды)
     const brand = schema.deck.chrome.find((c) => c.bold) || schema.deck.chrome[0];
+    // шаблонның жылы («2024» тақырыпшада, бұрышта) — LLM не жазса да ағымдағы жыл
+    for (const s of deckSlots) if (/^\s*(19|20)\d\d\s*$/.test(String(s.orig || s.text || ''))) deck[s.key] = String(new Date().getFullYear());
     for (const s of deckSlots) {
       if (deck[s.key] != null) continue;
       report.fallback++;

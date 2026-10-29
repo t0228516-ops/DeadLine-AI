@@ -153,6 +153,12 @@ function setAlgn(el, algn) {
 function applyOps(xml, ops, W, H) {
   let out = xml;
   for (const op of ops || []) {
+    // op.text — шаблонның түпнұсқа мәтіні бойынша (әр слайдта аты әртүрлі қайталанатын элемент: бренд, жыл): бәріне
+    if (op.text) {
+      const re = new RegExp(op.text, 'u');
+      for (const e of elements(out).filter((x) => !x.inGroup && re.test(x.text.trim()))) out = applyOps(out, [{ ...op, text: undefined, name: e.name }], W, H);
+      continue;
+    }
     const hits = elements(out).filter((e) => e.name === op.name && !e.inGroup);
     const e = hits[op.nth || 0];
     if (!e) continue;
@@ -212,6 +218,7 @@ function adaptDeck(buf, id, o = {}) {
     let out = widenEdgeLabels(xml, W, H);
     const ops = patch && patch.slides && patch.slides[String(i + 1)];
     if (ops) out = applyOps(out, ops, W, H);
+    if (patch && patch.all) out = applyOps(out, patch.all, W, H);              // әр слайдқа (мәтін бойынша табылатын элементтер)
     if (out !== xml) { files.set(sp, out); changed = true; }
   });
   return changed ? writeZipAll(files) : buf;

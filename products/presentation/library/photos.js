@@ -370,6 +370,10 @@ async function neutralizeMedia(buf, hashes, o = {}) {
     const hue = o.hue != null ? o.hue : (require('./variants').dominantHue(buf) ?? 220);
     // осы презентацияда табылған тақырыптық фотолар: бос түсті қорап емес, солардың бірі шаблон реңіне боялып қойылады (duotone)
     const pool = (o.photos || []).filter((x) => typeof x === 'string' && /^data:image\//.test(x));
+    // фото тек фон емес орынға (қорап, карточка) және әрқайсысы бір-ақ рет: үлкен фондағы не қайта-қайта қойылған
+    // бір фото (портрет) бүкіл презентацияны толтырып жібереді — оларға бұрынғыдай шаблон реңінің түсі
+    const areaOf = new Map();
+    try { for (const sl of photoSlots(buf)) areaOf.set(sl.media, Math.max(areaOf.get(sl.media) || 0, sl.area || 0)); } catch {}
     let k = 0;
     for (const name of targets) {
       const png = /\.png$/i.test(name);
@@ -399,11 +403,11 @@ async function neutralizeMedia(buf, hashes, o = {}) {
         } else { g.fillStyle = gr; g.fillRect(0, 0, W, H); }
         if (type === 'image/png') { g.globalCompositeOperation = 'destination-in'; g.drawImage(im, 0, 0, W, H); }
         return c.toDataURL(type, 0.9);
-      }, `data:${mime};base64,${Buffer.from(files.get(name)).toString('base64')}`, mime, hue, pool.length ? pool[k++ % pool.length] : null);
+      }, `data:${mime};base64,${Buffer.from(files.get(name)).toString('base64')}`, mime, hue, k < pool.length && (areaOf.get(name) || 0) < 0.5 ? pool[k++] : null);
       const m = /^data:image\/(png|jpeg);base64,(.+)$/.exec(out || '');
       if (m) files.set(name, Buffer.from(m[2], 'base64'));
     }
-    console.log(`[Library] photos: ${targets.length} off-topic template photo(s) toned ${pool.length ? 'into on-topic duotone' : 'into plain colour'}`);
+    console.log(`[Library] photos: ${targets.length} off-topic template photo(s) toned (${k} on-topic duotone, ${targets.length - k} plain colour)`);
     return writeZipAll(files);
   } finally { if (browser) await browser.close().catch(() => {}); }
 }
