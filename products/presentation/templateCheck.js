@@ -314,6 +314,8 @@ function checkSlide(origXml, xml, o = {}) {
       });
       for (const th of things) {
         if (contains(th.r, t.box, 8)) continue;                                  // мәтін осы элементтің ІШІНДЕ (фон/таблетка/карточка)
+        // мөлдір PNG-пішіннің (көпіршік, карточка) ішінде әдейі тұрған мәтін: оның ұяшықтары кедергі емес — шекарасы homesFor-да
+        if (th.parent && or && fracOf(or, th.parent) >= 0.9 && area(th.parent) < SW * SH * 0.45) continue;
         const big = th.parent || th.r;
         if (area(big) > SW * SH * 0.45 || (big.w > SW * 0.95 && big.h > SH * 0.3)) continue;   // фон/жолақ (иллюстрация ұяшығы — бүкіл суреті бойынша)
         const isHolder = holders.includes(th);
@@ -328,6 +330,20 @@ function checkSlide(origXml, xml, o = {}) {
       }
       return ob;
     };
+    // мәтін шаблонда ішінде тұрған мөлдір пішіндер: мәтін олардың көрінетін бөлігінен (ұяшықтарының шекарасынан) шықпауы керек
+    const homesFor = (i) => {
+      const or = origRect.get(keyOf(texts[i]));
+      if (!or) return [];
+      const byParent = new Map();
+      for (const th of things) {
+        if (!th.parent || area(th.parent) >= SW * SH * 0.45 || fracOf(or, th.parent) < 0.9) continue;
+        const b = byParent.get(th.parent) || { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };
+        b.x1 = Math.min(b.x1, th.r.x); b.y1 = Math.min(b.y1, th.r.y); b.x2 = Math.max(b.x2, th.r.x + th.r.w); b.y2 = Math.max(b.y2, th.r.y + th.r.h);
+        byParent.set(th.parent, b);
+      }
+      return [...byParent.values()].map((b) => ({ x: b.x1, y: b.y1, w: b.x2 - b.x1, h: b.y2 - b.y1 }))
+        .filter((h) => contains(h, or, 8));                                      // шаблонда да ішінде болса ғана
+    };
     const outside = (r) => r.y < -1 || r.y + r.h > SH + 1 || r.x < -1 || r.x + r.w > SW + 1;
     const problemOf = (i, r) => {
       if (r.broken) return { code: 'word_split' };
@@ -336,6 +352,7 @@ function checkSlide(origXml, xml, o = {}) {
         if (!(or && outside(or))) return { code: 'off_slide' };                  // шаблонда әуелден шетке шыққан — әдейі
       }
       for (const ob of obstaclesFor(i)) if (hits(r, ob)) return { code: ob.kind === 'text' ? 'text_overlap' : ob.kind === 'holder' ? 'holder_overlap' : 'element_overlap', ob };
+      for (const h of homesFor(i)) if (!contains(h, r, 8)) return { code: 'element_overlap', ob: { r: h, kind: 'home' } };
       return null;
     };
 
