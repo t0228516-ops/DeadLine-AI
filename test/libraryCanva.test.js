@@ -204,3 +204,18 @@ test('widenPillLabels: a label box narrower than its pill grows to the pill (cen
   assert.match(out, /name="T3"[\s\S]*?algn="ctr"/);
   assert.match(out, /name="T5"[\s\S]*?<a:off x="1260000" y="3270000"\/><a:ext cx="730000"/);
 });
+
+test('canva credits: a deck already ending on a thank-you slide gets a small Canva link there, not a second thank-you slide', () => {
+  const files = readZipAll(carveDeck(FIX, [0, 0]));
+  const [, last] = orderedSlides(files);
+  let n = 0;
+  files.set(last, String(files.get(last)).replace(/<a:t>[^<]*<\/a:t>/g, (m) => (n++ ? m : '<a:t>Рахмет!</a:t>')));
+  const deck = require('../products/presentation/templateFill').writeZipAll(files);
+  const out = L.appendCredits(deck, { source: 'canva', creditsBuf: carveDeck(FIX, [1, 0]), creditsIdx: 1 }, 'kk');
+  const f2 = readZipAll(out);
+  const sl = orderedSlides(f2);
+  assert.strictEqual(sl.length, 2, 'жаңа слайд қосылмады');
+  assert.ok(texts(f2.get(sl[1])).includes('Designed with Canva · www.canva.com'));
+  assert.ok(texts(f2.get(sl[1])).includes('Рахмет!'));
+  assert.strictEqual(L.canvaCreditLine(out), null, 'екі рет қосылмайды');
+});

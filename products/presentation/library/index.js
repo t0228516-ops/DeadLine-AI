@@ -329,6 +329,8 @@ function linkCredits(buf, idx) {
 
 /** Толтырылған колодаға түпнұсқа Credits слайдын қосу (атрибуция мен slidescarnival.com сілтемесі — рұқсаттың міндетті шарты) */
 function appendCredits(filledBuf, prep, language) {
+  // Canva: соңғы слайд әлдеқашан алғыс слайды болса — екінші «рахмет» қосылмайды, атрибуция сол слайдқа шағын жол болып түседі
+  if (prep.source === 'canva') { const own = canvaCreditLine(filledBuf); if (own) return own; }
   const out = appendSlideFrom(filledBuf, prep.creditsBuf, prep.creditsIdx);
   return prep.source === 'canva' ? canvaCredits(out, -1, language) : linkCredits(out, -1);
 }
@@ -341,6 +343,45 @@ const CANVA_LINE = 'Designed with Canva · www.canva.com';
  * Соңғы слайд — студент көрсете алатын қорытынды: шаблонның жабу слайды (дизайны сақталады), ең ірі мәтін → «Назарларыңызға рахмет!»,
  * келесісі → шағын «Designed with Canva · www.canva.com» сілтемесі (атрибуция), қалған мәтін қораптары алынады.
  */
+const THANKS_RE = /рахмет|спасибо|благодар|thank/i;
+/** Соңғы слайд алғыс слайды болса — оның төменгі оң жағына шағын «Designed with Canva · www.canva.com» сілтемесі; әйтпесе null */
+function canvaCreditLine(buf) {
+  const { readZipAll, writeZipAll } = require('../templateFill');
+  const { orderedSlides } = require('../../../design-dna/structure');
+  const files = readZipAll(buf);
+  const all = orderedSlides(files);
+  const sp = all[all.length - 1];
+  if (!sp || all.length < 2) return null;
+  let xml = String(files.get(sp));
+  const text = [...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => m[1]).join(' ');
+  if (!THANKS_RE.test(text) || /canva\.com/i.test(text)) return null;
+  const rp = sp.replace(/([^/]+)$/, '_rels/$1.rels');
+  let rels = files.get(rp) || '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const rid = 'rIdDlCanvaLink';
+  if (!rels.includes(`Id="${rid}"`)) rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="${HLINK_TYPE}" Target="${CANVA_URL}" TargetMode="External"/></Relationships>`);
+  const { W, H } = require('./photos').slideSize(files);
+  const color = (xml.match(/<a:rPr\b[^>]*>\s*<a:solidFill>\s*<a:srgbClr val="([0-9A-Fa-f]{6})"/) || [])[1] || '808080';
+  const id = Math.max(1000, ...[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map((x) => +x[1])) + 1;
+  const sz = Math.max(800, Math.round(1000 * W / 12192000 / 100) * 100);
+  // бос бұрыш: төменгі сол/оң жолақпен қиылысатын элементтер ауданы азы (сурет, пішін үстіне түспесін)
+  const band = (x0) => ({ x: W * x0, y: H * 0.94, w: W * 0.37, h: H * 0.05 });
+  const busy = (b) => [...xml.matchAll(/<a:off x="(-?\d+)" y="(-?\d+)"\/>\s*<a:ext cx="(\d+)" cy="(\d+)"\/>/g)].reduce((sum, m) => {
+    const [x, y, w, h] = [+m[1], +m[2], +m[3], +m[4]];
+    if (w * h > W * H * 0.9) return sum;                                         // толық фон есептелмейді
+    const ix = Math.min(x + w, b.x + b.w) - Math.max(x, b.x); const iy = Math.min(y + h, b.y + b.h) - Math.max(y, b.y);
+    return sum + (ix > 0 && iy > 0 ? ix * iy : 0);
+  }, 0);
+  const left = busy(band(0.03)) < busy(band(0.6));
+  const box = `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Canva credit"><a:hlinkClick r:id="${rid}"/></p:cNvPr><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>`
+    + `<p:spPr><a:xfrm><a:off x="${Math.round(W * (left ? 0.03 : 0.6))}" y="${Math.round(H * 0.945)}"/><a:ext cx="${Math.round(W * 0.37)}" cy="${Math.round(H * 0.04)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>`
+    + '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"><a:noAutofit/></a:bodyPr><a:lstStyle/>'
+    + `<a:p><a:pPr algn="${left ? 'l' : 'r'}"/><a:r><a:rPr lang="en-US" sz="${sz}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>${CANVA_LINE}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  xml = xml.replace(/<\/p:spTree>/, `${box}</p:spTree>`);
+  files.set(sp, xml);
+  files.set(rp, rels);
+  return writeZipAll(files);
+}
+
 function canvaCredits(buf, idx, language) {
   const thanks = THANKS[language] || THANKS.kk;
   const { readZipAll, writeZipAll } = require('../templateFill');
@@ -422,4 +463,4 @@ function eligible(o = {}, env = process.env, rng = Math.random) {
   return rng() < share;
 }
 
-module.exports = { CATALOG, SERIOUS_RE, layoutsOf, linkCredits, canvaCredits, creditsSlide, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
+module.exports = { CATALOG, SERIOUS_RE, layoutsOf, linkCredits, canvaCredits, canvaCreditLine, creditsSlide, topicGroups, topicSubjects, SUBJECT_RE, chooseTemplate, planPicks, prepareDeck, appendCredits, eligible, fetchTemplate, LIB_DIR };
