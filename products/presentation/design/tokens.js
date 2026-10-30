@@ -151,6 +151,10 @@ const MOODS = ({
   vivid_emerald: { bg: '#ffffff', text: '#0a2219', accent: '#008f56', accent2: '#ff7a00', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.0, own: 'vivid' },
   vivid_magenta: { bg: '#ffffff', text: '#1f0a19', accent: '#d4006e', accent2: '#5b2bff', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.0, own: 'vivid' },
   vivid_violet:  { bg: '#ffffff', text: '#120b2e', accent: '#5a24f0', accent2: '#00a88f', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.0, own: 'vivid' },
+  poster_blue:   { bg: '#ffffff', text: '#0b0d1f', accent: '#1d3fd6', accent2: '#ff4f2b', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
+  poster_green:  { bg: '#ffffff', text: '#081a12', accent: '#06704a', accent2: '#5b22d6', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
+  poster_red:    { bg: '#ffffff', text: '#160a0a', accent: '#c41f28', accent2: '#141a63', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
+  poster_violet: { bg: '#ffffff', text: '#0f0a24', accent: '#5a22e0', accent2: '#d11f6f', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
   // олардың қою жұбы — мұқаба, бөлім, қорытынды слайдтары (sys.deepMood)
   vivid_cobalt_deep:  { bg: '#213ce7', text: '#ffffff', accent: '#ffd23f', accent2: '#ff8a6b', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },
   vivid_emerald_deep: { bg: '#00663e', text: '#ffffff', accent: '#ffd23f', accent2: '#b6f09c', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },

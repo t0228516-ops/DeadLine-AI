@@ -18,7 +18,7 @@ const T = require('../tokens');
 const { formatNum } = require('./numbers');
 
 const SYSTEMS = {};
-for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid']) {
+for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster']) {
   const sys = require('./' + id);
   SYSTEMS[sys.id] = sys;
 }
@@ -26,11 +26,11 @@ const DEFAULT = 'aurora';
 
 /** Стиль (business/minimal/…) → қай жүйелер лайықты (бірінші — ең лайықтысы). Белгісіз стиль → бәрі. */
 const STYLE_SYSTEMS = Object.freeze({
-  business: ['swiss', 'mono', 'academy', 'aurora', 'journal', 'vivid'],
+  business: ['swiss', 'mono', 'academy', 'aurora', 'journal', 'vivid', 'poster'],
   minimal: ['swiss', 'journal', 'atelier', 'academy'],
-  creative: ['atelier', 'aurora', 'mono', 'journal', 'swiss', 'vivid'],
+  creative: ['atelier', 'aurora', 'mono', 'journal', 'swiss', 'vivid', 'poster'],
   academic: ['academy', 'journal', 'aurora', 'swiss', 'mono', 'atelier'],
-  pitch: ['aurora', 'swiss', 'mono', 'atelier', 'vivid'],
+  pitch: ['aurora', 'swiss', 'mono', 'atelier', 'vivid', 'poster'],
 });
 
 function getSystem(id) {

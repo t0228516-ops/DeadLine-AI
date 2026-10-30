@@ -107,3 +107,18 @@ test('vivid: saturated palette follows the topic; long words never spill into th
   assert.strictEqual(P.wordFit('Гибридті', 42, 367, 'arial'), 42);
   assert.match(P.fsMax(42, 40), /min\(calc\(42px\*var\(--fs,1\)\*var\(--wfit,1\)\),40px\)/);
 });
+
+test('poster: its own bold compositions come first; other systems never get them', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const c = { mood: 'poster_blue' };
+  const deck = [
+    { title: 'Саяси режимдер', subtitle: 'Түрлері', composition: c },
+    { title: 'Режим түрлері', bullets: ['Демократиялық: еркін сайлау', 'Авторитарлық: билік бір топта', 'Тоталитарлық: толық бақылау'], composition: c },
+    { title: 'Бірінші бөлім', subtitle: 'Белгілері', composition: { ...c, visualPurpose: 'section' } },
+    { title: 'Қорытынды', bullets: ['Режим — биліктің жұмыс тәсілі', 'Азаматтар режимді өзгерте алады'], composition: { ...c, visualPurpose: 'conclusion' } },
+  ];
+  const layouts = (sys) => [...build3DPresentationHTML(deck, 'Саяси режимдер', { system: sys }).matchAll(/data-layout="([^"]+)"/g)].map((m) => m[1]);
+  const own = layouts('poster');
+  assert.ok(own.filter((l) => /^cx-poster-/.test(l)).length >= 3, own.join(' '));
+  for (const sys of ['vivid', 'heritage', 'swiss']) assert.ok(!layouts(sys).some((l) => /poster/.test(l)), sys);
+});

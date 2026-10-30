@@ -339,6 +339,7 @@ def({
 
 require('./more')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 require('./more2')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./poster')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 
 /**
  * Композиция таңдау. env: { used:Set (әшекей), comps:Set (колодада қолданылған), recent:string[], seed:number }
@@ -396,7 +397,10 @@ function compose(ctx, env) {
   const avoid = Array.isArray(cx.avoid) ? cx.avoid : [];
   // визуал тексерістен кейін: тексеруден өткен слайд сол композицияда қалады (pin)
   const pinned = cx.pin ? COMPS.find((c) => c.id === cx.pin && c.kind === sh.kind && safeFits(c, ctx.a, sh, ctx.sys)) : null;
-  const cands = pinned ? [pinned] : COMPS.filter((c) => c.kind === sh.kind && !avoid.includes(c.id) && !(c.systems && !c.systems.includes(ctx.sys && ctx.sys.id)) && safeFits(c, ctx.a, sh, ctx.sys));
+  let cands = pinned ? [pinned] : COMPS.filter((c) => c.kind === sh.kind && !avoid.includes(c.id) && !(c.systems && !c.systems.includes(ctx.sys && ctx.sys.id)) && safeFits(c, ctx.a, sh, ctx.sys));
+  // жүйенің өз композициясы (poster) сай келсе — бірінші сол (жалпы композиция тек ол қолданылып болған соң)
+  const own = ctx.sys && ctx.sys.ownComps ? cands.filter((c) => c.systems && c.systems.includes(ctx.sys.id) && !env.comps.has(c.id)) : [];
+  if (!pinned && own.length) cands = own;
   if (!cands.length) return null;
   const fresh = pinned ? cands : cands.filter((c) => !env.comps.has(c.id));
   const pool0 = fresh.length ? fresh : (sh.kind === 'concepts' ? [] : cands);
