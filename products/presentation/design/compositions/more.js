@@ -114,13 +114,15 @@ module.exports = function register(def, K) {
       const gap = 64; const span = W - 2 * MX; const w = (span - gap * (n - 1)) / n;
       let bg = '<div class="plate"></div>' + P.panel(0, 0, W, 300, P.mix(p.bg, p.text, 0.05));
       let fg = wrap(MX, MT, 1400, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: 1400, maxLines: 2, scale: [76, 68, 60, 52, 46], hl: true }));
+      // барлық бағанда бір өлшем: ең ұзын сөзі бар термин бағанға сыятындай
+      const cap = Math.min(...sh.items.map((m) => P.wordFit(m.label, 999, w, ctx.kind)));
       sh.items.forEach((m, i) => {
         const x = MX + i * (w + gap);
         bg += P.ghost(x - 10, 430, H.num(ctx, i + 1), 320, P.mix(p.bg, p.accent, 0.16), { weight: 700 });
         if (i) bg += P.panel(x - gap / 2, 470, 2, 520, P.mix(p.bg, p.text, 0.16));
         fg += t('concept', x, 690, w,
           '<div style="width:56px;height:5px;background:' + p.accent + ';margin-bottom:26px"></div>' +
-          '<div style="' + disp + ';' + fs(n <= 3 ? 50 : 42) + ';line-height:1.06;color:var(--text)">' + esc(m.label) + '</div>' +
+          '<div style="' + disp + ';' + P.fsMax(Math.min(n <= 3 ? 50 : 42, cap), cap) + ';line-height:1.06;color:var(--text)">' + esc(m.label) + '</div>' +
           (m.detail ? '<div style="margin-top:16px;' + fs(n <= 3 ? 29 : 26) + ';line-height:1.45;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));
       });
       return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide' };

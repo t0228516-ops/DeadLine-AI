@@ -93,3 +93,17 @@ test('regalia: humanities topics alternate heritage/regalia; colour follows the 
   assert.match(slides[0], /--bg:#3d1219/);
   assert.match(slides[1], /--bg:#f6efe6/);
 });
+
+test('vivid: saturated palette follows the topic; long words never spill into the next column', () => {
+  const SYS = require('../products/presentation/design/systems');
+  const V = SYS.SYSTEMS.vivid;
+  assert.strictEqual(V.moodFor('Саяси режимдер'), 'vivid_cobalt');
+  assert.strictEqual(V.moodFor('Жасуша биологиясы'), 'vivid_emerald');
+  assert.strictEqual(V.moodFor('Бастауыш мектепте оқыту әдістері'), 'vivid_magenta');
+  assert.strictEqual(V.moodFor('Python бағдарламалау'), 'vivid_violet');
+  const P = require('../products/presentation/design/compositions/parts');
+  // «Демократиялық» (Arial Bold) ≈ 7.96 em → 367 px бағанға ≤ 43 px
+  assert.ok(P.wordFit('Демократиялық', 999, 367, 'arial') <= 43);
+  assert.strictEqual(P.wordFit('Гибридті', 42, 367, 'arial'), 42);
+  assert.match(P.fsMax(42, 40), /min\(calc\(42px\*var\(--fs,1\)\*var\(--wfit,1\)\),40px\)/);
+});
