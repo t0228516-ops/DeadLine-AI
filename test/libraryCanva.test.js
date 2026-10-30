@@ -87,7 +87,8 @@ test('fetchTemplate: a Canva template comes from private storage once, then from
 });
 
 test('canva catalog: ids are Canva design ids, every template has text slides and roles inside the deck, licence cap 100', () => {
-  const cv = L.CATALOG.templates.filter((x) => x.source === 'canva');
+  // құрылымы каталог файлындағы бәріне (өшірілгендері де) тексеріледі — қайта қосылса да дұрыс болсын
+  const cv = require('../products/presentation/library/canva.json').templates;
   assert.ok(cv.length >= 20 && cv.length <= 100);
   assert.strictEqual(new Set(cv.map((t) => t.id)).size, cv.length);
   for (const t of cv) {
@@ -107,10 +108,10 @@ test('photos: a picture behind a text box is the slide background (kept in Canva
 });
 
 test('storage down: after one Canva template cannot be fetched, the next requests use SlidesCarnival for a while', async () => {
-  const t = L.CATALOG.templates.find((x) => x.source === 'canva' && x.subjects && x.subjects.includes('medicine'));
-  const picks = () => Array.from({ length: 40 }, () => L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу' }).source);
+  const t = L.CATALOG.templates.find((x) => x.source === 'canva' && x.subjects && x.subjects.includes('it'));
+  const picks = () => Array.from({ length: 40 }, () => L.chooseTemplate({ topic: 'Жасанды интеллект және бағдарламалау' }).source);
   assert.ok(picks().includes('canva'), 'әдетте Canva да таңдалады');
-  for (let i = 0; i < 20; i++) assert.strictEqual(L.chooseTemplate({ topic: 'Жүрек ауруларының алдын алу', noCanva: true }).source, 'slidescarnival');
+  for (let i = 0; i < 20; i++) assert.strictEqual(L.chooseTemplate({ topic: 'Жасанды интеллект және бағдарламалау', noCanva: true }).source, 'slidescarnival');
   let asked = 0;
   await assert.rejects(L.prepareDeck({ entry: t, s3: { getObject: async () => { asked++; return null; } }, arrange: false }), /қоймада жоқ/);
   assert.strictEqual(asked, 1);

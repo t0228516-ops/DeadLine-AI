@@ -5,6 +5,7 @@
  "templates": [
   {
    "id": "DAHYKJeOZvA",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Vintage History Project",
    "style": "vintage",
    "groups": [
@@ -93,6 +94,7 @@
   },
   {
    "id": "DAHXaUeMyfo",
+   "disabled": "2026-10-29 review B: қара ретро (тарих), сәнді; шаблонның ескі фотосы (адамдар) қалады",
    "slug": "Gray Black Modern History",
    "style": "history",
    "groups": [
@@ -117,6 +119,7 @@
   },
   {
    "id": "DAHXTBoHN8M",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Black Yellow History Project",
    "style": "history",
    "groups": [
@@ -142,6 +145,7 @@
   },
   {
    "id": "DAHWmAJVLOY",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Black Beige History Project",
    "style": "dark",
    "groups": [
@@ -193,6 +197,7 @@
   },
   {
    "id": "DAHXgcOlu2w",
+   "disabled": "2026-10-29 review C: күңгірт қоңыр коллаж — боялған фото күңгірт, мәтін фотоға түседі",
    "slug": "Vintage History Stories",
    "style": "vintage",
    "groups": [
@@ -225,6 +230,7 @@
   },
   {
    "id": "DAHZAsvvtZo",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Ancient Great Steppe",
    "style": "photo",
    "groups": [
@@ -249,6 +255,7 @@
   },
   {
    "id": "DAHXsKSg2FA",
+   "disabled": "2026-10-29 review B: өнер тарихы, тығыз, мәтін ұсақ",
    "slug": "Elegant Art History",
    "style": "elegant",
    "groups": [
@@ -280,6 +287,7 @@
   },
   {
    "id": "DAHXrVW7Lx8",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Aesthetic Art History",
    "style": "elegant",
    "groups": [
@@ -307,6 +315,7 @@
   },
   {
    "id": "DAHXb_9kFOk",
+   "disabled": "2026-10-29 review B: бордо + алтын рама (өнер/мәдениет), сәнді; ұсақ курсив мәтін",
    "slug": "Art Treasures",
    "style": "elegant",
    "groups": [
@@ -360,6 +369,7 @@
   },
   {
    "id": "DAHZAvTaZik",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Human Cell and Genetics",
    "style": "photo",
    "groups": [
@@ -390,6 +400,7 @@
   },
   {
    "id": "DAHZAh3hA7s",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Heart Health",
    "style": "photo",
    "groups": [
@@ -419,6 +430,7 @@
   },
   {
    "id": "DAHZAocIHUw",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Climate and Ecology",
    "style": "photo",
    "groups": [
@@ -450,6 +462,7 @@
   },
   {
    "id": "DAHC6tz8v98",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Illustrative Ecology",
    "style": "botanical",
    "groups": [
@@ -479,6 +492,7 @@
   },
   {
    "id": "DAHBpEwNn2I",
+   "disabled": "2026-10-29 review C: қоқыс жәшігі — тек «қалдық» тақырыбы, ұсқынсыз",
    "slug": "Waste Industrial Ecology",
    "style": "school",
    "groups": [
@@ -505,6 +519,7 @@
   },
   {
    "id": "DAHXb-YeZyU",
+   "disabled": "2026-10-29 review C: мультфильм таулар — мектептік",
    "slug": "Landforms Geography",
    "style": "school",
    "groups": [
@@ -536,6 +551,7 @@
   },
   {
    "id": "DAHXcAzklSc",
+   "disabled": "2026-10-29 review C: электр/физика мультфильмі, мәтін-ғана слайдтар көп",
    "slug": "Electricity Group Project",
    "style": "school",
    "groups": [
@@ -570,6 +586,7 @@
   },
   {
    "id": "DAHZBmbzuBw",
+   "disabled": "2026-10-29 review C: магнит мультфильмі (физика), барлығы мәтін-ғана, бірсарынды",
    "slug": "Magnetic Fields",
    "style": "school",
    "groups": [
@@ -607,6 +624,7 @@
   },
   {
    "id": "DAHZBm7gqIw",
+   "disabled": "2026-10-29 review B: сызба зертхана (ғылым), сәнді; суретсіз мәтін бөлігі көп",
    "slug": "Vintage Science",
    "style": "vintage",
    "groups": [
@@ -637,6 +655,7 @@
   },
   {
    "id": "DAHZBnlI0TY",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Cartoon Science",
    "style": "school",
    "groups": [
@@ -664,6 +683,7 @@
   },
   {
    "id": "DAHZBinEUqs",
+   "disabled": "2026-10-29 review C: ДНҚ шыны, қараңғы — ДНҚ әшекейі мәтінді жабады, карточкадан мәтін асады",
    "slug": "Research Project",
    "style": "dark",
    "groups": [
@@ -757,6 +777,7 @@
   },
   {
    "id": "DAHZBr3h2sw",
+   "disabled": "2026-10-29 review C: химия мультфильмі; барлық слайд бірдей мәтін-ғана макет (бірсарынды)",
    "slug": "Scientific Discovery",
    "style": "school",
    "groups": [
@@ -783,6 +804,7 @@
   },
   {
    "id": "DAHYKFbdT3c",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Psychology Growth",
    "style": "illustrated",
    "groups": [
@@ -811,6 +833,7 @@
   },
   {
    "id": "DAHZAqQqNlk",
+   "disabled": "2026-10-29 review B: көк ЖИ/ми (тек IT); бір слайд бос қалады («ЗНАЧЕНИ» тек тақырып), алғыс слайды бос",
    "slug": "AI in Everyday Life",
    "style": "photo",
    "groups": [
@@ -866,6 +889,7 @@
   },
   {
    "id": "DAHXgC1LqP0",
+   "disabled": "2026-10-29 review B: қою көк + сары схема (IT/экономика); мәтін тығыз",
    "slug": "Business Plan",
    "style": "dark",
    "groups": [
@@ -898,6 +922,7 @@
   },
   {
    "id": "DAHZA9r1Rus",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Finances",
    "style": "dark",
    "groups": [
@@ -926,6 +951,7 @@
   },
   {
    "id": "DAHZA0w95ZY",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Company Profile",
    "style": "corporate",
    "groups": [
@@ -994,6 +1020,7 @@
   },
   {
    "id": "DAHZA9Csswc",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Innovation in Economics",
    "style": "corporate",
    "groups": [
@@ -1023,6 +1050,7 @@
   },
   {
    "id": "DAHZA5ZvXO0",
+   "disabled": "2026-10-29 review B: бор тақта (экономика, $ белгішелері) — тек экономика",
    "slug": "Globalized Economy",
    "style": "illustrated",
    "groups": [
@@ -1049,6 +1077,7 @@
   },
   {
    "id": "DAHZAw84_Z4",
+   "disabled": "2026-10-29 review B: қара-алтын, сәнді; боялған шаблон фотолары бос алтын тіктөртбұрыш болып қалады (7, 12-слайд)",
    "slug": "Law Firm Elegant",
    "style": "dark",
    "groups": [
@@ -1084,6 +1113,7 @@
   },
   {
    "id": "DAHZA1z7pwQ",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Trusted Legal Services",
    "style": "dark",
    "groups": [
@@ -1114,6 +1144,7 @@
   },
   {
    "id": "DAHZA-aeXEA",
+   "disabled": "2026-10-29 review C: құқық иллюстрациясы — алғыс сөзін адам суреті жауып тұр",
    "slug": "Lawyer Profession",
    "style": "illustrated",
    "groups": [
@@ -1143,6 +1174,7 @@
   },
   {
    "id": "DAHZAx8HDts",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Justice in Balance",
    "style": "corporate",
    "groups": [
@@ -1179,6 +1211,7 @@
   },
   {
    "id": "DAHZA87LF58",
+   "disabled": "2026-10-29 review C: құқық (балға) — мұқаба мен алғыс тақырыбын балға жауып тұр",
    "slug": "Law Firm Bold",
    "style": "bold",
    "groups": [
@@ -1211,6 +1244,7 @@
   },
   {
    "id": "DAHZA96o-Ns",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Literature Talk",
    "style": "playful",
    "groups": [
@@ -1333,6 +1367,7 @@
   },
   {
    "id": "DAHZBpPQsYI",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Reinventing Education",
    "style": "corporate",
    "groups": [
@@ -1359,6 +1394,7 @@
   },
   {
    "id": "DAHZBjJqp90",
+   "disabled": "2026-10-29 review C: иллюстрация адамдар — мәтін суреттердің үстіне түседі (7, 4-слайд)",
    "slug": "Digital Learning",
    "style": "illustrated",
    "groups": [
@@ -1387,6 +1423,7 @@
   },
   {
    "id": "DAHZBpVNEeE",
+   "disabled": "2026-10-29 review C: technical QA failed (text overflow / overlaps)",
    "slug": "Future of Education",
    "style": "corporate",
    "groups": [
