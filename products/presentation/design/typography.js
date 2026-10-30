@@ -9,6 +9,11 @@ const { TYPE_SCALE } = require('./tokens');
 // average glyph width (em) per family/weight class; Cyrillic/Kazakh run a bit wider than Latin.
 function glyphEm(kind, weight) {
   // measured on Kazakh text with the deck fonts (Calibri ≈ Carlito, Times New Roman ≈ Liberation Serif) + ~2% margin
+  // дизайнер қаріптері (assets/brand-fonts): қазақ мәтінінде өлшенген орташа ен + ~2% қор
+  if (kind === 'playfair') return 0.53;
+  if (kind === 'montserrat') return 0.67;
+  if (kind === 'inter') return weight >= 600 ? 0.625 : 0.595;
+  if (kind === 'opensans') return weight >= 600 ? 0.645 : 0.585;
   if (kind === 'serif') return weight >= 600 ? 0.55 : 0.515;
   // Arial (Liberation Sans) Calibri-ден ~8% кең: fontMetrics бойынша 0.532 / 0.578 + қор
   if (kind === 'arial') return weight >= 600 ? 0.6 : 0.56;

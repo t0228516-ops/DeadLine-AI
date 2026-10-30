@@ -21,6 +21,7 @@ const LIB = path.join(A, 'library');
 const KINDS = {
   heritage: ['engraving', 'ornament'],
   regalia: ['engraving', 'ornament'],
+  bordeaux: ['engraving'],
   journal: ['engraving'],
   academy: ['engraving'],
   atelier: ['engraving'],

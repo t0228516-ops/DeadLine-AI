@@ -30,9 +30,19 @@ const FACES = [
   ['Arial', 'Arial-Regular.ttf', 400, 'normal'], ['Arial', 'Arial-Bold.ttf', 700, 'normal'], ['Arial', 'Arial-Italic.ttf', 400, 'italic'],
   ['Courier New', 'Mono-Regular.ttf', 400, 'normal'], ['Courier New', 'Mono-Bold.ttf', 700, 'normal'],
 ];
-function fontFaces() {
+// Дизайнер қаріптері — тек колода қолданса қосылады (әр HTML-ге ~0.5 МБ артық салмақ болмасын).
+// Отбасы атауы PowerPoint-тегі атаумен бірдей (fontEmbed.BRAND): «Montserrat Bold» — салмағы ішінде, 400 және 700 бір файл.
+const BRAND_FACES = [
+  ['Playfair Bold', 'brand-fonts/Playfair-Bold.ttf', 400, 'normal'], ['Playfair Bold', 'brand-fonts/Playfair-Bold.ttf', 700, 'normal'],
+  ['Montserrat Bold', 'brand-fonts/Montserrat-Bold.ttf', 400, 'normal'], ['Montserrat Bold', 'brand-fonts/Montserrat-Bold.ttf', 700, 'normal'],
+  ['Inter', 'brand-fonts/Inter-Regular.ttf', 400, 'normal'], ['Inter', 'brand-fonts/Inter-Bold.ttf', 700, 'normal'],
+  ['Open Sans', 'brand-fonts/OpenSans-Regular.ttf', 400, 'normal'], ['Open Sans', 'brand-fonts/OpenSans-Bold.ttf', 700, 'normal'],
+];
+function fontFaces(ts) {
   let css = '';
-  for (const [family, file, weight, style] of FACES) {
+  const used = ts ? String(ts.display || '') + ',' + String(ts.text || '') : '';
+  const faces = FACES.concat(BRAND_FACES.filter(([family]) => used.includes(family)));
+  for (const [family, file, weight, style] of faces) {
     const f = fontData(file, 'font/ttf', 'truetype');
     if (f) css += "@font-face{font-family:'" + family + "';font-style:" + style + ';font-weight:' + weight + ';font-display:block;src:url(' + f.uri + ") format('truetype')}\n";
   }
@@ -75,7 +85,7 @@ function typeVars(ts) {
 
 function css(palette, ts) {
   const g = T.GRID;
-  return fontFaces() + baseVars() + typeVars(ts) + `
+  return fontFaces(ts) + baseVars() + typeVars(ts) + `
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#000;color:var(--text);font-family:var(--f-text);font-synthesis:none;overflow:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-kerning:normal}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}

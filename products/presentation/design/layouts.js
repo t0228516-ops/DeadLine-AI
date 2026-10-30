@@ -43,7 +43,7 @@ function makeCtx(a, plan, palette, ts, deckTitle, sys) {
     a, plan, palette, ts, deckTitle, serif, sys: sys || BASE_SYS,
     rv() { i += 1; return 'class="rv" style="--i:' + i + '"'; },
     rvAttr() { i += 1; return { cls: 'rv', style: '--i:' + i }; },
-    kind: serif ? 'serif' : /Arial/i.test(head) ? 'arial' : 'sans',
+    kind: /Playfair/.test(head) ? 'playfair' : /Montserrat/.test(head) ? 'montserrat' : /Inter\b/.test(head) ? 'inter' : /Open Sans/.test(head) ? 'opensans' : serif ? 'serif' : /Arial/i.test(head) ? 'arial' : 'sans',
   };
 }
 /** Дизайн жүйесі бойынша нөмір (01 / 1 / 1. / I / [01]) */

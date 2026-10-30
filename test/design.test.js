@@ -61,17 +61,20 @@ test('auto-picked palettes are light unless the client asks for a dark backgroun
   const SYS = require('../products/presentation/design/systems');
   for (let i = 0; i < 40; i++) {
     const d = SYS.pickDesign({ seed: 'seed' + i, brief: 'Қазақ хандығының құрылуы', avoidSystems: ['heritage', 'blueprint', 'academy', 'journal'], avoidMoods: ['sand', 'ivory', 'light'] });
-    assert.ok(T.isLightMood(d.mood), d.system + '/' + d.mood);
+    // «Бордо» — дизайнері қою етіп салған шаблон (проекторда контрасты жоғары: 11:1); қалғаны — ашық
+    assert.ok(T.isLightMood(d.mood) || d.system === 'bordeaux', d.system + '/' + d.mood);
+    const lit = SYS.pickDesign({ seed: 'seed' + i, brief: 'Қазақ хандығының құрылуы, ақ фон' });
+    assert.ok(T.isLightMood(lit.mood) && lit.system !== 'bordeaux', 'ақ фон сұраса: ' + lit.system + '/' + lit.mood);
   }
   const dark = SYS.pickDesign({ seed: 'x', brief: 'Python негіздері, қара фон' });
   assert.ok(!T.isLightMood(dark.mood), 'asked for dark → dark');
 });
 
-test('regalia: humanities topics alternate heritage/regalia; colour follows the topic; cover, section and closing use the deep palette', () => {
+test('regalia: humanities topics alternate heritage/regalia/bordeaux; colour follows the topic; cover, section and closing use the deep palette', () => {
   const SYS = require('../products/presentation/design/systems');
   const seen = new Set();
   for (let i = 0; i < 40; i++) seen.add(SYS.pickDesign({ seed: 's' + i, brief: 'Қазақ хандығының тарихы' }).system);
-  assert.deepStrictEqual([...seen].sort(), ['heritage', 'regalia']);
+  assert.deepStrictEqual([...seen].sort(), ['bordeaux', 'heritage', 'regalia']);
   // студенттің соңғы жүйесі regalia болса — келесісі heritage
   assert.strictEqual(SYS.pickDesign({ seed: 's1', brief: 'Қазақ хандығының тарихы', avoidSystems: ['regalia'] }).system, 'heritage');
   const R = SYS.SYSTEMS.regalia;
@@ -121,4 +124,21 @@ test('poster: its own bold compositions come first; other systems never get them
   const own = layouts('poster');
   assert.ok(own.filter((l) => /^cx-poster-/.test(l)).length >= 3, own.join(' '));
   for (const sys of ['vivid', 'heritage', 'swiss']) assert.ok(!layouts(sys).some((l) => /poster/.test(l)), sys);
+});
+
+test('bordeaux / northline: designer-template compositions and fonts are used only by their own system', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const deck = (mood) => [
+    { title: 'Қазақ хандығы', subtitle: 'XV ғасыр', composition: { mood } },
+    { title: 'Негізгі ерекшеліктер', bullets: ['Жүздер: аумақтық бөліну', 'Билер кеңесі: сот', 'Сауда: Жібек жолы'], composition: { mood } },
+    { title: 'Қорытынды', bullets: ['Хандық — мемлекеттіліктің негізі', 'Жүздер басқаруды тұрақтандырды'], composition: { mood, visualPurpose: 'conclusion' } },
+  ];
+  const bx = build3DPresentationHTML(deck('bordeaux_wine'), 'Хандық', { system: 'bordeaux' });
+  assert.ok((bx.match(/data-layout="cx-bx-/g) || []).length >= 3);
+  assert.match(bx, /font-family:'Playfair Bold'/);
+  const nl = build3DPresentationHTML(deck('northline_lime'), 'Хандық', { system: 'northline' });
+  assert.ok((nl.match(/data-layout="cx-nl-/g) || []).length >= 3);
+  assert.match(nl, /font-family:'Montserrat Bold'/);
+  const other = build3DPresentationHTML(deck('ivory'), 'Хандық', { system: 'swiss' });
+  assert.doesNotMatch(other, /cx-(bx|nl)-|Playfair Bold|Montserrat Bold/);
 });

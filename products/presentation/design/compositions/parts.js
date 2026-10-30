@@ -176,6 +176,11 @@ function visualsForAll(texts, sys, palette, used, seed, o = {}) {
 
 /** Ең ұзын сөз бағанға сыятын қаріп өлшемі (сөз ортасынан үзілмейді, көрші бағанға кірмейді); өлшем — қаріптің нақты метрикасынан */
 function wordFit(text, size, width, kind) {
+  const BRAND = { playfair: 0.53, montserrat: 0.67, inter: 0.625, opensans: 0.645 };
+  if (BRAND[kind]) {
+    const longest = String(text || '').split(/\s+/).reduce((m, w) => Math.max(m, w.length), 0);
+    return longest ? Math.max(18, Math.min(size, Math.floor((width * 0.95) / (longest * BRAND[kind] * 1.08)))) : size;
+  }
   const M = require('../../fontMetrics');
   const tab = kind === 'serif' ? M.serifBold : M.sansBold;          // Arial/Liberation Sans Bold; Calibri одан ~8% енсіз
   const scale = kind === 'sans' ? 0.92 : 1;

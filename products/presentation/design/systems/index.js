@@ -18,7 +18,7 @@ const T = require('../tokens');
 const { formatNum } = require('./numbers');
 
 const SYSTEMS = {};
-for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster']) {
+for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster', 'bordeaux', 'northline']) {
   const sys = require('./' + id);
   SYSTEMS[sys.id] = sys;
 }
@@ -26,7 +26,7 @@ const DEFAULT = 'aurora';
 
 /** Стиль (business/minimal/…) → қай жүйелер лайықты (бірінші — ең лайықтысы). Белгісіз стиль → бәрі. */
 const STYLE_SYSTEMS = Object.freeze({
-  business: ['swiss', 'mono', 'academy', 'aurora', 'journal', 'vivid', 'poster'],
+  business: ['swiss', 'mono', 'academy', 'aurora', 'journal', 'vivid', 'poster', 'northline'],
   minimal: ['swiss', 'journal', 'atelier', 'academy'],
   creative: ['atelier', 'aurora', 'mono', 'journal', 'swiss', 'vivid', 'poster'],
   academic: ['academy', 'journal', 'aurora', 'swiss', 'mono', 'atelier'],
@@ -57,7 +57,7 @@ function typeStyleFor(sys, palette) {
  */
 // Сала → жүйе (тақырыпқа қарай, студенттің мамандығына емес). Тек салаға арналған жүйелер жалпы пулға кірмейді.
 // Бір салаға бірнеше жүйе болса — тұқым бойынша кезектеседі, студенттің соңғысы қайталанбайды.
-const FIELD_SYSTEMS = { humanities: ['heritage', 'regalia'], law: ['heritage', 'regalia'], education: ['campus'], it: ['blueprint'], engineering: ['blueprint'], science: ['blueprint'], business: ['ledger'] };
+const FIELD_SYSTEMS = { humanities: ['heritage', 'regalia', 'bordeaux'], law: ['heritage', 'regalia', 'bordeaux'], education: ['campus'], it: ['blueprint'], engineering: ['blueprint'], science: ['blueprint'], business: ['ledger'] };
 const FIELD_ONLY = new Set(Object.values(FIELD_SYSTEMS).flat());
 const FIELD_RE = {
   humanities: /тарих|хандық|хандығ|соғыс|мұрағат|қолжазба|шежіре|ғасыр|история|хански|войн|архив|рукопис|war\b|khanate|archive|manuscript|әдебиет|философ|ойшыл|ақын|жазушы|абай|фараби|мәдениет|өнертану|этнограф|фольклор|истори|литератур|философ|культур|поэт|писател|history|historical|literature|philosoph|culture|poet|heritage/i,
@@ -81,6 +81,11 @@ function pickDesign(o = {}) {
   if (field && FIELD_SYSTEMS[field]) {
     const own = FIELD_SYSTEMS[field].filter((id) => !avoidS.slice(0, 1).includes(id));
     if (own.length) pool = own;
+  }
+  // клиент ақ/жарық фон сұраса — тек қараңғы жүйе (bordeaux, blueprint) таңдалмайды
+  if (/(ақ|жарық|светл\p{L}*|бел\p{L}*|light|white)\s*(фон|тема|түс|стиль|дизайн|background|theme|mode)/iu.test(String(o.brief || ''))) {
+    const lit = pool.filter((id) => SYSTEMS[id].moods.some(T.isLightMood));
+    if (lit.length) pool = lit;
   }
   // соңғы 2 жүйе қайталанбайды (пул жетсе); пулдың басы — стильге ең лайықтысы, бірақ хэш араластырады
   const fresh = pool.filter((id) => !avoidS.slice(0, 2).includes(id));

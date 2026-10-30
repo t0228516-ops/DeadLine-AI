@@ -104,6 +104,11 @@ const FONT_STACKS = Object.freeze({
   serif: '"Times New Roman","Liberation Serif",serif',
   arial: 'Arial,"Liberation Sans",sans-serif',
   mono: '"Courier New","Liberation Mono",monospace',
+  // Дизайнер қаріптері (SIL OFL, assets/brand-fonts): PPTX-ке ендіріледі (fontEmbed.js) — мәтін өңделетін күйде қалады
+  playfair: '"Playfair Bold","Times New Roman",serif',
+  montserrat: '"Montserrat Bold",Arial,sans-serif',
+  inter: 'Inter,Calibri,sans-serif',
+  opensans: '"Open Sans",Calibri,sans-serif',
 });
 const TYPE_STYLES = Object.freeze({
   editorial: {
@@ -155,6 +160,14 @@ const MOODS = ({
   poster_green:  { bg: '#ffffff', text: '#081a12', accent: '#06704a', accent2: '#5b22d6', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
   poster_red:    { bg: '#ffffff', text: '#160a0a', accent: '#c41f28', accent2: '#141a63', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
   poster_violet: { bg: '#ffffff', text: '#0f0a24', accent: '#5a22e0', accent2: '#d11f6f', tone: 'modern', deco: 'bands', img: 'saturate(1.06) contrast(1.05)', scrim: 0.0, own: 'poster' },
+  // «Бордо» (Canva шаблонының өлшенген түстері): қою фон, шабдалы тақырып, сұрғылт-ақ мәтін, алтын нүкте
+  bordeaux_wine:   { bg: '#33020a', text: '#e6e7d7', accent: '#fcd0a7', accent2: '#d9af52', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.04)', scrim: 0.5, own: 'bordeaux' },
+  bordeaux_forest: { bg: '#0d2219', text: '#e6e7d7', accent: '#f3d6a4', accent2: '#cfae5a', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.04)', scrim: 0.5, own: 'bordeaux' },
+  bordeaux_night:  { bg: '#0d1530', text: '#e6e7d7', accent: '#f6d9b0', accent2: '#d6b25e', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.04)', scrim: 0.5, own: 'bordeaux' },
+  // «Ақ корпоратив» (Canva шаблонының өлшенген түстері): ақшыл фон, қою көк, тақырыпқа қарай екінші түс
+  northline_lime:  { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#a3e635', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
+  northline_sky:   { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#38bdf8', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
+  northline_coral: { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#fb7185', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
   // олардың қою жұбы — мұқаба, бөлім, қорытынды слайдтары (sys.deepMood)
   vivid_cobalt_deep:  { bg: '#213ce7', text: '#ffffff', accent: '#ffd23f', accent2: '#ff8a6b', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },
   vivid_emerald_deep: { bg: '#00663e', text: '#ffffff', accent: '#ffd23f', accent2: '#b6f09c', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },

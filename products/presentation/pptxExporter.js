@@ -27,8 +27,17 @@ const inch = (px) => Math.round((px / PX_PER_IN) * 10000) / 10000;
 const pt = (px) => Math.round(px * PT_PER_PX * 100) / 100;
 
 /** Office font for a CSS family (our stacks start with the Office name already). */
+// дизайнер қаріптері: атауы PowerPoint-тегі ендірілген отбасымен бірдей (fontEmbed.BRAND); қаріптің биіктігі (hhea)
+const BRAND_FONTS = [[/Playfair Bold/, 'Playfair Bold', 1.2], [/Montserrat Bold/, 'Montserrat Bold', 1.219], [/(^|[",\s])Inter\b/, 'Inter', 1.21], [/Open Sans/, 'Open Sans', 1.362]];
+function fontHeight(face) {
+  const b = BRAND_FONTS.find((x) => x[1] === face);
+  return b ? b[2] : face === 'Times New Roman' ? 1.107 : 1.221;
+}
 function officeFont(family) {
   const f = String(family || '');
+  const head = f.split(',')[0];
+  const b = BRAND_FONTS.find((x) => x[0].test(head));
+  if (b) return b[1];
   if (/courier|mono/i.test(f)) return 'Courier New';
   if (/arial|liberation sans|helvetica/i.test(f)) return 'Arial';
   if (/times|serif|lora|georgia|cambria|displayface/i.test(f) && !/sans/i.test(f)) return 'Times New Roman';
@@ -110,12 +119,12 @@ function addTextBlock(pgSlide, block, deckLang) {
     // browser centres the font's content box (ascent+descent = H) in the line; with 1.2em spacing the office
     // renderers sit it at the bottom of the line → move the box by the difference (measured with LibreOffice)
     const natural = size * 1.2;
-    const H = size * (officeFont(block.lines[0][0].s.font) === 'Times New Roman' ? 1.107 : 1.221);
+    const H = size * fontHeight(officeFont(block.lines[0][0].s.font));
     box.y += lineH / 2 + H / 2 - natural;
     box.h = Math.max(box.h, natural);
     lineH = natural;
   } else {
-    const H = size * (officeFont(block.lines[0][0].s.font) === 'Times New Roman' ? 1.107 : 1.221);
+    const H = size * fontHeight(officeFont(block.lines[0][0].s.font));
     if (lineH > H) box.y -= (lineH - H) / 2;
   }
   pgSlide.addText(runs, {
@@ -198,6 +207,13 @@ async function exportToPptx(pngPaths, presentationTitle, slides = [], layers = {
 
   const outPath = path.join(os.tmpdir(), `presentation-${uniqueId()}.pptx`);
   await pptx.writeFile({ fileName: outPath });
+  // дизайнер қаріптері қолданылса — PPTX-ке ендіріледі (компьютерде орнатылмаса да көрінісі бірдей)
+  const used = new Set();
+  textLayers.forEach((layer) => (Array.isArray(layer) ? layer : []).forEach((b) => (b.lines || []).forEach((l) => l.forEach((w) => used.add(officeFont(w.s && w.s.font))))));
+  try {
+    const n = await require('./fontEmbed').embedFonts(outPath, [...used]);
+    if (n) console.log(`[PPTX] embedded ${n} designer font file(s)`);
+  } catch (err) { console.warn('[PPTX] font embedding failed: ' + err.message); }
   return outPath;
 }
 
