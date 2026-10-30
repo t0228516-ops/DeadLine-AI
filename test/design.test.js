@@ -66,3 +66,30 @@ test('auto-picked palettes are light unless the client asks for a dark backgroun
   const dark = SYS.pickDesign({ seed: 'x', brief: 'Python негіздері, қара фон' });
   assert.ok(!T.isLightMood(dark.mood), 'asked for dark → dark');
 });
+
+test('regalia: humanities topics alternate heritage/regalia; colour follows the topic; cover, section and closing use the deep palette', () => {
+  const SYS = require('../products/presentation/design/systems');
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) seen.add(SYS.pickDesign({ seed: 's' + i, brief: 'Қазақ хандығының тарихы' }).system);
+  assert.deepStrictEqual([...seen].sort(), ['heritage', 'regalia']);
+  // студенттің соңғы жүйесі regalia болса — келесісі heritage
+  assert.strictEqual(SYS.pickDesign({ seed: 's1', brief: 'Қазақ хандығының тарихы', avoidSystems: ['regalia'] }).system, 'heritage');
+  const R = SYS.SYSTEMS.regalia;
+  assert.strictEqual(R.moodFor('Абай шығармашылығы және қазақ әдебиеті'), 'regalia_malachite');
+  assert.strictEqual(R.moodFor('Әл-Фараби философиясы'), 'regalia_lapis');
+  assert.strictEqual(R.moodFor('Қазақ хандығының құрылуы'), 'regalia_bordo');
+  // жүйенің өз палитрасы басқа жүйелерге түспейді
+  for (let i = 0; i < 60; i++) assert.ok(!/^regalia_/.test(SYS.pickDesign({ seed: 'm' + i, brief: 'Маркетинг негіздері' }).mood));
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const c = { mood: 'regalia_bordo' };
+  const html = build3DPresentationHTML([
+    { title: 'Қазақ хандығы', subtitle: 'XV ғасыр', composition: c },
+    { title: 'Негізгі ерекшеліктер', bullets: ['Жүздер жүйесі: басқару', 'Билер кеңесі: сот', 'Сауда жолдары: байланыс'], composition: c },
+    { title: 'Қорытынды', bullets: ['Хандық — мемлекеттіліктің негізі', 'Жүздер басқаруды тұрақтандырды'], composition: { ...c, visualPurpose: 'conclusion' } },
+  ], 'Қазақ хандығы', { system: 'regalia' });
+  const slides = html.split('<article class="slide').slice(1);
+  assert.match(slides[0], /^[^"]*is-deep/);
+  assert.doesNotMatch(slides[1], /^[^"]*is-deep/);
+  assert.match(slides[0], /--bg:#3d1219/);
+  assert.match(slides[1], /--bg:#f6efe6/);
+});

@@ -267,6 +267,26 @@ COVER.arch = (ctx) => {
   return { bg, fg: fg + folio(ctx), cls: 'cover-arch-slide' + (photoOK ? ' has-arch' : ' no-arch') };
 };
 
+/** «Перде» мұқаба (regalia): қою алаң, сол жақта тақырып, оң жақта фото алаңға біртіндеп сіңеді, алтын бұрыштар */
+COVER.veil = (ctx) => {
+  const a = ctx.a;
+  const photoOK = a.hasPhoto && I.sharpEnough(a.img, 900);
+  const bg = '<div class="plate plate-cover"></div>' +
+    (photoOK ? '<div class="veil-photo" data-role="photo">' + I.imgTag(a.photo, a.img, ctx.palette, { focus: a.focus }) + '</div>' : '') +
+    '<i class="rg-corner tl" aria-hidden="true"></i><i class="rg-corner br" aria-hidden="true"></i>';
+  const w = GRID.span(photoOK ? 6 : 9);
+  const { org, metaHtml, labeled } = coverParts(ctx, 2);
+  const fg = '<div class="canvas cover cover-veil">' +
+    '<div class="cover-top">' + (org || kicker(ctx, sectionLabel(ctx))) + '</div>' +
+    '<div class="block cover-block" style="width:' + w + 'px">' +
+      titleH1(ctx, a.title, { role: 'display', width: w, maxLines: 4, hl: true, scale: [112, 100, 90, 80, 72, 64] }) +
+      rule(ctx, 240) +
+      lead(ctx, labeled ? '' : a.subtitle, 32, { maxw: w }) +
+      metaHtml +
+    '</div></div>';
+  return { bg, fg: fg + folio(ctx), cls: 'cover-veil-slide' };
+};
+
 /** Дудл мұқаба (campus): сол жақта тақырып, оң жақта тақырыпқа сай қолмен салынған иллюстрация (Open Doodles, CC0) */
 COVER.doodle = (ctx) => {
   const a = ctx.a; const p = ctx.palette;

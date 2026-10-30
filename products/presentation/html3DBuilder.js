@@ -153,8 +153,13 @@ const STACK_OF = { points: 'stackPoints', editorial: 'stackPoints', split: 'stac
 // Дизайн жүйесінің «тақырып жоғарыда» құрылымы (швейцар, академия): мазмұн слайдтары басқа композицияда
 const SYS_STACK_OF = { points: 'stackPoints', editorial: 'stackPoints', split: 'stackSplit', references: 'stackRefs' };
 
+// Жүйенің «қою» слайдтары (sys.deepMood): мұқаба, бөлім, қорытынды — бөлек қою палитрамен салынады
+const isDeepRole = (index, plan) => index === 0 || /^(section|closing)$/.test(plan.layout) || /^(section|closing|conclusion)$/.test(plan.type);
+
 function renderSlide(slide, index, plan, ctxDeck) {
-  const { palette, ts, deckTitle } = ctxDeck;
+  const { ts, deckTitle } = ctxDeck;
+  const deep = !!ctxDeck.deepPalette && isDeepRole(index, plan);
+  const palette = deep ? ctxDeck.deepPalette : ctxDeck.palette;
   let layoutName = plan.layout;
   if (ctxDeck.skin && ctxDeck.skin.titleTop && STACK_OF[layoutName] && index > 0) layoutName = STACK_OF[layoutName];
   else if (!ctxDeck.skin && ctxDeck.sys && ctxDeck.sys.stack && SYS_STACK_OF[layoutName] && index > 0) layoutName = SYS_STACK_OF[layoutName];
@@ -225,7 +230,7 @@ function renderSlide(slide, index, plan, ctxDeck) {
   const accent = palette.accent;
   const sk = ctxDeck.skin;
   const dec = sk && sk.decor ? decorHtml(sk, refIndexFor(sk, index, ctxDeck.total, ctxDeck.roles), layoutName, index, ctxDeck.mediaIds, palette) : { html: '', vars: '' };
-  return '<article class="slide L-' + layoutName + ' ' + (out.cls || '') + (ctxDeck.serif ? ' serif-tone' : '') + (palette.ref ? ' ref-skin' : '') + ' cam-' + cam + (index === 0 ? ' is-active' : '') +
+  return '<article class="slide L-' + layoutName + ' ' + (out.cls || '') + (deep ? ' is-deep' : '') + (ctxDeck.serif ? ' serif-tone' : '') + (palette.ref ? ' ref-skin' : '') + ' cam-' + cam + (index === 0 ? ' is-active' : '') +
     '" data-index="' + index + '" data-layout="' + layoutName + '" data-type="' + plan.type + '" data-cam="' + cam + '" data-accent="' + accent +
     '" style="' + paletteVars(palette) + dec.vars + '"><div class="layer layer-bg" data-depth="0.12">' + (out.bg || '') + (bgk ? '' : decoFor(out.bg, palette, index)) + (sk && sk.decor ? dec.html : skinShapes(ctxDeck.skin, layoutName, index, ctxDeck.total)) +
     '</div><div class="layer layer-mid" data-depth="0.4">' + out.fg + '</div></article>';
@@ -282,9 +287,11 @@ function buildNew(slides, presentationTitle, opts) {
   const mt = mediaTable(skin);
   const serif = /Times|DisplayFace|serif/i.test(ts.display.split(',')[0]);
   const ctxDeck = { palette, ts, deckTitle, skin, serif, sys, total: list.length, mediaIds: mt.ids, roles: opts.refRoles || null };
+  const deepMood = !skin && sys.deepMood && sys.deepMood[palette.mood];
+  if (deepMood && T.MOODS[deepMood]) ctxDeck.deepPalette = T.buildPalette(deepMood, null, opts.style);
   // құрастырылған фон: клиент үлгісі (skin) жоқ болса; колодаға бір рецепт, тұқым — колоданың ырғақ тұқымы
   const BG = require('./design/bgkit');
-  if (!skin && BG.enabled()) {
+  if (!skin && BG.enabled() && sys.bgkit !== false) { // жүйенің өз фоны болса (regalia) — құрастырылған фон қосылмайды
     const c0b = (list[0] && list[0].composition) || {};
     ctxDeck.bgSeed = Number(c0b.layoutSeed) >>> 0 || T.strHash(deckTitle);
     ctxDeck.bgRecipe = BG.pickRecipe(sys && sys.id, ctxDeck.bgSeed, palette);

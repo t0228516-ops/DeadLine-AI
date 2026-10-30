@@ -20,6 +20,7 @@ const LIB = path.join(A, 'library');
 // ойнақы жүйелер — doodle. Қалғандары (swiss, mono, numbers, blueprint, ledger) — әшекейсіз (өз белгішелері бар).
 const KINDS = {
   heritage: ['engraving', 'ornament'],
+  regalia: ['engraving', 'ornament'],
   journal: ['engraving'],
   academy: ['engraving'],
   atelier: ['engraving'],

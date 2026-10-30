@@ -18,7 +18,7 @@ const T = require('../tokens');
 const { formatNum } = require('./numbers');
 
 const SYSTEMS = {};
-for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger']) {
+for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia']) {
   const sys = require('./' + id);
   SYSTEMS[sys.id] = sys;
 }
@@ -56,8 +56,9 @@ function typeStyleFor(sys, palette) {
  * @returns {{system:string, mood:string}}
  */
 // Сала → жүйе (тақырыпқа қарай, студенттің мамандығына емес). Тек салаға арналған жүйелер жалпы пулға кірмейді.
-const FIELD_SYSTEMS = { humanities: 'heritage', law: 'heritage', education: 'campus', it: 'blueprint', engineering: 'blueprint', science: 'blueprint', business: 'ledger' };
-const FIELD_ONLY = new Set(Object.values(FIELD_SYSTEMS));
+// Бір салаға бірнеше жүйе болса — тұқым бойынша кезектеседі, студенттің соңғысы қайталанбайды.
+const FIELD_SYSTEMS = { humanities: ['heritage', 'regalia'], law: ['heritage', 'regalia'], education: ['campus'], it: ['blueprint'], engineering: ['blueprint'], science: ['blueprint'], business: ['ledger'] };
+const FIELD_ONLY = new Set(Object.values(FIELD_SYSTEMS).flat());
 const FIELD_RE = {
   humanities: /тарих|хандық|хандығ|соғыс|мұрағат|қолжазба|шежіре|ғасыр|история|хански|войн|архив|рукопис|war\b|khanate|archive|manuscript|әдебиет|философ|ойшыл|ақын|жазушы|абай|фараби|мәдениет|өнертану|этнограф|фольклор|истори|литератур|философ|культур|поэт|писател|history|historical|literature|philosoph|culture|poet|heritage/i,
 };
@@ -77,7 +78,10 @@ function pickDesign(o = {}) {
   let pool = (STYLE_SYSTEMS[String(o.style || '').toLowerCase()] || Object.keys(SYSTEMS)).filter((id) => SYSTEMS[id] && !FIELD_ONLY.has(id));
   // салаға тән жүйе: тақырып гуманитарлық болса — «Мұра» (студенттің соңғы жүйесі болмаса)
   const field = (o.field && FIELD_SYSTEMS[o.field] ? o.field : null) || fieldOf(o.brief);
-  if (field && FIELD_SYSTEMS[field] && !avoidS.slice(0, 1).includes(FIELD_SYSTEMS[field])) pool = [FIELD_SYSTEMS[field]];
+  if (field && FIELD_SYSTEMS[field]) {
+    const own = FIELD_SYSTEMS[field].filter((id) => !avoidS.slice(0, 1).includes(id));
+    if (own.length) pool = own;
+  }
   // соңғы 2 жүйе қайталанбайды (пул жетсе); пулдың басы — стильге ең лайықтысы, бірақ хэш араластырады
   const fresh = pool.filter((id) => !avoidS.slice(0, 2).includes(id));
   if (fresh.length) pool = fresh;
@@ -91,11 +95,16 @@ function pickDesign(o = {}) {
   const wantsDark = /(қара|тұнық|тёмн\p{L}*|темн\p{L}*|dark|black)\s*(фон|тема|түс|стиль|дизайн|background|theme|mode)/iu.test(brief);
   const wantsLight = /(ақ|жарық|светл\p{L}*|бел\p{L}*|light|white)\s*(фон|тема|түс|стиль|дизайн|background|theme|mode)/iu.test(brief);
   let moods = sys.moods.filter((m) => T.MOODS[m]);
-  if (wantsDark && !wantsLight) moods = (moods.filter((m) => !T.isLightMood(m)).length ? moods.filter((m) => !T.isLightMood(m)) : Object.keys(T.MOODS).filter((m) => !T.isLightMood(m) && !/^ref_/.test(m)));
-  else if (wantsLight && !wantsDark) moods = (moods.filter(T.isLightMood).length ? moods.filter(T.isLightMood) : Object.keys(T.MOODS).filter((m) => T.isLightMood(m) && !/^ref_/.test(m)));
+  if (wantsDark && !wantsLight) moods = (moods.filter((m) => !T.isLightMood(m)).length ? moods.filter((m) => !T.isLightMood(m)) : Object.keys(T.MOODS).filter((m) => !T.isLightMood(m) && T.isSharedMood(m)));
+  else if (wantsLight && !wantsDark) moods = (moods.filter(T.isLightMood).length ? moods.filter(T.isLightMood) : Object.keys(T.MOODS).filter((m) => T.isLightMood(m) && T.isSharedMood(m)));
   // Клиент қараңғы фон сұрамаса — тек ашық палитра (қараңғы колода «бұлыңғыр» көрінеді, сыныпта проектормен оқылмайды).
   // Әртүрлілік: 6 ашық палитра × 10 жүйе. Тек қараңғы жүйе (blueprint) өз палитрасында қалады. DESIGN_DARK=1 — бұрынғыдай.
   else if (process.env.DESIGN_DARK !== '1' && moods.some(T.isLightMood)) moods = moods.filter(T.isLightMood);
+  // жүйенің тақырыпқа тән палитрасы (regalia: тарих — бордо, әдебиет — малахит…); клиент өзі түс сұраса — сол
+  if (sys.moodFor && !wantsDark && !wantsLight) {
+    const m = sys.moodFor(brief);
+    if (T.MOODS[m]) return { system, mood: m };
+  }
   const freshM = moods.filter((m) => !avoidM.includes(m));
   if (freshM.length) moods = freshM;
   const mood = moods[T.strHash(seed + '|mood') % moods.length] || 'ivory';

@@ -143,7 +143,17 @@ const MOODS = ({
   mint:     { bg: '#eef6f1', text: '#10241a', accent: '#1f8a5b', accent2: '#1a7f9a', tone: 'modern',    deco: 'dots',     img: 'saturate(.98) contrast(1.02)',               scrim: 0.0 },
   blush:    { bg: '#fbf1ee', text: '#2a1519', accent: '#c2415a', accent2: '#c4662a', tone: 'modern',    deco: 'orbs',     img: 'saturate(.98) contrast(1.02)',               scrim: 0.0 },
   sand:     { bg: '#f3ebdc', text: '#2a2118', accent: '#b8651b', accent2: '#a8352a', tone: 'editorial', deco: 'diagonal', img: 'sepia(.08) saturate(.96) contrast(1.02)',    scrim: 0.0 },
+  // ── жүйенің өз палитралары (own) — тек сол жүйе алады, жалпы пулға кірмейді ──
+  regalia_bordo:     { bg: '#f6efe6', text: '#2a1418', accent: '#7a1f2b', accent2: '#b8863b', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.0, own: 'regalia' },
+  regalia_malachite: { bg: '#f3f1e8', text: '#14231d', accent: '#1f5444', accent2: '#b8913f', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.0, own: 'regalia' },
+  regalia_lapis:     { bg: '#f2f1ec', text: '#141b2e', accent: '#22356b', accent2: '#b98d3e', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.0, own: 'regalia' },
+  // олардың қою жұбы — мұқаба, бөлім, қорытынды слайдтары (sys.deepMood)
+  regalia_bordo_deep:     { bg: '#3d1219', text: '#f6e9dc', accent: '#d4a95f', accent2: '#ecd3a4', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.55, own: 'regalia' },
+  regalia_malachite_deep: { bg: '#11302a', text: '#eef2e8', accent: '#d2ad62', accent2: '#ead6a8', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.55, own: 'regalia' },
+  regalia_lapis_deep:     { bg: '#141f3f', text: '#eef0f6', accent: '#d3ab60', accent2: '#ead5a6', tone: 'editorial', deco: 'rings', img: 'saturate(.95) contrast(1.03)', scrim: 0.55, own: 'regalia' },
 });
+/** Жалпы пулға кіретін палитра (клиент референсінен жасалған ref_* мен жүйенің өз палитрасы емес) */
+const isSharedMood = (k) => !!MOODS[k] && !MOODS[k].own && !/^ref_/.test(k);
 
 /** Register a theme derived from a client's reference PPTX. Key is content-hashed → idempotent, bounded. */
 function registerMood(def) {
@@ -187,12 +197,12 @@ function pickTheme(opts) {
   const o = opts || {};
   const brief = String(o.brief || '');
   // 'dark' (қара+алтын) — бұрынғы әдепкі; енді тек клиент қара фон сұраса ғана таңдалады
-  const allThemes = Object.keys(MOODS).filter((k) => k !== 'dark');
+  const allThemes = Object.keys(MOODS).filter((k) => k !== 'dark' && isSharedMood(k));
   let pool = (THEME_POOLS[String(o.style || '').toLowerCase()] || allThemes).slice();
   const wantsDark = /(қара|тұнық|тёмн\p{L}*|темн\p{L}*|dark|black)\s*(фон|тема|түс|стиль|дизайн|background|theme|mode)/iu.test(brief);
   const wantsLight = /(ақ|жарық|светл\p{L}*|бел\p{L}*|light|white)\s*(фон|тема|түс|стиль|дизайн|background|theme|mode)/iu.test(brief);
-  if (wantsDark && !wantsLight) pool = Object.keys(MOODS).filter((k) => !isLightMood(k));
-  else if (wantsLight && !wantsDark) pool = Object.keys(MOODS).filter(isLightMood);
+  if (wantsDark && !wantsLight) pool = Object.keys(MOODS).filter((k) => isSharedMood(k) && !isLightMood(k));
+  else if (wantsLight && !wantsDark) pool = Object.keys(MOODS).filter((k) => isSharedMood(k) && isLightMood(k));
   pool = pool.filter((k) => MOODS[k]);
   if (!pool.length) pool = allThemes;
   const start = strHash(o.seed) % pool.length;
@@ -258,6 +268,6 @@ function typeStyleFor(palette) {
 
 module.exports = {
   SPACE, RADIUS, SHADOW, GRID, TYPE_SCALE, FONT_STACKS, TYPE_STYLES, MOODS, THEME_POOLS, STYLE_HINTS,
-  buildPalette, typeStyleFor, pickTheme, isLightMood, registerMood, strHash,
+  buildPalette, typeStyleFor, pickTheme, isLightMood, isSharedMood, registerMood, strHash,
   safeColor, hexToRgb, mixHex, shiftHue, luminance, contrast, ensureContrast, rgba,
 };

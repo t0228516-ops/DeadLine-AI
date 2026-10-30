@@ -91,6 +91,11 @@ test('composition variants: same content + different seed → different inner lo
   const m = C.mirrorHtml('<div style="position:absolute;left:100px;top:10px;width:300px">x</div><div style="position:absolute;right:0;width:5px"></div>');
   assert.match(m, /left:1520px/);
   assert.match(m, /right:0;width:5px/);
+  // пішін ішіндегі бөлшек (арка ішіндегі гравюра) ата-анасына қатысты — шағылыспайды, әйтпесе пішін бос қалады
+  const n = C.mirrorHtml('<div style="position:absolute;left:140px;top:150px;width:520px;overflow:hidden"><div style="position:absolute;left:70px;top:120px;width:380px"><img src="x" style="width:100%"></div></div><div style="position:absolute;left:0px;width:10px"></div>');
+  assert.match(n, /left:1260px;top:150px/);
+  assert.match(n, /left:70px;top:120px/);
+  assert.match(n, /left:1910px/);
 });
 
 test('library templates: the newest goes first and feeds the next choice as recentLibs', () => {

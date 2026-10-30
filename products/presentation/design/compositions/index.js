@@ -363,14 +363,29 @@ function variantFor(env, a, id, cx) {
 const GROWABLE = new Set(['concepts-ghostcols', 'definition-page', 'closing-seal', 'list-margin', 'list-ghostrows', 'timeline-rail', 'compare-spine', 'process-chevrons', 'statement-arch', 'quote-paper']);
 // Айналы нұсқасы бар композициялар (элементтердің бәрі left+width-пен орналасқан → дәл шағылысады)
 const MIRROR_SAFE = new Set(['cover-arch', 'cover-polaroid', 'statement-arch', 'photo-polaroid', 'cover-bigvisual', 'number-hero', 'definition-page', 'section-band', 'closing-seal', 'list-margin']);
-/** Айна: абсолют элементтің left-і → W − left − width (мәтін тураланымы өзгермейді) */
+/**
+ * Айна: слайдқа тікелей орналасқан абсолют элементтің left-і → W − left − width (мәтін тураланымы өзгермейді).
+ * Басқа абсолют элементтің ІШІНДЕГІ бөлшек (арка ішіндегі гравюра) ата-анасына қатысты орналасқан — оған тиіспейміз,
+ * әйтпесе ол пішіннің сыртына шығып, пішін бос қалады.
+ */
+const VOID_TAGS = new Set(['img', 'br', 'hr', 'input', 'meta', 'link', 'source', 'col', 'wbr']);
 function mirrorHtml(html) {
-  return String(html || '').replace(/style="([^"]*)"/g, (m, st) => {
-    if (!/position:absolute/.test(st) || /(^|;)\s*right:/.test(st)) return m;
-    const l = st.match(/(^|;)\s*left:(-?\d+(?:\.\d+)?)px/); const w = st.match(/(^|;)\s*width:(\d+(?:\.\d+)?)px/);
-    if (!l || !w) return m;
-    const nl = Math.round(W - Number(l[2]) - Number(w[2]));
-    return 'style="' + st.replace(/(^|;)(\s*)left:-?\d+(?:\.\d+)?px/, '$1$2left:' + nl + 'px') + '"';
+  const stack = []; // әр ашық тег: абсолют пе
+  return String(html || '').replace(/<(\/?)([a-zA-Z][\w-]*)([^>]*)>/g, (m, close, tag, attrs) => {
+    if (close) { stack.pop(); return m; }
+    const st = (attrs.match(/style="([^"]*)"/) || [])[1] || '';
+    const abs = /position:absolute/.test(st);
+    const nested = stack.some(Boolean);
+    let out = m;
+    if (abs && !nested && !/(^|;)\s*right:/.test(st)) {
+      const l = st.match(/(^|;)\s*left:(-?\d+(?:\.\d+)?)px/); const w = st.match(/(^|;)\s*width:(\d+(?:\.\d+)?)px/);
+      if (l && w) {
+        const nl = Math.round(W - Number(l[2]) - Number(w[2]));
+        out = m.replace('style="' + st + '"', 'style="' + st.replace(/(^|;)(\s*)left:-?\d+(?:\.\d+)?px/, '$1$2left:' + nl + 'px') + '"');
+      }
+    }
+    if (!VOID_TAGS.has(tag.toLowerCase()) && !/\/\s*$/.test(attrs)) stack.push(abs);
+    return out;
   });
 }
 
