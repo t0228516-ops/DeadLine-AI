@@ -82,3 +82,13 @@ test('speech .docx: per-slide script, glossary and teacher questions', async () 
   const rx = await ru.file('word/document.xml').async('string');
   assert.ok(rx.includes('ПОДГОТОВКА К ДОКЛАДУ') && !rx.includes('Квиз вместе с классом'), 'ru, no quiz section without quiz');
 });
+
+test('clients (pedagogy:false): classic prompts, no class quiz call, classic «Баяндама мәтіні»', async () => {
+  const calls = [];
+  const r = await generateSpeakerNotes({ slides, title: 'Цифрлық экономика', language: 'Kazakh', llm: fakeLlm(calls), pedagogy: false });
+  assert.ok(!calls.some((c) => c.label === 'classQuiz'), 'no quiz call for clients');
+  assert.ok(!calls.some((c) => /"cues"/.test(c.user) || /12-year-old/.test(c.user)), 'classic prompts');
+  assert.deepStrictEqual(r.quiz, []);
+  const xml = await (await JSZip.loadAsync(buildSpeechDocx({ title: 'Т', slides, notes: r.notes, study: r.study, language: 'Kazakh', pedagogy: false }))).file('word/document.xml').async('string');
+  assert.ok(xml.includes('БАЯНДАМА МӘТІНІ') && xml.includes('Мұғалім қоюы мүмкін сұрақтар') && !xml.includes('БАЯНДАМАҒА ДАЙЫНДЫҚ') && !xml.includes('Өзіңді тексер'));
+});

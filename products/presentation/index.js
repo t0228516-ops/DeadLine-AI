@@ -722,7 +722,7 @@ async function generatePresentation(userInput, options = {}) {
   if (isTemplateFill) {
     await onProgress('template', 'Шаблонға мәтін салынуда...');
     // Баяндама мәтіні шаблон режимінде де: шаблон қорабына аз мәтін сыяды — студент оқитын толық мәтін .docx-те
-    const tplNotesTask = generateSpeakerNotes({ slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta })
+    const tplNotesTask = generateSpeakerNotes({ slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta, pedagogy: options.pedagogy !== false, quiz: !!options.quiz })
       .catch((e) => { console.warn(`[Notes] failed (continuing): ${e.message}`); return null; });
     try {
       pptxPath = path.join(os.tmpdir(), `template-${uniqueId()}.pptx`);
@@ -780,7 +780,7 @@ async function generatePresentation(userInput, options = {}) {
         notesMeta = { ok: notesRes.ok, study: !!notesRes.study };
         try {
           speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
-          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links }));
+          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links, pedagogy: options.pedagogy !== false }));
         } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
         console.log(`[Pipeline] Template speaker notes: ${notesRes.ok}/${slides.length} slides, study guide=${notesMeta.study}`);
       }
@@ -812,7 +812,7 @@ async function generatePresentation(userInput, options = {}) {
   //    Екеуі де ЕШҚАШАН лақтырмайды: сәтсіз болса, слайд қалыпты күйінде қалады.
   // Баяндамашы мәтіні + оқу көмекшісі: мазмұн енді түпкілікті → суреттермен ҚАТАР жазылады (күту уақыты қосылмайды)
   const notesTask = generateSpeakerNotes({
-    slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta,
+    slides: slides.map((sl) => ({ ...sl })), title, topic, language, coverMeta, pedagogy: options.pedagogy !== false, quiz: !!options.quiz,
   }).catch((e) => { console.warn(`[Notes] failed (continuing): ${e.message}`); return null; });
 
   await onProgress('media', 'Суреттер мен диаграммалар...');
@@ -1151,7 +1151,7 @@ async function generatePresentation(userInput, options = {}) {
     if (notesFit) {
       try {
         speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
-        fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links }));
+        fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links, pedagogy: options.pedagogy !== false }));
       } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
     }
   } catch (err) {

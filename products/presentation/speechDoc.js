@@ -124,17 +124,62 @@ function guessLang(slides) {
   return /[a-z]/i.test(t) ? 'en' : 'kk';
 }
 
+// ── Классикалық «Баяндама мәтіні» (клиенттерге; жаңа «Дайындық» әзірге тек админ мен тестерлерге — иесінің шешімі) ──
+const CLASSIC = {
+  kk: { doc: 'БАЯНДАМА МӘТІНІ', how: '► — слайдтың басты ойы. Мәтінді жаттап алмаңыз: басты ойды есте сақтап, өз сөзіңізбен айтыңыз.', glossary: 'Негізгі терминдер', questions: 'Мұғалім қоюы мүмкін сұрақтар' },
+  ru: { doc: 'ТЕКСТ ДОКЛАДА', how: '► — главная мысль слайда. Не заучивайте текст: запомните главную мысль и говорите своими словами.', glossary: 'Ключевые термины', questions: 'Возможные вопросы преподавателя' },
+  en: { doc: 'SPEAKER SCRIPT', how: '► — the key idea of the slide. Do not memorise the text: remember the idea and say it in your own words.', glossary: 'Key terms', questions: 'Questions a teacher may ask' },
+};
+
+function buildClassicDocx(o, lang) {
+  const slides = Array.isArray(o.slides) ? o.slides : [];
+  const notes = Array.isArray(o.notes) ? o.notes : [];
+  const t = { ...L10N[lang], ...CLASSIC[lang] };
+  const meta = o.coverMeta || {};
+  const C = (text, ro = {}, po = {}) => para(run(text, ro), Object.assign({ jc: 'center', firstLine: 0, line: 300 }, po));
+  const P = (text, ro = {}, po = {}) => para(run(text, ro), Object.assign({ line: 360, firstLine: 709, after: 120 }, po));
+  const body = [];
+  body.push(C(t.doc, { bold: true, size: 32 }, { after: 240 }));
+  body.push(C(`${t.topic}: «${o.title || ''}»`, { bold: true, size: 28 }, { after: 120 }));
+  const who = [meta.performedBy ? `${t.speaker}: ${meta.performedBy}` : '', meta.group ? `${t.group}: ${meta.group}` : ''].filter(Boolean).join(' · ');
+  if (who) body.push(C(who, {}, { after: 60 }));
+  body.push(C(t.time(speakingMinutes(notes), slides.length), { italic: true, size: 24 }, { after: 240 }));
+  body.push(P(t.how, { italic: true, size: 24 }, { firstLine: 0, after: 240 }));
+  slides.forEach((s, i) => {
+    const n = notes[i];
+    if (!n) return;
+    body.push(para(run(`${t.slide} ${i + 1}. ${String((s && s.title) || '').trim()}`), { style: 'Heading2', firstLine: 0, before: 240 }));
+    if (n.point) body.push(P('► ' + n.point, { bold: true }, { firstLine: 0 }));
+    body.push(P(n.speech));
+  });
+  const study = o.study || null;
+  if (study && study.glossary && study.glossary.length) {
+    body.push(para(run(t.glossary), { style: 'Heading1', pageBreakBefore: true }));
+    study.glossary.forEach((g) => body.push(para(run(g.term, { bold: true }) + run(' — ' + g.meaning), { line: 360, firstLine: 0, after: 120 })));
+  }
+  if (study && study.questions && study.questions.length) {
+    body.push(para(run(t.questions), { style: 'Heading1', pageBreakBefore: !(study.glossary && study.glossary.length) }));
+    study.questions.forEach((q, k) => {
+      body.push(para(run(`${k + 1}. ${q.q}`, { bold: true }), { line: 360, firstLine: 0, before: 120, after: 60, keepNext: true }));
+      body.push(para(run(t.answer + ': ', { italic: true }) + run(q.a), { line: 360, firstLine: 0, after: 120 }));
+    });
+  }
+  return packDocx(lang, o.title || t.doc, body.join(''));
+}
+
 const LETTERS = ['A', 'B', 'C', 'D'];
 
 /**
  * @param {{ title: string, slides: object[], notes: ({point,cues?,speech}|null)[], study?: object|null, language?: string|null,
- *           coverMeta?: object, quiz?: {q,options,correct,explain}[], quizLinks?: {player:string, host:string}|null }} o
+ *           coverMeta?: object, quiz?: {q,options,correct,explain}[], quizLinks?: {player:string, host:string}|null,
+ *           pedagogy?: boolean }} o — pedagogy:false → классикалық «Баяндама мәтіні»
  * @returns {Buffer} .docx
  */
 function buildSpeechDocx(o) {
   const slides = Array.isArray(o.slides) ? o.slides : [];
   const notes = Array.isArray(o.notes) ? o.notes : [];
   const lang = o.language ? langCode(o.language) : guessLang(slides);
+  if (o.pedagogy === false) return buildClassicDocx(o, lang);
   const t = L10N[lang];
   const meta = o.coverMeta || {};
   const study = o.study || null;

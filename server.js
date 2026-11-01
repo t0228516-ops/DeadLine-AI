@@ -1020,6 +1020,7 @@ async function executeJob(jobId) {
         pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
       } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
     }
+    const pilot = isAdminId(chatId) || !!job.payload?.tester;
     const genOpts = (lib) => ({
       ...avoid,
       designForce: lib ? undefined : (chosenDesign || undefined),
@@ -1027,7 +1028,9 @@ async function executeJob(jobId) {
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
-      quiz: QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
+      // Сыныпқа квиз + жаңа «Баяндамаға дайындық» — әзірге тек админ мен тестерлерге (иесінің шешімі, 2026-11-01)
+      pedagogy: pilot,
+      quiz: pilot && QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
       mode: lib ? 'template' : (job.payload?.mode || 'presentation'),
       materialText: job.payload?.materialText || null,
       referencePptx: lib ? lib.deckBuf : referencePptx,
@@ -1181,10 +1184,13 @@ async function executeJob(jobId) {
             contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           });
           if (speechPath && fs.existsSync(speechPath)) {
-            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — дайындық.docx`;
+            const pilotDoc = isAdminId(chatId) || !!job.payload?.tester;
+            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — ${pilotDoc ? 'дайындық' : 'баяндама'}.docx`;
             await global.__deadlineBot.sendDocument(chatId, speechPath, {
-              caption: '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.'
-                + (result.quiz ? '\n\n🎯 Соңғы слайдта сыныпқа арналған квиз бар: баяндамадан кейін «Квизді бастау» батырмасын басыңыз, сынып QR кодты телефонмен сканерлеп ойнайды.' : ''),
+              caption: pilotDoc
+                ? '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.'
+                  + (result.quiz ? '\n\n🎯 Соңғы слайдта сыныпқа арналған квиз бар: баяндамадан кейін «Квизді бастау» батырмасын басыңыз, сынып QR кодты телефонмен сканерлеп ойнайды.' : '')
+                : '🎤 Баяндама мәтіні: әр слайдта не айту керек, негізгі терминдер және мұғалім қоюы мүмкін сұрақтар мен жауаптар. Бұл мәтін PPTX-тің «Заметки» бөлімінде де бар.',
             }, {
               filename: speechName,
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

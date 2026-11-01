@@ -53,7 +53,8 @@ function langRule(language) {
 const NOTES_SYSTEM = `You are a presentation coach who also teaches. You write what a student will SAY while showing each slide.
 Respond with valid JSON only.`;
 
-function notesPrompt({ title, topic, language, speaker, batch, total }) {
+function notesPrompt({ title, topic, language, speaker, batch, total, pedagogy }) {
+  if (!pedagogy) return classicNotesPrompt({ title, topic, language, speaker, batch, total });
   return `Presentation: «${title}» (topic: ${clean(topic, 300)}), ${total} slides. ${langRule(language)}
 ${speaker ? `The speaker's name: ${speaker}.` : ''}
 
@@ -77,10 +78,44 @@ ${JSON.stringify(batch)}
 Return {"notes":[{"n":<slide number>,"point":"...","cues":["...","..."],"speech":"..."}]} — exactly ${batch.length} items, same numbers.`;
 }
 
+// Классикалық нұсқа (клиенттерге): кілт сөздерсіз, сөйлеу стилі туралы қосымша талапсыз — бұрынғы мінез
+function classicNotesPrompt({ title, topic, language, speaker, batch, total }) {
+  return `Presentation: «${title}» (topic: ${clean(topic, 300)}), ${total} slides. ${langRule(language)}
+${speaker ? `The speaker's name: ${speaker}.` : ''}
+
+For EVERY slide below write:
+- "point": the key idea of the slide in ONE short sentence (max 16 words) — what the listener must remember;
+- "speech": what the speaker says aloud, 60–120 words, natural spoken language, first person.
+  • Do NOT read the slide back: explain WHY / HOW, give one concrete example or comparison, define any term a classmate may not know in simple words.
+  • Numbers: say what they mean ("бұл әр үшінші адам дегенді білдіреді"), never invent new figures.
+  • End with a short bridge to the next slide (not on the last slide).
+  • cover: greet the audience, name the topic${speaker ? ' and introduce yourself by name' : ''}, say in one sentence what the talk will show.
+  • closing: sum up 2–3 main conclusions, thank the audience and invite questions.
+  • references: one sentence about what sources were used.
+- No markdown, no lists, no stage directions, no "on this slide we see".
+
+Slides:
+${JSON.stringify(batch)}
+
+Return {"notes":[{"n":<slide number>,"point":"...","speech":"..."}]} — exactly ${batch.length} items, same numbers.`;
+}
+
+function classicStudyPrompt({ title, topic, language, facts }) {
+  return `Presentation: «${title}» (topic: ${clean(topic, 300)}). ${langRule(language)}
+Slides (what the student will show):
+${JSON.stringify(facts.map((f) => ({ n: f.n, title: f.title, bullets: f.bullets, numbers: f.numbers })))}
+
+Prepare the student:
+- "glossary": 4–8 key terms USED in these slides, each with a simple 1-sentence meaning a classmate understands;
+- "questions": 5 questions a teacher is likely to ask about THIS presentation (why/how/compare/what-if, not trivia), each with a short answer (2–3 sentences) based on the slides; never invent statistics.
+Return {"glossary":[{"term":"...","meaning":"..."}],"questions":[{"q":"...","a":"..."}]}`;
+}
+
 const STUDY_SYSTEM = `You are an experienced teacher preparing a student to present and defend a topic they only met this week.
 Respond with valid JSON only.`;
 
-function studyPrompt({ title, topic, language, facts }) {
+function studyPrompt({ title, topic, language, facts, pedagogy }) {
+  if (!pedagogy) return classicStudyPrompt({ title, topic, language, facts });
   return `Presentation: «${title}» (topic: ${clean(topic, 300)}). ${langRule(language)}
 Slides (what the student will show):
 ${JSON.stringify(facts.map((f) => ({ n: f.n, title: f.title, bullets: f.bullets, numbers: f.numbers })))}
@@ -135,7 +170,7 @@ async function pool(items, limit, fn) {
 }
 
 /**
- * @param {{ slides: object[], title?: string, topic?: string, language?: string|null, coverMeta?: object, llm?: Function, quiz?: boolean }} opts
+ * @param {{ slides: object[], title?: string, topic?: string, language?: string|null, coverMeta?: object, llm?: Function, quiz?: boolean, pedagogy?: boolean }} opts
  * @returns {Promise<{ notes: ({point:string, cues:string[], speech:string}|null)[], study: {overview:object, glossary:object[], questions:object[]}|null, quiz: object[], ok: number }>}
  */
 async function generateSpeakerNotes(opts = {}) {
@@ -144,7 +179,9 @@ async function generateSpeakerNotes(opts = {}) {
   const total = slides.length;
   const facts = slides.map((s, i) => slideFacts(s || {}, i, total));
   const speaker = opts.coverMeta && opts.coverMeta.performedBy ? clean(opts.coverMeta.performedBy, 120) : '';
-  const ctx = { title: clean(opts.title || opts.topic, 200), topic: opts.topic || opts.title || '', language: opts.language || null, speaker, total };
+  // pedagogy: жаңа «Дайындық» (кілт сөздер, қарапайым түсіндірме, жеңіл сөйлемдер) — әзірге тек админ мен тестерлер
+  const pedagogy = opts.pedagogy !== false;
+  const ctx = { title: clean(opts.title || opts.topic, 200), topic: opts.topic || opts.title || '', language: opts.language || null, speaker, total, pedagogy };
 
   const batches = [];
   for (let i = 0; i < facts.length; i += BATCH) batches.push(facts.slice(i, i + BATCH));
@@ -156,7 +193,7 @@ async function generateSpeakerNotes(opts = {}) {
   const studyTask = total >= 3
     ? llm(STUDY_SYSTEM, studyPrompt({ ...ctx, facts }), 'studyGuide').catch((e) => { console.warn('[Notes] study guide failed: ' + e.message); return null; })
     : Promise.resolve(null);
-  const quizTask = total >= 4 && opts.quiz !== false
+  const quizTask = total >= 4 && pedagogy && opts.quiz !== false
     ? llm(QUIZ_SYSTEM, quizPrompt({ ...ctx, facts }), 'classQuiz').catch((e) => { console.warn('[Notes] quiz failed: ' + e.message); return null; })
     : Promise.resolve(null);
   const [maps, studyRaw, quizRaw] = await Promise.all([notesTask, studyTask, quizTask]);
