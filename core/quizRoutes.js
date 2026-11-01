@@ -62,12 +62,22 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
   }, 10 * 60 * 1000);
   if (sweep.unref) sweep.unref();
 
+  // Telegram ішіндегі браузер /webapp/* файлдарын 7 күн кэштейді → жаңа нұсқа шыққанда ескі CSS/JS қалып қоятын.
+  // Беттегі сілтемелерге файлдардың мазмұнынан алынған нұсқа (?v=…) қосылады: файл өзгерсе — браузер жаңасын жүктейді.
+  const assetVer = (() => {
+    try {
+      const h = require('crypto').createHash('sha1');
+      for (const f of ['quiz.css', 'i18n.js', 'host.js', 'play.js']) h.update(fs.readFileSync(path.join(webappDir, 'quiz', f)));
+      return h.digest('hex').slice(0, 10);
+    } catch { return String(Date.now()); }
+  })();
   const page = (file) => (req, res) => {
     if (!Q.isCode(String(req.params.code || '').toUpperCase())) return res.status(404).type('text').send('Not found');
     try {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Referrer-Policy', 'no-referrer'); // проектор кілті басқа сайтқа кетпесін
-      res.type('html').send(fs.readFileSync(path.join(webappDir, 'quiz', file), 'utf8'));
+      res.type('html').send(fs.readFileSync(path.join(webappDir, 'quiz', file), 'utf8')
+        .replace(/(\/webapp\/quiz\/(?:quiz\.css|i18n\.js|host\.js|play\.js))"/g, `$1?v=${assetVer}"`));
     } catch { res.status(500).send('quiz page error'); }
   };
   // беттің қаріптері (OFL, assets/brand-fonts) — тек осы үшеуі

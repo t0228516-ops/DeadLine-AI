@@ -189,3 +189,14 @@ test('routes: pages, join/answer/state; only the host key starts and advances; r
     assert.ok((await svg.text()).startsWith('<svg'));
   } finally { srv.close(); }
 });
+
+test('quiz pages version their CSS/JS so Telegram\'s browser never keeps an old copy', async () => {
+  const express = require('express');
+  const app = express();
+  app.use(createQuizRouter({ db: { getQuiz: async () => null }, webappDir: path.join(__dirname, '..', 'webapp') }));
+  const srv = app.listen(0);
+  try {
+    const html = await (await fetch(`http://127.0.0.1:${srv.address().port}/q/ABCDE/host`)).text();
+    for (const f of ['quiz.css', 'i18n.js', 'host.js']) assert.ok(new RegExp(`/webapp/quiz/${f.replace('.', '\\.')}\\?v=[0-9a-f]{10}"`).test(html), f);
+  } finally { srv.close(); }
+});
