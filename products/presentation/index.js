@@ -39,7 +39,9 @@ const { makePhotoJudge } = require('./photoJudge');
 const { makeVisionChooser } = require('./photoVision');
 const { gatherTopic } = require('./research');
 const { generateSlideImage, deckBudget } = require('./imageGen');
-const { buildSpeechDocx } = require('./speechDoc');
+const { buildSpeechDocx, langCode, guessLang } = require('./speechDoc');
+const quizLib = require('../../core/quiz');
+const { appendQuizSlide } = require('./quizSlide');
 
 // Query-ді жалпылама етіп қысқарту
 // мұқаба фотосы бүкіл фонды жабатын пішіндер (қалғандарында фото рамкада/доғада/панельде тұрады)
@@ -662,6 +664,7 @@ async function generatePresentation(userInput, options = {}) {
   let pptxPath = null;
   let speechPath = null;   // «Баяндама мәтіні» .docx
   let notesMeta = { ok: 0, study: false };
+  let quiz = null;          // сыныпқа квиз: { code, hostKey, questions, language, topic, links }
   let pngPaths = [];
   let bgPaths = [];     // мәтінсіз фондар (өңделетін PPTX)
   let textLayers = [];  // әр слайдтың нативті мәтін блоктары
@@ -770,11 +773,14 @@ async function generatePresentation(userInput, options = {}) {
       console.log(`[Pipeline] Template health=${templateHealth} (unfixedQA=${unfixed} fallback=${w.fallback || 0} problems=${w.problems || 0}${oldRemaining ? ` oldRemaining=${oldRemaining}` : ''})`);
       console.log('[Pipeline] Template-Fill: PPTX = пайдаланушы шаблоны, тек мәтін ауыстырылды');
       const notesRes = await tplNotesTask;
+      // Сыныпқа квиз: шаблонның өз тақырып түстерімен соңғы слайд (Credits болса — оның алдында)
+      quiz = planQuiz(options, notesRes, { title, slides, language });
+      if (quiz && !(await attachQuizSlide(pptxPath, quiz, { palette: null, beforeLast: !!(options.library && options.library.creditsBuf) }))) quiz = null;
       if (notesRes && notesRes.notes.length === slides.length && notesRes.ok) {
         notesMeta = { ok: notesRes.ok, study: !!notesRes.study };
         try {
           speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
-          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta }));
+          fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links }));
         } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
         console.log(`[Pipeline] Template speaker notes: ${notesRes.ok}/${slides.length} slides, study guide=${notesMeta.study}`);
       }
@@ -1122,12 +1128,9 @@ async function generatePresentation(userInput, options = {}) {
     }
     // Баяндамашы мәтіні → PPTX Notes + бөлек .docx (слайд саны өзгермесе ғана — әйтпесе нөмірлер сәйкес келмейді)
     const notesRes = await notesTask;
-    if (notesRes && notesRes.notes.length === slides.length) {
+    const notesFit = !!(notesRes && notesRes.notes.length === slides.length);
+    if (notesFit) {
       notesMeta = { ok: applySpeakerNotes(slides, notesRes.notes), study: !!notesRes.study };
-      try {
-        speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
-        fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta }));
-      } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
       console.log(`[Pipeline] Speaker notes: ${notesMeta.ok}/${slides.length} slides, study guide=${notesMeta.study}`);
     }
     // Сурет авторы: CC BY / BY-SA лицензиясы атрибуцияны талап етеді → баяндамашы жазбасының соңына (слайдты бүлдірмейді)
@@ -1142,6 +1145,15 @@ async function generatePresentation(userInput, options = {}) {
     }
     // Өңделетін PPTX: мәтінсіз фон + нативті мәтін қораптары (HTML тек ішкі «сурет салушы»)
     pptxPath = await exportToPptx(pngPaths, title, slides, { bgPaths, textLayers, language, badge });
+    // Сыныпқа квиз: колоданың соңғы слайдының түсімен қосымша слайд (студент сұраған санға кірмейді)
+    quiz = planQuiz(options, notesRes, { title, slides, language });
+    if (quiz && !(await attachQuizSlide(pptxPath, quiz, { palette: quizPalette(slides, design) }))) quiz = null;
+    if (notesFit) {
+      try {
+        speechPath = path.join(os.tmpdir(), `speech-${uniqueId()}.docx`);
+        fs.writeFileSync(speechPath, buildSpeechDocx({ title, slides, notes: notesRes.notes, study: notesRes.study, language, coverMeta, quiz: quiz && quiz.questions, quizLinks: quiz && quiz.links }));
+      } catch (e) { console.warn(`[Notes] speech docx failed: ${e.message}`); speechPath = null; }
+    }
   } catch (err) {
     try { if (htmlPath) fs.unlinkSync(htmlPath); } catch {}
     try { if (speechPath) fs.unlinkSync(speechPath); } catch {}
@@ -1234,6 +1246,7 @@ async function generatePresentation(userInput, options = {}) {
     pptxPath,
     htmlPath,
     speechPath,
+    quiz: quiz ? { code: quiz.code, hostKey: quiz.hostKey, questions: quiz.questions, language: quiz.language, topic: quiz.topic, links: quiz.links } : null,
     title,
     visualStats,
     genId,
@@ -1251,6 +1264,46 @@ async function generatePresentation(userInput, options = {}) {
     compIds: compIdsOf(htmlPath),
     design,
   };
+}
+
+/**
+ * Сыныпқа квиз жоспары: код + проектор кілті + сілтемелер (слайд пен құжатқа бірдей).
+ * options.quiz = { baseUrl } (server.js береді) және кемінде 6 жарамды сұрақ болмаса — квиз жоқ.
+ */
+function planQuiz(options, notesRes, { title, slides, language }) {
+  const base = options && options.quiz && options.quiz.baseUrl ? String(options.quiz.baseUrl).replace(/\/+$/, '') : '';
+  const questions = notesRes && Array.isArray(notesRes.quiz) ? notesRes.quiz : [];
+  if (!base || !/^https?:\/\//.test(base) || !questions.length) return null;
+  const code = quizLib.makeCode(); const hostKey = quizLib.makeToken();
+  return {
+    code, hostKey, questions,
+    language: language ? langCode(language) : guessLang(slides),
+    topic: String(title || '').slice(0, 200),
+    links: { player: `${base}/q/${code}`, host: `${base}/q/${code}/host?k=${hostKey}` },
+  };
+}
+
+async function attachQuizSlide(pptxPath, quiz, extra) {
+  try {
+    await appendQuizSlide(pptxPath, { playerUrl: quiz.links.player, hostUrl: quiz.links.host, count: quiz.questions.length, language: quiz.language, ...extra });
+    console.log(`[Pipeline] Class quiz ${quiz.code}: ${quiz.questions.length} questions, slide appended`);
+    return true;
+  } catch (e) {
+    console.warn(`[Pipeline] Class quiz slide failed (no quiz): ${e.message}`);
+    return false;
+  }
+}
+
+/** Квиз слайдының түсі = колоданың соңғы (қорытынды) слайды: терең палитралы жүйеде — терең нұсқасы */
+function quizPalette(slides, design) {
+  try {
+    const T = require('./design/tokens');
+    const c = ((slides && slides[slides.length - 1]) || {}).composition || {};
+    const sys = require('./design/systems').getSystem(design && design.system);
+    const deep = sys && sys.deepMood && c.mood && sys.deepMood[c.mood];
+    const p = deep ? T.buildPalette(deep) : T.buildPalette(c.mood || 'dark', c.accentColor);
+    return { bg: p.bg, text: p.text, text2: p.text2, accent: p.accent, accentInk: p.accentInk };
+  } catch { return null; }
 }
 
 /** HTML-дағы құрастырылған композиция идентификаторлары (data-layout="cx-…") */

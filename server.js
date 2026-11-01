@@ -21,7 +21,7 @@ const {
   cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
   scheduleRatePrompt, takeDueRatePrompts, recentRateContact, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
-  getDesignMemory, pushDesignMemory,
+  getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes,
 } = require('./db');
 const designMemory = require('./core/designMemory');
 const libraryCore = require('./products/presentation/library');
@@ -37,6 +37,8 @@ const ADMIN_IDS = String(process.env.ADMIN_CHAT_ID || '').split(',').map((x) => 
 const isAdminId = (id) => ADMIN_IDS.includes(String(id));
 const MAINTENANCE = /^(1|true|on)$/i.test(String(process.env.MAINTENANCE || ''));
 const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
+// Сыныпқа квиз: QR пен «Квизді бастау» батырмасы осы мекенжайға апарады (жария https керек; жоқ болса — квиз қосылмайды)
+const QUIZ_BASE_URL = (process.env.QUIZ_BASE_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
 
 const templateNudged = new Set();
 async function nudgeTemplate(chatId) {
@@ -89,6 +91,8 @@ const sendIndex = (req, res) => {
   } catch (e) { res.status(500).send('webapp error'); }
 };
 app.get(['/webapp', '/webapp/', '/webapp/index.html'], sendIndex);
+// Сыныпқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
+app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts') }));
 app.use('/webapp', express.static(WEBAPP_DIR, {
   index: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,   // ?v=… өзгергенде жаңа файл жүктеледі
@@ -1023,6 +1027,7 @@ async function executeJob(jobId) {
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
+      quiz: QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
       mode: lib ? 'template' : (job.payload?.mode || 'presentation'),
       materialText: job.payload?.materialText || null,
       referencePptx: lib ? lib.deckBuf : referencePptx,
@@ -1093,6 +1098,13 @@ async function executeJob(jobId) {
       speechPath = speechFile(jobId);
       try { fs.copyFileSync(result.speechPath, speechPath); } catch (e) { console.warn('[Job] speech.docx', e.message); speechPath = null; }
       try { fs.unlinkSync(result.speechPath); } catch {}
+    }
+
+    // Сыныпқа квиз: слайдтағы QR осы кодқа апарады → базаға (30 күн)
+    if (result.quiz) {
+      try {
+        await saveQuiz({ ...result.quiz, chatId, jobId, expiresAt: Date.now() + require('./core/quiz').QUIZ_TTL_MS });
+      } catch (e) { console.warn(`[Job] quiz save failed (${result.quiz.code}): ${e.message}`); }
     }
 
     if (result.requirementsReport) {
@@ -1169,9 +1181,10 @@ async function executeJob(jobId) {
             contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           });
           if (speechPath && fs.existsSync(speechPath)) {
-            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — баяндама.docx`;
+            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — дайындық.docx`;
             await global.__deadlineBot.sendDocument(chatId, speechPath, {
-              caption: '🎤 Баяндама мәтіні: әр слайдта не айту керек, негізгі терминдер және мұғалім қоюы мүмкін сұрақтар мен жауаптар. Бұл мәтін PPTX-тің «Заметки» бөлімінде де бар.',
+              caption: '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.'
+                + (result.quiz ? '\n\n🎯 Соңғы слайдта сыныпқа арналған квиз бар: баяндамадан кейін «Квизді бастау» батырмасын басыңыз, сынып QR кодты телефонмен сканерлеп ойнайды.' : ''),
             }, {
               filename: speechName,
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -1258,6 +1271,8 @@ async function runCleanup() {
   try {
     const cutoff = Date.now() - RETENTION_MS;
     const jobs = await cleanupOldJobs(RETENTION_MS).catch((e) => { console.warn('[Cleanup] db:', e.message); return 0; });
+    const quizzes = await deleteExpiredQuizzes().catch((e) => { console.warn('[Cleanup] quizzes:', e.message); return 0; });
+    if (quizzes) console.log(`[Cleanup] мерзімі біткен квиз: ${quizzes}`);
     const files = removeOldFiles(JOBS_DIR, cutoff, new Set(['_ref', '_mat']))
       + removeOldFiles(REF_DIR, cutoff)
       + removeOldFiles(MATERIAL_DIR, cutoff);
