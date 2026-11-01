@@ -250,6 +250,21 @@ const SCHEMA = {
     )`,
     cols: { host_key: 'TEXT', chat_id: 'TEXT', job_id: 'TEXT', topic: 'TEXT', language: 'TEXT', data: 'JSONB', created_at: 'BIGINT', expires_at: 'BIGINT' },
   },
+  // Квиз нәтижелері: кім неше сұраққа дұрыс жауап берді (тірі ойын + өз бетімен өткендер)
+  quiz_results: {
+    create: `CREATE TABLE IF NOT EXISTS quiz_results (
+      id TEXT PRIMARY KEY,
+      code TEXT,
+      name TEXT,
+      right_n INTEGER,
+      total INTEGER,
+      score INTEGER,
+      mode TEXT,
+      data JSONB,
+      created_at BIGINT
+    )`,
+    cols: { code: 'TEXT', name: 'TEXT', right_n: 'INTEGER', total: 'INTEGER', score: 'INTEGER', mode: 'TEXT', data: 'JSONB', created_at: 'BIGINT' },
+  },
   receipts: {
     create: `CREATE TABLE IF NOT EXISTS receipts (
       receipt_no TEXT PRIMARY KEY,
@@ -1106,8 +1121,25 @@ async function getQuiz(code) {
   return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: data.questions || [] };
 }
 async function deleteExpiredQuizzes(now = Date.now()) {
+  await q('DELETE FROM quiz_results WHERE code IN (SELECT code FROM quizzes WHERE expires_at < $1)', [now]);
   const r = await q('DELETE FROM quizzes WHERE expires_at < $1', [now]);
   return r.rowCount || 0;
+}
+async function addQuizResults(code, rows) {
+  const now = Date.now();
+  for (const x of rows || []) {
+    await q(`INSERT INTO quiz_results (id, code, name, right_n, total, score, mode, data, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9) ON CONFLICT (id) DO NOTHING`,
+    [require('crypto').randomBytes(9).toString('base64url'), String(code), String(x.name || '').slice(0, 40), num(x.right), num(x.total), x.score == null ? null : num(x.score),
+      x.mode || 'solo', jsonParam({ answers: x.answers || [] }), now]);
+  }
+}
+async function listQuizResults(code, limit = 500) {
+  const r = await q('SELECT name, right_n, total, score, mode, data, created_at FROM quiz_results WHERE code = $1 ORDER BY created_at ASC LIMIT $2', [String(code), limit]);
+  return r.rows.map((x) => {
+    const d = typeof x.data === 'string' ? JSON.parse(x.data) : (x.data || {});
+    return { name: x.name, right: num(x.right_n), total: num(x.total), score: x.score == null ? null : num(x.score), mode: x.mode, answers: d.answers || [], at: num(x.created_at) };
+  });
 }
 
 async function closeDB() {
@@ -1119,6 +1151,8 @@ module.exports = {
   saveQuiz,
   getQuiz,
   deleteExpiredQuizzes,
+  addQuizResults,
+  listQuizResults,
   initDB,
   closeDB,
   _setPool,

@@ -139,11 +139,17 @@ test('quiz slide: appended after the last slide (or before Credits), QR + start 
   fs.unlinkSync(file);
 });
 
-test('routes: pages, join/answer/state, host key, solo blocked during a live game', async () => {
+test('routes: pages, join/answer/state; only the host key starts and advances; results list for the host', async () => {
   const express = require('express');
   const quiz = { code: 'ABCDE', hostKey: 'secret-key', topic: 'Тақырып', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
   const app = express(); app.use(express.json());
-  app.use(createQuizRouter({ db: { getQuiz: async (c) => (c === 'ABCDE' ? quiz : null) }, webappDir: path.join(__dirname, '..', 'webapp'), baseUrl: 'https://x.app' }));
+  const saved = [];
+  const db = {
+    getQuiz: async (c) => (c === 'ABCDE' ? quiz : null),
+    addQuizResults: async (c, rows) => { rows.forEach((r) => saved.push({ ...r, code: c, at: Date.now() })); },
+    listQuizResults: async (c) => saved.filter((r) => r.code === c),
+  };
+  app.use(createQuizRouter({ db, webappDir: path.join(__dirname, '..', 'webapp'), baseUrl: 'https://x.app' }));
   const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
   const j = async (u, o) => { const r = await fetch(base + u, o); return { status: r.status, body: await r.json().catch(() => null) }; };
   const post = (u, b) => j(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
@@ -156,13 +162,29 @@ test('routes: pages, join/answer/state, host key, solo blocked during a live gam
     assert.strictEqual((await j('/api/quiz/ABCDE/host/state?k=bad')).status, 403);
     const me = (await post('/api/quiz/ABCDE/join', { name: 'Айбек' })).body;
     assert.ok(me.pid && me.secret);
-    assert.strictEqual((await j('/api/quiz/ABCDE/solo')).status, 200, 'solo works before the game');
+    assert.strictEqual((await j('/api/quiz/ABCDE/solo')).status, 404, 'no self-start mode: only the presenter starts');
     assert.strictEqual((await post('/api/quiz/ABCDE/host', { k: 'bad', action: 'start' })).status, 403);
     assert.strictEqual((await post('/api/quiz/ABCDE/host', { k: 'secret-key', action: 'start' })).body.state.phase, 'question');
-    assert.strictEqual((await j('/api/quiz/ABCDE/solo')).status, 409, 'answers not exposed during a live game');
     assert.ok(!('top' in (await j('/api/quiz/ABCDE/host/state?k=secret-key')).body), 'no leaderboard mid-game');
     const st = (await j(`/api/quiz/ABCDE/state?pid=${me.pid}&s=${me.secret}`)).body;
     assert.strictEqual(st.joined, true); assert.ok(!('review' in st) && !('score' in st.me));
+    // ойыншы бастай да, келесіге өткізе де алмайды — кілт керек
+    assert.strictEqual((await post('/api/quiz/ABCDE/host', { action: 'next' })).status, 403);
+    assert.strictEqual((await j('/api/quiz/ABCDE/results?k=bad')).status, 403);
+    // ойынды соңына дейін өткізу → нәтиже базаға бір рет жазылады
+    const room = [...(app._router.stack.find((l) => l.handle && l.handle._rooms).handle._rooms.values())][0];
+    room.startedAt = Date.now() - 10; // «дайындал» кідірісін өткіземіз
+    assert.ok((await post('/api/quiz/ABCDE/answer', { pid: me.pid, s: me.secret, qi: 0, choice: quiz.questions[0].correct })).body.ok);
+    for (let i = 0; i < 25; i++) {
+      const r = await post('/api/quiz/ABCDE/host', { k: 'secret-key', action: 'next' });
+      if (r.body.state && r.body.state.phase === 'end') break;
+    }
+    await post('/api/quiz/ABCDE/host', { k: 'secret-key', action: 'review' });
+    await post('/api/quiz/ABCDE/host', { k: 'secret-key', action: 'results' });
+    const res = (await j('/api/quiz/ABCDE/results?k=secret-key')).body;
+    assert.strictEqual(res.results.length, 1, 'saved once');
+    assert.deepStrictEqual([res.results[0].name, res.results[0].right, res.results[0].total], ['Айбек', 1, 10]);
+    assert.strictEqual(res.summary.count, 1);
     const svg = await fetch(base + '/api/quiz/ABCDE/qr.svg');
     assert.ok((await svg.text()).startsWith('<svg'));
   } finally { srv.close(); }

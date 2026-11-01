@@ -1,6 +1,11 @@
 /* Квиз беттерінің мәтіні: kk / ru / en (тіл — презентация тілі) */
 window.QUIZ_I18N = {
   kk: {
+    rightAnsShort: 'Дұрыс жауап',
+   
+   
+    resultsTitle: 'Нәтижелер', resultsBtn: (n) => `📋 Нәтижелер (${n})`, colName: 'Аты', colRight: 'Дұрыс', modeLive: 'проектор', modeSolo: 'телефон',
+    noResults: 'Әзірге ешкім өтпеді. Сілтемені сыныптың чатына жіберіңіз.', close: 'Жабу', shareHint: 'Сілтеме:',
     stop: '⏹ Тоқтату', allAnswered: 'Барлығы жауап берді', timeUp: 'Уақыт бітті', answeredOf: (n, m) => `Жауап берді: ${n} / ${m}`,
     atEnd: 'дұрыс жауаптар соңында ашылады', nextQ: 'Келесі сұрақ →', reviewGo: 'Жауаптарды талдау →', reviewOf: (i, n) => `Талдау · ${i} / ${n}`,
     hardBadge: '🔥 Сынып ең қиналған сұрақ — қайта түсіндіріңіз', classPct: (p) => `Сыныптың ${p}%-ы дұрыс тапты`, back: '← Артқа',
@@ -14,16 +19,21 @@ window.QUIZ_I18N = {
     badKey: 'Проектор сілтемесі қате. Презентацияның соңғы слайдындағы «Квизді бастау» батырмасын қайта басыңыз.',
     notFound: 'Квиз табылмады немесе мерзімі өтіп кетті.', offline: 'Байланыс үзілді — қайта қосылуда…', fullscreen: '⛶ Толық экран',
     joinTitle: 'Квизге қосылу', name: 'Атыңыз', join: 'Қосылу →', noReg: 'Тіркелу қажет емес',
-    solo: 'Проектор жоқ па? Өз бетіңізше өтіңіз →', joined: (n) => `Сіз қосылдыңыз, ${n}!`, lookScreen: 'Экранға қараңыз — квиз жақында басталады.',
+    joined: (n) => `Сіз қосылдыңыз, ${n}!`, lookScreen: 'Баяндамашы квизді бастағанда сұрақтар осы жерде шығады. Экранға қараңыз.',
     accepted: 'Жауабыңыз қабылданды', tooLate: 'Уақыт бітті',
     noAnswer: 'Жауап берілмеді', theAnswer: 'Дұрыс жауап:',
     place: (r, n) => `Сіз ${r}-орындасыз (${n} қатысушы)`, points: 'ұпай', right: 'дұрыс',
     over: 'Квиз аяқталды!', review: 'Сұрақтар мен жауаптар', yours: 'Сіздің жауабыңыз:',
-    soloTitle: 'Өз бетіңізше', soloStart: 'Бастау →', soloNext: 'Келесі →', soloDone: 'Нәтиже →',
-    soloScore: (r, n) => `${n} сұрақтың ${r}-іне дұрыс жауап бердіңіз`, soloAgain: '↺ Қайта өту',
-    liveNow: 'Қазір тірі ойын жүріп жатыр — экранға қарап қосылыңыз.', full: 'Бұл квизде орын қалмады.', made: 'DeadLine-да жасалды',
+   
+   
+    full: 'Бұл квизде орын қалмады.', made: 'DeadLine-да жасалды',
   },
   ru: {
+    rightAnsShort: 'Верный ответ',
+   
+   
+    resultsTitle: 'Результаты', resultsBtn: (n) => `📋 Результаты (${n})`, colName: 'Имя', colRight: 'Верно', modeLive: 'проектор', modeSolo: 'телефон',
+    noResults: 'Пока никто не прошёл. Отправьте ссылку в чат класса.', close: 'Закрыть', shareHint: 'Ссылка:',
     stop: '⏹ Стоп', allAnswered: 'Все ответили', timeUp: 'Время вышло', answeredOf: (n, m) => `Ответили: ${n} / ${m}`,
     atEnd: 'верные ответы — в конце', nextQ: 'Следующий вопрос →', reviewGo: 'Разбор ответов →', reviewOf: (i, n) => `Разбор · ${i} / ${n}`,
     hardBadge: '🔥 Самый трудный вопрос — объясните ещё раз', classPct: (p) => `Верно ответили ${p}% класса`, back: '← Назад',
@@ -37,16 +47,21 @@ window.QUIZ_I18N = {
     badKey: 'Неверная ссылка проектора. Нажмите кнопку «Начать квиз» на последнем слайде ещё раз.',
     notFound: 'Квиз не найден или срок его действия истёк.', offline: 'Нет связи — переподключаемся…', fullscreen: '⛶ Полный экран',
     joinTitle: 'Войти в квиз', name: 'Ваше имя', join: 'Войти →', noReg: 'Регистрация не нужна',
-    solo: 'Нет проектора? Пройдите сами →', joined: (n) => `Вы в игре, ${n}!`, lookScreen: 'Смотрите на экран — квиз скоро начнётся.',
+    joined: (n) => `Вы в игре, ${n}!`, lookScreen: 'Когда докладчик начнёт квиз, вопросы появятся здесь. Смотрите на экран.',
     accepted: 'Ответ принят', tooLate: 'Время вышло',
     noAnswer: 'Нет ответа', theAnswer: 'Верный ответ:',
     place: (r, n) => `Вы на ${r}-м месте (участников: ${n})`, points: 'очков', right: 'верно',
     over: 'Квиз окончен!', review: 'Вопросы и ответы', yours: 'Ваш ответ:',
-    soloTitle: 'Самостоятельно', soloStart: 'Начать →', soloNext: 'Дальше →', soloDone: 'Итоги →',
-    soloScore: (r, n) => `Верных ответов: ${r} из ${n}`, soloAgain: '↺ Пройти снова',
-    liveNow: 'Сейчас идёт игра — подключайтесь, глядя на экран.', full: 'В этом квизе нет мест.', made: 'Сделано в DeadLine',
+   
+   
+    full: 'В этом квизе нет мест.', made: 'Сделано в DeadLine',
   },
   en: {
+    rightAnsShort: 'Right answer',
+   
+   
+    resultsTitle: 'Results', resultsBtn: (n) => `📋 Results (${n})`, colName: 'Name', colRight: 'Right', modeLive: 'projector', modeSolo: 'phone',
+    noResults: 'Nobody has played yet. Send the link to the class chat.', close: 'Close', shareHint: 'Link:',
     stop: '⏹ Stop', allAnswered: 'Everyone answered', timeUp: "Time's up", answeredOf: (n, m) => `Answered: ${n} / ${m}`,
     atEnd: 'right answers are shown at the end', nextQ: 'Next question →', reviewGo: 'Review answers →', reviewOf: (i, n) => `Review · ${i} / ${n}`,
     hardBadge: '🔥 The hardest question — explain it again', classPct: (p) => `${p}% of the class got it right`, back: '← Back',
@@ -60,14 +75,14 @@ window.QUIZ_I18N = {
     badKey: 'Wrong projector link. Click "Start quiz" on the last slide again.',
     notFound: 'Quiz not found or expired.', offline: 'Connection lost — reconnecting…', fullscreen: '⛶ Full screen',
     joinTitle: 'Join the quiz', name: 'Your name', join: 'Join →', noReg: 'No sign-up needed',
-    solo: 'No projector? Play on your own →', joined: (n) => `You are in, ${n}!`, lookScreen: 'Look at the screen — the quiz starts soon.',
+    joined: (n) => `You are in, ${n}!`, lookScreen: 'When the presenter starts the quiz, the questions appear here. Look at the screen.',
     accepted: 'Answer received', tooLate: "Time's up",
     noAnswer: 'No answer', theAnswer: 'Right answer:',
     place: (r, n) => `You are #${r} of ${n}`, points: 'points', right: 'right',
     over: 'Quiz finished!', review: 'Questions and answers', yours: 'Your answer:',
-    soloTitle: 'On your own', soloStart: 'Start →', soloNext: 'Next →', soloDone: 'Results →',
-    soloScore: (r, n) => `${r} of ${n} right`, soloAgain: '↺ Try again',
-    liveNow: 'A live game is on — join from the screen.', full: 'This quiz is full.', made: 'Made with DeadLine',
+   
+   
+    full: 'This quiz is full.', made: 'Made with DeadLine',
   },
 };
 window.QUIZ_SHAPES = ['▲', '◆', '●', '■'];

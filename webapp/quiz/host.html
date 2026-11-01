@@ -2,17 +2,22 @@
 <html lang="kk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#16123a">
 <title>Квиз · DeadLine</title>
 <link rel="stylesheet" href="/webapp/quiz/quiz.css">
 </head>
 <body class="host">
-<div class="bar"><span class="pill" id="topic">🎯</span><span class="pill" id="badge"></span></div>
-<div class="screen" id="screen"></div>
-<div class="ctrl" id="ctrl"></div>
-<button class="ghost fs" id="fs"></button>
-<div class="brand" id="brand"></div>
+<header class="hbar"><span class="pill" id="topic">🎯</span><span class="pill" id="badge"></span></header>
+<main class="hmain" id="screen"></main>
+<footer class="hfoot">
+  <button class="ghost" id="fs"></button>
+  <button class="ghost" id="resBtn"></button>
+  <span class="brand" id="brand"></span>
+  <div class="ctrl" id="ctrl"></div>
+</footer>
+<div class="ov hidden" id="ov"></div>
 <script src="/webapp/quiz/i18n.js"></script>
 <script src="/webapp/quiz/host.js"></script>
 </body>

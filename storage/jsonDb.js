@@ -40,7 +40,8 @@ function emptyDB() {
     events: {},
     gen_log: {},
     tester_feedback: {},
-    quizzes: {}
+    quizzes: {},
+    quiz_results: []
   };
 }
 
@@ -66,7 +67,8 @@ function loadDB() {
       events: db.events || {},
       gen_log: db.gen_log || {},
       tester_feedback: db.tester_feedback || {},
-      quizzes: db.quizzes || {}
+      quizzes: db.quizzes || {},
+      quiz_results: Array.isArray(db.quiz_results) ? db.quiz_results : []
     };
   } catch (err) {
     console.error('[DB] Local read error:', err.message);
@@ -856,8 +858,20 @@ async function deleteExpiredQuizzes(now = Date.now()) {
   const box = db.quizzes || {};
   let n = 0;
   for (const k of Object.keys(box)) if (box[k].expires_at < now) { delete box[k]; n += 1; }
-  if (n) saveDB(db);
+  if (n) { db.quiz_results = (db.quiz_results || []).filter((r) => box[r.code]); saveDB(db); }
   return n;
+}
+async function addQuizResults(code, rows) {
+  const list = db.quiz_results || (db.quiz_results = []);
+  const now = Date.now();
+  for (const x of rows || []) {
+    list.push({ code: String(code), name: String(x.name || '').slice(0, 40), right: Number(x.right) || 0, total: Number(x.total) || 0,
+      score: x.score == null ? null : Number(x.score), mode: x.mode || 'solo', answers: x.answers || [], at: now });
+  }
+  saveDB(db);
+}
+async function listQuizResults(code, limit = 500) {
+  return (db.quiz_results || []).filter((r) => r.code === String(code)).slice(0, limit).map((r) => ({ ...r }));
 }
 
 module.exports = {
@@ -865,6 +879,8 @@ module.exports = {
   saveQuiz,
   getQuiz,
   deleteExpiredQuizzes,
+  addQuizResults,
+  listQuizResults,
   closeDB: async () => {},
   initDB,
   getUser,
