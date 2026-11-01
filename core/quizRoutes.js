@@ -11,7 +11,8 @@
  *   POST /api/quiz/:code/answer   — { pid, s, qi, choice }
  *   GET  /api/quiz/:code/host/state?k=…  — проектор күйі
  *   POST /api/quiz/:code/host     — { k, action: start|next|prev|close|review|results|restart }
- *   GET  /api/quiz/:code/solo     — өз бетімен өту (проекторсыз): сұрақтар жауабымен; тірі ойын жүріп жатса — 409
+ *   GET  /api/quiz/:code/results?k=… — баяндамашыға: кім неше сұраққа дұрыс жауап берді (өткен ойындар да) + сынып қорытындысы
+ * Ойынды бастау мен келесі сұраққа өту — тек баяндамашы (проектор кілті бар адам).
  *
  * Бөлмелер процесс жадында (Railway — бір дана). Сервер қайта қосылса, ойын лоббиден басталады — квиздің өзі базада.
  */
@@ -86,7 +87,7 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
     try {
       const room = await getRoom(code(req));
       if (!room) return res.status(404).json({ error: 'not_found' });
-      return fn(req, res, room);
+      return await fn(req, res, room);
     } catch (e) {
       console.warn('[Quiz] api error:', e.message);
       return res.status(500).json({ error: 'server' });
@@ -107,12 +108,17 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
     res.type('image/svg+xml').send(Q.qrSvg(playerUrl(req), { margin: 2 }));
   }));
 
-  router.post('/api/quiz/:code/join', withRoom((req, res, room) => {
+  // бір сыныпта бір Wi-Fi → шек жоғары
+  const tooMany = (req) => {
     const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
     const j = joins.get(ip) || { n: 0, t: Date.now() };
     if (Date.now() - j.t > 60_000) { j.n = 0; j.t = Date.now(); }
     j.n += 1; joins.set(ip, j);
-    if (j.n > 40) return res.status(429).json({ error: 'slow_down' }); // бір сыныпта бір Wi-Fi → шек жоғары
+    return j.n > 40;
+  };
+
+  router.post('/api/quiz/:code/join', withRoom((req, res, room) => {
+    if (tooMany(req)) return res.status(429).json({ error: 'slow_down' });
     const r = Q.join(room, req.body && req.body.name);
     if (r.error) return res.status(r.error === 'full' ? 409 : 400).json(r);
     return res.json(r);
@@ -137,13 +143,22 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
     if (!hostOk(room, b.k)) return res.status(403).json({ error: 'key' });
     const r = Q.hostAction(room, String(b.action || ''));
     if (r.error) return res.status(409).json(r);
+    // тірі ойын бітті → әр ойыншының нәтижесі базаға (бір рет; «кім неше сұраққа дұрыс жауап берді»)
+    if (room.phase === 'end' && !room.savedGame && room.players.size && db.addQuizResults) {
+      room.savedGame = true;
+      db.addQuizResults(code(req), Q.liveResults(room)).catch((e) => console.warn('[Quiz] save live results:', e.message));
+    }
     return res.json({ ok: true, state: { ...Q.hostView(room), url: playerUrl(req) } });
   }));
 
-  router.get('/api/quiz/:code/solo', withRoom((req, res, room) => {
-    // тірі ойын жүріп жатқанда жауаптарды бермейміз (ойыншы алдап қарап алмасын)
-    if (room.phase === 'question' || room.phase === 'closed') return res.status(409).json({ error: 'live' });
-    return res.json({ topic: room.quiz.topic, lang: room.quiz.language, questions: room.quiz.questions });
+  // баяндамашыға: барлық нәтиже (тірі ойын + өз бетімен өткендер) және сынып қорытындысы
+  router.get('/api/quiz/:code/results', withRoom(async (req, res, room) => {
+    if (!hostOk(room, req.query.k)) return res.status(403).json({ error: 'key' });
+    const rows = db.listQuizResults ? await db.listQuizResults(code(req)) : [];
+    return res.json({
+      results: rows.map((r) => ({ name: r.name, right: r.right, total: r.total, mode: r.mode, at: r.at })),
+      summary: Q.resultsSummary(room.quiz, rows),
+    });
   }));
 
   router._rooms = rooms; // тесттер үшін

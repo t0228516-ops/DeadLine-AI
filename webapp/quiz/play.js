@@ -1,6 +1,6 @@
-/* Телефон беті.
- *  • тірі ойын: атын жазып қосылады → экранға қарайды → түсті батырманы басады → дұрыс/қате + түсіндірме → соңында орны мен шолу;
- *  • өз бетімен (проектор жоқ): уақытсыз, әр жауаптан кейін бірден дұрыс жауап пен түсіндірме — үйрену режимі.
+/* Телефон беті (сынып).
+ *  • атын жазып қосылады → баяндамашы бастауын күтеді (ойынды да, келесі сұрақты да тек баяндамашы басқарады — иесінің шешімі);
+ *  • түсті батырма → «қабылданды» → соңында орны, ұпайы, әр сұрақ ✓/✕ + дұрыс жауап + түсіндірме.
  * Қосылу деректері localStorage-та: бет жаңарса не телефон ұйықтап қалса — сол ойыншы болып жалғасады. */
 (function () {
   'use strict';
@@ -26,7 +26,6 @@
       info = await r.json(); setLang(info.lang);
     } catch { setLang('kk'); app.innerHTML = '<div class="center"><p class="note">' + esc(T.offline) + '</p></div>'; setTimeout(boot, 3000); return; }
     try { me = JSON.parse(localStorage.getItem(store) || 'null'); } catch { me = null; }
-    if (location.hash === '#solo') return solo();
     if (me && me.pid) return poll();
     joinScreen();
   }
@@ -36,8 +35,7 @@
     app.innerHTML = top(T.questions(info.total)) + '<div class="center"><h1>' + esc(T.joinTitle) + '</h1>'
       + '<input class="inp" id="nm" maxlength="20" autocomplete="nickname" placeholder="' + esc(T.name) + '">'
       + '<button class="btn" id="jb">' + esc(T.join) + '</button>'
-      + '<p class="note">' + esc(msg || T.noReg) + '</p>'
-      + '<a class="link" href="#solo" id="sl">' + esc(T.solo) + '</a></div>';
+      + '<p class="note">' + esc(msg || T.noReg) + '</p></div>';
     const nm = document.getElementById('nm'); const jb = document.getElementById('jb');
     nm.value = localStorage.getItem('dlquiz:name') || '';
     const go = async () => {
@@ -55,7 +53,6 @@
     };
     jb.onclick = go;
     nm.onkeydown = (e) => { if (e.key === 'Enter') go(); };
-    document.getElementById('sl').onclick = (e) => { e.preventDefault(); location.hash = 'solo'; solo(); };
   }
 
   async function poll() {
@@ -133,8 +130,8 @@
 
   function finalHtml(rank, of, right, total, score) {
     return '<div class="final"><h1>' + esc(T.over) + '</h1>'
-      + (rank ? '<div class="place">#' + rank + '</div><div class="of">' + esc(T.place(rank, of)) + '</div>' : '<div class="place">' + right + '/' + total + '</div><div class="of">' + esc(T.soloScore(right, total)) + '</div>')
-      + (rank ? '<div class="sc"><div><b>' + right + ' / ' + total + '</b>' + esc(T.right) + '</div><div><b>' + score + '</b>' + esc(T.points) + '</div></div>' : '') + '</div>';
+      + '<div class="place">#' + rank + '</div><div class="of">' + esc(T.place(rank, of)) + '</div>'
+      + '<div class="sc"><div><b>' + right + ' / ' + total + '</b>' + esc(T.right) + '</div><div><b>' + score + '</b>' + esc(T.points) + '</div></div></div>';
   }
 
   function reviewHtml(list) {
@@ -155,42 +152,6 @@
     requestAnimationFrame(frame);
   })();
   document.addEventListener('visibilitychange', () => { if (!document.hidden && me && st) poll(); });
-
-  // ── өз бетімен (проекторсыз): үйрену режимі ─────────────────────────
-  async function solo() {
-    clearTimeout(timer);
-    let data;
-    try {
-      const r = await fetch(api + '/solo', { cache: 'no-store' });
-      if (r.status === 409) { location.hash = ''; return joinScreen(T.liveNow); }
-      data = await r.json();
-    } catch { return joinScreen(T.offline); }
-    const qs = data.questions || []; const res = [];
-    let i = 0;
-    const prog = () => '<div class="prog">' + qs.map((_, k) => '<i class="' + (k < res.length ? 'done' : k === i ? 'cur' : '') + '"></i>').join('') + '</div>';
-    const ask = () => {
-      const q = qs[i];
-      app.innerHTML = top(T.of(i + 1, qs.length)) + prog() + '<div class="pq">' + esc(q.q) + '</div>'
-        + q.options.map((o, k) => '<button class="popt c' + k + '" data-k="' + k + '"><i class="shape">' + S[k] + '</i>' + esc(o) + '</button>').join('')
-        + '<p class="note">' + esc(T.atEndShort) + '</p>';
-      app.querySelectorAll('.popt').forEach((b) => { b.onclick = () => answer(Number(b.dataset.k)); });
-    };
-    // дұрыс-қатесі ойын соңында (тірі ойындағыдай): таңдалғаны белгіленіп, келесі сұраққа өтеді
-    const answer = (k) => {
-      const q = qs[i];
-      res.push({ ok: k === q.correct, mine: q.options[k] });
-      app.querySelectorAll('.popt').forEach((b) => { b.disabled = true; b.classList.add(Number(b.dataset.k) === k ? 'picked' : 'dim'); });
-      setTimeout(() => { i += 1; if (i < qs.length) ask(); else done(); }, 450);
-    };
-    const done = () => {
-      const right = res.filter((r) => r.ok).length;
-      app.innerHTML = top(T.soloTitle) + finalHtml(0, 0, right, qs.length, null)
-        + '<button class="btn alt" id="ag" style="margin-top:16px">' + esc(T.soloAgain) + '</button>'
-        + reviewHtml(qs.map((q, k) => ({ q: q.q, answer: q.options[q.correct], explain: q.explain, mine: res[k] && res[k].mine, ok: res[k] && res[k].ok })));
-      document.getElementById('ag').onclick = () => { res.length = 0; i = 0; ask(); };
-    };
-    ask();
-  }
 
   boot();
 })();

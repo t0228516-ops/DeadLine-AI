@@ -166,6 +166,7 @@ function createRoom(quiz, now = Date.now()) {
     players: new Map(), // pid → { name, secret, score, answers: [{choice, ok, gained, ms}], joinedAt }
     answers: [],        // qi → Map(pid → choice)
     lastActive: now,
+    savedGame: false,   // тірі ойын нәтижесі базаға жазылды ма
     version: 0,
   };
 }
@@ -279,7 +280,7 @@ function hostAction(room, action, now = Date.now()) {
     if (room.phase !== 'review') return { error: 'state' };
     room.phase = 'end'; bump();
   } else if (action === 'restart') {
-    room.phase = 'lobby'; room.qi = -1; room.ri = -1; room.answers = [];
+    room.phase = 'lobby'; room.qi = -1; room.ri = -1; room.answers = []; room.savedGame = false;
     room.players.forEach((p) => { p.score = 0; p.answers = []; });
     bump();
   } else return { error: 'action' };
@@ -383,9 +384,35 @@ function playerView(room, pid, secret, now = Date.now()) {
   return v;
 }
 
+/** Тірі ойын біткенде — әр ойыншының нәтижесі (базаға бір рет жазу үшін) */
+function liveResults(room) {
+  return ranking(room).map((r) => ({
+    name: r.name, right: r.right, total: room.quiz.questions.length, score: r.score, mode: 'live',
+    answers: room.quiz.questions.map((_, i) => { const a = room.players.get(r.pid).answers[i]; return a ? a.choice : null; }),
+  }));
+}
+
+/** Нәтижелер тізімінен сынып қорытындысы: орташа, әр сұрақтың %, ең қиыны */
+function resultsSummary(quiz, rows) {
+  const total = quiz.questions.length;
+  const per = quiz.questions.map((item, i) => {
+    const got = rows.filter((r) => Array.isArray(r.answers) && r.answers[i] != null);
+    const right = got.filter((r) => r.answers[i] === item.correct).length;
+    return { n: i + 1, answered: got.length, pct: got.length ? Math.round((right / got.length) * 100) : null };
+  });
+  const played = per.filter((x) => x.answered > 0);
+  const hard = played.length ? played.slice().sort((a, b) => a.pct - b.pct || a.n - b.n)[0] : null;
+  const avg = rows.length ? Math.round((rows.reduce((a, r) => a + (r.right || 0), 0) / rows.length) * 10) / 10 : 0;
+  return {
+    count: rows.length, total, avgRight: avg, per,
+    hardest: hard && hard.pct < 100 ? { n: hard.n, q: quiz.questions[hard.n - 1].q, pct: hard.pct, answer: quiz.questions[hard.n - 1].options[quiz.questions[hard.n - 1].correct] } : null,
+  };
+}
+
 module.exports = {
   QUIZ_TTL_MS, MAX_PLAYERS, MIN_QUESTIONS, MAX_QUESTIONS,
   makeCode, makeToken, isCode, safeEq, normalizeQuestions, questionSeconds, shuffle,
   qrMatrix, qrPng, qrSvg,
   createRoom, join, answer, hostAction, tick, hostView, playerView, ranking, classStats, questionStats, cleanName,
+  liveResults, resultsSummary,
 };

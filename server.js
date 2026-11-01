@@ -21,7 +21,7 @@ const {
   cleanupOldJobs, listUnfinishedJobs, REFERRALS_PER_BONUS, incrementRefCount, closeDB, backend: DB_BACKEND, saveLearnedTemplate, addLearnUse, setFeedback, getFeedbackForJob,
   scheduleRatePrompt, takeDueRatePrompts, recentRateContact, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
-  getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes,
+  getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes, addQuizResults, listQuizResults,
 } = require('./db');
 const designMemory = require('./core/designMemory');
 const libraryCore = require('./products/presentation/library');
@@ -92,7 +92,7 @@ const sendIndex = (req, res) => {
 };
 app.get(['/webapp', '/webapp/', '/webapp/index.html'], sendIndex);
 // Сыныпқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
-app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts') }));
+app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz, addQuizResults, listQuizResults }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts') }));
 app.use('/webapp', express.static(WEBAPP_DIR, {
   index: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,   // ?v=… өзгергенде жаңа файл жүктеледі
@@ -1189,13 +1189,14 @@ async function executeJob(jobId) {
             await global.__deadlineBot.sendDocument(chatId, speechPath, {
               caption: pilotDoc
                 ? '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.'
-                  + (result.quiz ? '\n\n🎯 Соңғы слайдта сыныпқа арналған квиз бар: баяндамадан кейін «Квизді бастау» батырмасын басыңыз, сынып QR кодты телефонмен сканерлеп ойнайды.' : '')
                 : '🎤 Баяндама мәтіні: әр слайдта не айту керек, негізгі терминдер және мұғалім қоюы мүмкін сұрақтар мен жауаптар. Бұл мәтін PPTX-тің «Заметки» бөлімінде де бар.',
             }, {
               filename: speechName,
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             }).catch((e) => console.warn('[Job] speech send failed', e.message));
           }
+          // Сыныпқа квиз: сілтемелер Telegram арқылы — сынып сілтемесі (топ чатына) + басқару беті (тек баяндамашыға)
+          if (result.quiz && result.quiz.links) await sendQuizLinks(chatId, result.quiz).catch((e) => console.warn('[Job] quiz links send failed', e.message));
         }
       }
     } catch (e) {
@@ -1268,6 +1269,23 @@ function removeOldFiles(dir, cutoff, keep = new Set()) {
     } catch {}
   }
   return n;
+}
+
+/** Квиз сілтемелері ботпен: «📤 Сыныпқа жіберу» (Telegram бөлісу терезесі) + «🎮 Квизді басқару» (бастау, келесі сұрақ, нәтижелер) */
+async function sendQuizLinks(chatId, quiz) {
+  if (!global.__deadlineBot || !quiz || !quiz.links) return;
+  const n = (quiz.questions || []).length || 10;
+  const shareText = `🎯 Квиз: «${String(quiz.topic || '').slice(0, 120)}» — сілтемені ашып, атыңызды жазыңыз`;
+  const share = `https://t.me/share/url?url=${encodeURIComponent(quiz.links.player)}&text=${encodeURIComponent(shareText)}`;
+  const text = `🎯 Сыныпқа квиз дайын — ${n} сұрақ.\n\n`
+    + '1️⃣ «📤 Сыныпқа жіберу» — сілтемені топ чатына жіберіңіз (не сынып соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n'
+    + '2️⃣ «🎮 Квизді басқару» — ойынды СІЗ бастайсыз, келесі сұраққа да сіз өткізесіз. Ноутбукта ашып, проекторға шығарыңыз (телефоннан да болады).\n'
+    + '📋 Кім неше сұраққа дұрыс жауап бергені — сол беттегі «Нәтижелер».\n\n'
+    + '⚠️ Басқару сілтемесін сыныпқа жібермеңіз — ол тек сізге.';
+  await global.__deadlineBot.sendMessage(chatId, text, {
+    disable_web_page_preview: true,
+    reply_markup: { inline_keyboard: [[{ text: '📤 Сыныпқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]] },
+  });
 }
 
 let cleanupRunning = false;
