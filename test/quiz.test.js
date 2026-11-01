@@ -200,3 +200,22 @@ test('quiz pages version their CSS/JS so Telegram\'s browser never keeps an old 
     for (const f of ['quiz.css', 'i18n.js', 'host.js']) assert.ok(new RegExp(`/webapp/quiz/${f.replace('.', '\\.')}\\?v=[0-9a-f]{10}"`).test(html), f);
   } finally { srv.close(); }
 });
+
+test('a double tap on «next» (or a network retry) never skips a question', async () => {
+  const express = require('express');
+  const quiz = { code: 'ABCDE', hostKey: 'kk', topic: 'T', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({ db: { getQuiz: async () => quiz }, webappDir: path.join(__dirname, '..', 'webapp') }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  const post = async (b) => (await fetch(base + '/api/quiz/ABCDE/host', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: 'kk', ...b }) })).json();
+  try {
+    let st = (await post({ action: 'start', at: 'lobby:-1:-1' })).state;
+    assert.strictEqual(st.qi, 0);
+    st = (await post({ action: 'close', at: 'question:0:-1' })).state;
+    const at = `${st.phase}:${st.qi}:${st.ri}`;
+    const a = await post({ action: 'next', at });
+    const b2 = await post({ action: 'next', at }); // екінші басу — сол күйден
+    assert.strictEqual(a.state.qi, 1);
+    assert.ok(b2.stale && b2.state.qi === 1, 'second tap ignored');
+  } finally { srv.close(); }
+});

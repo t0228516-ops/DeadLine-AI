@@ -30,7 +30,7 @@
   async function act(action) {
     if (busy) return; busy = true;
     try {
-      const r = await fetch(api + '/host', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: key, action }) });
+      const r = await window.qFetch(api + '/host', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: key, action, at: st ? st.phase + ':' + st.qi + ':' + st.ri : undefined }) });
       const j = await r.json();
       if (j.state) take(j.state);
       if (j.state && j.state.phase === 'end') setTimeout(loadCount, 800);
@@ -39,18 +39,23 @@
 
   function take(s) { st = s; gotAt = performance.now(); render(); }
 
+  // бір ғана сұрау циклі (gen) + күзетші: желі ілінсе не экран сөніп-жанса, басқару беті қатып қалмайды
+  let gen = 0; let lastOk = Date.now(); let dead = false;
   async function poll() {
+    const my = ++gen;
     try {
-      const r = await fetch(api + '/host/state?k=' + encodeURIComponent(key), { cache: 'no-store' });
-      if (r.status === 403) return fatal(T.badKey);
-      if (r.status === 404) return fatal(T.notFound);
-      take(await r.json()); fails = 0;
+      const r = await window.qFetch(api + '/host/state?k=' + encodeURIComponent(key));
+      if (r.status === 403) { dead = true; return fatal(T.badKey); }
+      if (r.status === 404) { dead = true; return fatal(T.notFound); }
+      take(await r.json()); fails = 0; lastOk = Date.now();
     } catch {
       fails += 1;
       if (fails > 3) { shown = ''; $('screen').innerHTML = '<div class="err">' + esc(T.offline) + '</div>'; }
     }
-    setTimeout(poll, st && st.phase === 'question' ? 600 : 900);
+    if (my === gen) setTimeout(poll, st && st.phase === 'question' ? 600 : 900);
   }
+  setInterval(() => { if (!dead && Date.now() - lastOk > 12000) poll(); }, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !dead) poll(); });
   function fatal(msg) { $('screen').innerHTML = '<div class="err">' + esc(msg) + '</div>'; $('ctrl').innerHTML = ''; $('resBtn').classList.add('hidden'); }
 
   const left = () => Math.max(0, (st.remainingMs || 0) - (performance.now() - gotAt));
@@ -160,7 +165,7 @@
 
   // ── «📋 Нәтижелер»: кім неше сұраққа дұрыс жауап берді (осы және бұрынғы ойындар) ──
   async function fetchResults() {
-    const r = await fetch(api + '/results?k=' + encodeURIComponent(key), { cache: 'no-store' });
+    const r = await window.qFetch(api + '/results?k=' + encodeURIComponent(key), { cache: 'no-store' });
     if (!r.ok) throw new Error('results ' + r.status);
     return r.json();
   }

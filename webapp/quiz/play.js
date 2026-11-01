@@ -21,11 +21,11 @@
 
   async function boot() {
     try {
-      const r = await fetch(api + '/info', { cache: 'no-store' });
+      const r = await window.qFetch(api + '/info', { cache: 'no-store' });
       if (!r.ok) { setLang('kk'); app.innerHTML = top() + '<div class="center"><div class="wait">🔍</div><p class="note">' + esc(T.notFound) + '</p></div>'; return; }
       info = await r.json(); setLang(info.lang);
     } catch { setLang('kk'); app.innerHTML = '<div class="center"><p class="note">' + esc(T.offline) + '</p></div>'; setTimeout(boot, 3000); return; }
-    try { me = JSON.parse(localStorage.getItem(store) || 'null'); } catch { me = null; }
+    try { me = JSON.parse(window.qStore.get(store) || 'null'); } catch { me = null; }
     if (me && me.pid) return poll();
     joinScreen();
   }
@@ -37,17 +37,17 @@
       + '<button class="btn" id="jb">' + esc(T.join) + '</button>'
       + '<p class="note">' + esc(msg || T.noReg) + '</p></div>';
     const nm = document.getElementById('nm'); const jb = document.getElementById('jb');
-    nm.value = localStorage.getItem('dlquiz:name') || '';
+    nm.value = window.qStore.get('dlquiz:name') || '';
     const go = async () => {
       const name = nm.value.trim();
       if (!name) { nm.focus(); return; }
       jb.disabled = true;
       try {
-        const r = await fetch(api + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        const r = await window.qFetch(api + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
         const j = await r.json();
         if (!r.ok) { jb.disabled = false; return joinScreen(j.error === 'full' ? T.full : T.offline); }
         me = { pid: j.pid, s: j.secret, name: j.name };
-        localStorage.setItem(store, JSON.stringify(me)); localStorage.setItem('dlquiz:name', name);
+        window.qStore.set(store, JSON.stringify(me)); window.qStore.set('dlquiz:name', name);
         poll();
       } catch { jb.disabled = false; }
     };
@@ -55,17 +55,23 @@
     nm.onkeydown = (e) => { if (e.key === 'Enter') go(); };
   }
 
+  // бір ғана сұрау циклі (gen): экран сөніп-жанғанда не желі ілінгенде цикл екіге бөлінбейді, тоқтап та қалмайды
+  let gen = 0; let lastOk = Date.now();
   async function poll() {
+    const my = ++gen;
     clearTimeout(timer);
     try {
-      const r = await fetch(api + '/state?pid=' + encodeURIComponent(me.pid) + '&s=' + encodeURIComponent(me.s), { cache: 'no-store' });
+      const r = await window.qFetch(api + '/state?pid=' + encodeURIComponent(me.pid) + '&s=' + encodeURIComponent(me.s));
       if (r.status === 404) { app.innerHTML = top() + '<div class="center"><p class="note">' + esc(T.notFound) + '</p></div>'; return; }
       const s = await r.json();
-      if (!s.joined) { localStorage.removeItem(store); me = null; return joinScreen(); } // сервер қайта қосылған — қайта кіреміз
+      if (!s.joined) { window.qStore.del(store); me = null; return joinScreen(); } // сервер қайта қосылған — қайта кіреміз
+      lastOk = Date.now();
       st = s; gotAt = performance.now(); render();
     } catch { /* желі үзілсе — қайталаймыз */ }
-    timer = setTimeout(poll, st && st.phase === 'question' ? 700 : 1200);
+    if (my === gen && me) timer = setTimeout(poll, st && st.phase === 'question' ? 700 : 1200);
   }
+  // күзетші: 15 с бойы жауап болмаса (браузер таймерді тоқтатып тастаса) — циклді қайта бастаймыз
+  setInterval(() => { if (me && st && Date.now() - lastOk > 15000) poll(); }, 5000);
 
   const left = () => Math.max(0, (st.remainingMs || 0) - (performance.now() - gotAt));
   const waitLeft = () => Math.max(0, (st.waitMs || 0) - (performance.now() - gotAt));
@@ -76,7 +82,7 @@
     st.myChoice = i; render(true);
     if (navigator.vibrate) navigator.vibrate(30);
     try {
-      const r = await fetch(api + '/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid: me.pid, s: me.s, qi: st.qi, choice: i }) });
+      const r = await window.qFetch(api + '/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid: me.pid, s: me.s, qi: st.qi, choice: i }) });
       const j = await r.json();
       if (j.state) { st = j.state; gotAt = performance.now(); }
       else if (!r.ok && j.error !== 'twice') { st.myChoice = null; st.late = true; }

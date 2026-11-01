@@ -151,6 +151,9 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
   router.post('/api/quiz/:code/host', withRoom((req, res, room) => {
     const b = req.body || {};
     if (!hostOk(room, b.k)) return res.status(403).json({ error: 'key' });
+    // қос басудан / желі қайталауынан сақтандыру: батырма басылған кездегі күй (at) қазіргіден өзгеше болса — әрекет қайталанбайды
+    Q.tick(room);
+    if (b.at && String(b.at) !== `${room.phase}:${room.qi}:${room.ri}`) return res.json({ ok: true, stale: true, state: { ...Q.hostView(room), url: playerUrl(req) } });
     const r = Q.hostAction(room, String(b.action || ''));
     if (r.error) return res.status(409).json(r);
     // тірі ойын бітті → әр ойыншының нәтижесі базаға (бір рет; «кім неше сұраққа дұрыс жауап берді»)
