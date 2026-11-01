@@ -108,37 +108,40 @@
         app.innerHTML = top(T.of(st.qi + 1, st.total)) + '<div class="tbar"><i id="tb"></i></div>'
           + '<div class="pq">' + esc(q.q) + '</div>'
           + q.options.map((o, i) => '<button class="popt c' + i + (done ? (i === st.myChoice ? ' picked' : ' dim') : '') + '" data-i="' + i + '"' + (done ? ' disabled' : '') + '><i class="shape">' + S[i] + '</i>' + esc(o) + '</button>').join('')
-          + (done ? '<p class="note">✓ ' + esc(T.accepted) + ' · ' + esc(T.waitOthers) + '</p>' : (st.late ? '<p class="note">' + esc(T.tooLate) + '</p>' : ''));
+          + (done ? '<p class="note">✓ ' + esc(T.accepted) + ' · ' + esc(T.atEndShort) + '</p>' : (st.late ? '<p class="note">' + esc(T.tooLate) + '</p>' : ''));
         app.querySelectorAll('.popt').forEach((b) => { b.onclick = () => pick(Number(b.dataset.i)); });
       }
       return;
     }
-    if (st.phase === 'reveal') {
+    if (st.phase === 'closed') {
+      // дұрыс-қатесі ойын соңында ғана — мұнда тек «қабылданды» не «уақыт бітті»
       if (shown === key) return; shown = key;
-      const rv = st.reveal; const q = st.question;
-      const kind = st.myChoice == null ? 'none' : rv.ok ? 'ok' : 'bad';
-      const head = kind === 'ok' ? '<div class="ic">✓</div><h2>' + esc(T.correct) + '</h2><div class="pts">+ ' + rv.gained + '</div>'
-        : kind === 'bad' ? '<div class="ic">✕</div><h2>' + esc(T.wrong) + '</h2>' : '<div class="ic">⌛</div><h2>' + esc(T.noAnswer) + '</h2>';
-      const ans = kind === 'ok' ? '' : '<div class="ans">' + esc(T.theAnswer) + ' ' + S[rv.correct] + ' ' + esc(q.options[rv.correct]) + '</div>';
-      app.innerHTML = top(T.of(st.qi + 1, st.total)) + '<div class="res ' + kind + '">' + head + ans
-        + (rv.explain ? '<div class="ex">' + esc(rv.explain) + '</div>' : '')
-        + '<div class="rank">' + esc(T.place(st.me.rank, st.me.of)) + ' · ' + st.me.score + ' ' + esc(T.points) + '</div></div>';
-      if (navigator.vibrate && kind !== 'none') navigator.vibrate(kind === 'ok' ? [40, 60, 40] : 120);
+      const q = st.question; const got = st.myChoice != null;
+      app.innerHTML = top(T.of(st.qi + 1, st.total)) + '<div class="res none">'
+        + (got ? '<div class="ic">✓</div><h2>' + esc(T.accepted) + '</h2><div class="ans">' + S[st.myChoice] + ' ' + esc(q.options[st.myChoice]) + '</div>'
+          : '<div class="ic">⌛</div><h2>' + esc(T.tooLate) + '</h2>')
+        + '<div class="ex">' + esc(T.waitNext) + '</div></div>';
       return;
     }
-    if (st.phase === 'end') {
-      if (shown === key) return; shown = key;
-      app.innerHTML = top(T.quiz) + '<div class="final"><h1>' + esc(T.over) + '</h1>'
-        + '<div class="place">#' + st.me.rank + '</div><div class="of">' + esc(T.place(st.me.rank, st.me.of)) + '</div>'
-        + '<div class="sc"><div><b>' + st.me.right + ' / ' + st.total + '</b>' + esc(T.right) + '</div><div><b>' + st.me.score + '</b>' + esc(T.points) + '</div></div></div>'
-        + reviewHtml(st.review);
+    if (st.phase === 'end' || st.phase === 'review') {
+      if (shown === 'final') return; // проектордағы талдау беттері ауысқанда телефондағы нәтиже қайта салынбайды
+      shown = 'final';
+      app.innerHTML = top(T.quiz) + finalHtml(st.me.rank, st.me.of, st.me.right, st.total, st.me.score) + reviewHtml(st.review);
+      if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
     }
   }
 
+  function finalHtml(rank, of, right, total, score) {
+    return '<div class="final"><h1>' + esc(T.over) + '</h1>'
+      + (rank ? '<div class="place">#' + rank + '</div><div class="of">' + esc(T.place(rank, of)) + '</div>' : '<div class="place">' + right + '/' + total + '</div><div class="of">' + esc(T.soloScore(right, total)) + '</div>')
+      + (rank ? '<div class="sc"><div><b>' + right + ' / ' + total + '</b>' + esc(T.right) + '</div><div><b>' + score + '</b>' + esc(T.points) + '</div></div>' : '') + '</div>';
+  }
+
   function reviewHtml(list) {
-    return '<div class="review"><h3>' + esc(T.review) + '</h3>' + (list || []).map((r, i) => '<div class="rv"><div class="q">' + (i + 1) + '. ' + esc(r.q) + '</div>'
-      + '<div class="a ok">✓ ' + esc(r.answer) + '</div>'
-      + (r.mine && !r.ok ? '<div class="a bad">' + esc(T.yours) + ' ' + esc(r.mine) + '</div>' : '')
+    return '<div class="review"><h3>' + esc(T.review) + '</h3>' + (list || []).map((r, i) => '<div class="rv ' + (r.ok ? 'is-ok' : 'is-bad') + '"><div class="q"><span class="mk">' + (r.ok ? '✓' : '✕') + '</span>' + (i + 1) + '. ' + esc(r.q) + '</div>'
+      + (r.ok ? '<div class="a ok">' + esc(T.yours) + ' ' + esc(r.answer) + '</div>'
+        : (r.mine ? '<div class="a bad">' + esc(T.yours) + ' ' + esc(r.mine) + '</div>' : '<div class="a bad">' + esc(T.noAnswer) + '</div>')
+          + '<div class="a ok">' + esc(T.theAnswer) + ' ' + esc(r.answer) + '</div>')
       + (r.explain ? '<div class="e">' + esc(r.explain) + '</div>' : '') + '</div>').join('') + '</div>';
   }
 
@@ -164,25 +167,24 @@
     } catch { return joinScreen(T.offline); }
     const qs = data.questions || []; const res = [];
     let i = 0;
-    const prog = () => '<div class="prog">' + qs.map((_, k) => '<i class="' + (k < res.length ? (res[k].ok ? 'ok' : 'bad') : k === i ? 'cur' : '') + '"></i>').join('') + '</div>';
+    const prog = () => '<div class="prog">' + qs.map((_, k) => '<i class="' + (k < res.length ? 'done' : k === i ? 'cur' : '') + '"></i>').join('') + '</div>';
     const ask = () => {
       const q = qs[i];
       app.innerHTML = top(T.of(i + 1, qs.length)) + prog() + '<div class="pq">' + esc(q.q) + '</div>'
-        + q.options.map((o, k) => '<button class="popt c' + k + '" data-k="' + k + '"><i class="shape">' + S[k] + '</i>' + esc(o) + '</button>').join('');
+        + q.options.map((o, k) => '<button class="popt c' + k + '" data-k="' + k + '"><i class="shape">' + S[k] + '</i>' + esc(o) + '</button>').join('')
+        + '<p class="note">' + esc(T.atEndShort) + '</p>';
       app.querySelectorAll('.popt').forEach((b) => { b.onclick = () => answer(Number(b.dataset.k)); });
     };
+    // дұрыс-қатесі ойын соңында (тірі ойындағыдай): таңдалғаны белгіленіп, келесі сұраққа өтеді
     const answer = (k) => {
-      const q = qs[i]; const ok = k === q.correct;
-      res.push({ ok, mine: q.options[k] });
-      app.innerHTML = top(T.of(i + 1, qs.length)) + prog() + '<div class="res ' + (ok ? 'ok' : 'bad') + '">'
-        + (ok ? '<div class="ic">✓</div><h2>' + esc(T.correct) + '</h2>' : '<div class="ic">✕</div><h2>' + esc(T.wrong) + '</h2><div class="ans">' + esc(T.theAnswer) + ' ' + S[q.correct] + ' ' + esc(q.options[q.correct]) + '</div>')
-        + (q.explain ? '<div class="ex">' + esc(q.explain) + '</div>' : '') + '</div>'
-        + '<button class="btn" id="nx" style="margin-top:16px">' + esc(i + 1 < qs.length ? T.soloNext : T.soloDone) + '</button>';
-      document.getElementById('nx').onclick = () => { i += 1; if (i < qs.length) ask(); else done(); };
+      const q = qs[i];
+      res.push({ ok: k === q.correct, mine: q.options[k] });
+      app.querySelectorAll('.popt').forEach((b) => { b.disabled = true; b.classList.add(Number(b.dataset.k) === k ? 'picked' : 'dim'); });
+      setTimeout(() => { i += 1; if (i < qs.length) ask(); else done(); }, 450);
     };
     const done = () => {
       const right = res.filter((r) => r.ok).length;
-      app.innerHTML = top(T.soloTitle) + '<div class="final"><h1>' + esc(T.over) + '</h1><div class="place">' + right + '/' + qs.length + '</div><div class="of">' + esc(T.soloScore(right, qs.length)) + '</div></div>'
+      app.innerHTML = top(T.soloTitle) + finalHtml(0, 0, right, qs.length, null)
         + '<button class="btn alt" id="ag" style="margin-top:16px">' + esc(T.soloAgain) + '</button>'
         + reviewHtml(qs.map((q, k) => ({ q: q.q, answer: q.options[q.correct], explain: q.explain, mine: res[k] && res[k].mine, ok: res[k] && res[k].ok })));
       document.getElementById('ag').onclick = () => { res.length = 0; i = 0; ask(); };

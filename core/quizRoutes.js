@@ -10,7 +10,7 @@
  *   GET  /api/quiz/:code/state    — ?pid&s → ойыншы күйі
  *   POST /api/quiz/:code/answer   — { pid, s, qi, choice }
  *   GET  /api/quiz/:code/host/state?k=…  — проектор күйі
- *   POST /api/quiz/:code/host     — { k, action: start|next|reveal|restart }
+ *   POST /api/quiz/:code/host     — { k, action: start|next|prev|close|review|results|restart }
  *   GET  /api/quiz/:code/solo     — өз бетімен өту (проекторсыз): сұрақтар жауабымен; тірі ойын жүріп жатса — 409
  *
  * Бөлмелер процесс жадында (Railway — бір дана). Сервер қайта қосылса, ойын лоббиден басталады — квиздің өзі базада.
@@ -142,7 +142,7 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
 
   router.get('/api/quiz/:code/solo', withRoom((req, res, room) => {
     // тірі ойын жүріп жатқанда жауаптарды бермейміз (ойыншы алдап қарап алмасын)
-    if (room.phase === 'question' || room.phase === 'reveal') return res.status(409).json({ error: 'live' });
+    if (room.phase === 'question' || room.phase === 'closed') return res.status(409).json({ error: 'live' });
     return res.json({ topic: room.quiz.topic, lang: room.quiz.language, questions: room.quiz.questions });
   }));
 

@@ -5,12 +5,14 @@
  * Педагогикалық негіз:
  *   • сұрақтар тек презентацияда АЙТЫЛҒАН мазмұннан (сынып жаңа ғана тыңдады) — ойдан факт жоқ;
  *   • оңайдан қиынға: еске түсіру → түсіну (неге/қалай) → қолдану/салыстыру;
- *   • әр сұрақтан кейін дұрыс жауап пен қысқа түсіндірме — бала қатесінен бірден үйренеді;
- *   • соңында баяндамашыға «ең қиын сұрақ» — сынып нені түсінбегенін көріп, қайта түсіндіре алады.
+ *   • дұрыс/қате ойын кезінде АШЫЛМАЙДЫ (иесінің шешімі): ойын шиеленісті, әлсіз бала әр сұрақта ұялмайды,
+ *     ал кешіктірілген кері байланыс есте жақсы сақталады;
+ *   • соңында: үздіктер → «жауаптарды талдау» (әр сұрақ: дұрыс жауап, сыныптың % дұрысы, түсіндірме),
+ *     ең қиын сұрақ белгіленеді — баяндамашы қайта түсіндіреді; телефонда әркім өз ✓/✕ мен түсіндірмені көреді.
  *
  * Бағдарламалық негіз:
  *   • ойын күйі серверде (жадта), клиенттер секунд сайын сұрайды (polling) — WebSocket керек емес;
- *   • дұрыс жауап телефонға ашылғанға дейін ЖІБЕРІЛМЕЙДІ (devtools арқылы алдау жоқ);
+ *   • дұрыс жауап пен ұпай ойын біткенше телефонға ЖІБЕРІЛМЕЙДІ (devtools арқылы алдау жоқ);
  *   • уақыт серверде есептеледі: клиентке қалған мс беріледі (телефон сағаты қате болса да дұрыс);
  *   • күй өтуі «жалқау»: кез келген сұрауда уақыт біткені тексеріледі (таймер/интервал керек емес).
  */
@@ -148,7 +150,9 @@ function qrSvg(text, { margin = 4 } = {}) {
 
 // ─── Тірі ойын ──────────────────────────────────────────────────────────
 /**
- * Бөлме — бір квиздің бір ойыны. Фазалар: lobby → question → reveal → … → end.
+ * Бөлме — бір квиздің бір ойыны.
+ * Фазалар: lobby → question → closed (уақыт бітті / бәрі жауап берді; дұрыс жауап АШЫЛМАЙДЫ) → … →
+ *          end (үздіктер + сынып нәтижесі) → review (жауаптарды талдау, сұрақ сайын) → end.
  * quiz: { code, topic, language, questions:[{q, options, correct, explain}] }
  */
 function createRoom(quiz, now = Date.now()) {
@@ -156,6 +160,7 @@ function createRoom(quiz, now = Date.now()) {
     quiz,
     phase: 'lobby',
     qi: -1,
+    ri: -1,             // талдаудағы сұрақ
     startedAt: 0,
     durMs: 0,
     players: new Map(), // pid → { name, secret, score, answers: [{choice, ok, gained, ms}], joinedAt }
@@ -200,7 +205,7 @@ function tick(room, now = Date.now()) {
   if (room.phase !== 'question') return;
   const got = room.answers[room.qi] ? room.answers[room.qi].size : 0;
   const everyone = room.players.size > 0 && got >= room.players.size;
-  if (remainingMs(room, now) <= 0 || everyone) reveal(room);
+  if (remainingMs(room, now) <= 0 || everyone) close(room);
 }
 
 function openQuestion(room, qi, now) {
@@ -212,13 +217,13 @@ function openQuestion(room, qi, now) {
   room.version += 1;
 }
 
-function reveal(room) {
+function close(room) {
   if (room.phase !== 'question') return;
-  room.phase = 'reveal';
+  room.phase = 'closed';
   room.version += 1;
 }
 
-/** Ұпай: дұрыс → 500 + жылдамдыққа 0–500 (ойын қызықты, бірақ білім басты) */
+/** Ұпай: дұрыс → 500 + жылдамдыққа 0–500 (ойын қызықты, бірақ білім басты). Ойын біткенше жасырын. */
 function answer(room, pid, secret, qi, choice, now = Date.now()) {
   room.lastActive = now;
   tick(room, now);
@@ -242,28 +247,46 @@ function answer(room, pid, secret, qi, choice, now = Date.now()) {
   return { ok: true };
 }
 
+/** start · next (сұрақты жабу → келесі сұрақ → нәтиже → талдау → … → нәтиже) · close · review · results · restart */
 function hostAction(room, action, now = Date.now()) {
   room.lastActive = now;
   tick(room, now);
   const total = room.quiz.questions.length;
+  const bump = () => { room.version += 1; };
   if (action === 'start') {
     if (room.phase !== 'lobby') return { error: 'state' };
     openQuestion(room, 0, now);
-  } else if (action === 'reveal') {
-    reveal(room);
+  } else if (action === 'close' || action === 'reveal') {
+    close(room);
   } else if (action === 'next') {
-    if (room.phase === 'question') reveal(room);
-    else if (room.phase === 'reveal') {
+    if (room.phase === 'question') close(room);
+    else if (room.phase === 'closed') {
       if (room.qi + 1 < total) openQuestion(room, room.qi + 1, now);
-      else { room.phase = 'end'; room.version += 1; }
+      else { room.phase = 'end'; bump(); }
+    } else if (room.phase === 'end') { room.phase = 'review'; room.ri = 0; bump(); }
+    else if (room.phase === 'review') {
+      if (room.ri + 1 < total) room.ri += 1; else room.phase = 'end';
+      bump();
     } else return { error: 'state' };
+  } else if (action === 'prev') {
+    if (room.phase !== 'review') return { error: 'state' };
+    if (room.ri > 0) room.ri -= 1; else room.phase = 'end';
+    bump();
+  } else if (action === 'review') {
+    if (room.phase !== 'end' && room.phase !== 'review') return { error: 'state' };
+    room.phase = 'review'; room.ri = 0; bump();
+  } else if (action === 'results') {
+    if (room.phase !== 'review') return { error: 'state' };
+    room.phase = 'end'; bump();
   } else if (action === 'restart') {
-    room.phase = 'lobby'; room.qi = -1; room.answers = [];
+    room.phase = 'lobby'; room.qi = -1; room.ri = -1; room.answers = [];
     room.players.forEach((p) => { p.score = 0; p.answers = []; });
-    room.version += 1;
+    bump();
   } else return { error: 'action' };
   return { ok: true };
 }
+
+const finished = (room) => room.phase === 'end' || room.phase === 'review';
 
 function ranking(room) {
   return [...room.players.entries()]
@@ -271,22 +294,28 @@ function ranking(room) {
     .sort((a, b) => b.score - a.score || b.right - a.right || a.name.localeCompare(b.name));
 }
 
+/** Бір сұрақтың сынып нәтижесі */
+function questionStats(room, i) {
+  const item = room.quiz.questions[i];
+  const counts = [0, 0, 0, 0];
+  const box = room.answers[i];
+  if (box) box.forEach((c) => { counts[c] += 1; });
+  const n = box ? box.size : 0;
+  return { counts, answered: n, pct: n ? Math.round((counts[item.correct] / n) * 100) : null };
+}
+
 /** Сынып нәтижесі: әр сұрақтың дұрыс жауап үлесі, ең қиыны, орташа балл */
 function classStats(room) {
   const total = room.quiz.questions.length;
-  const per = room.quiz.questions.map((item, i) => {
-    const box = room.answers[i];
-    const n = box ? box.size : 0;
-    const right = box ? [...box.values()].filter((c) => c === item.correct).length : 0;
-    return { i, answered: n, right, pct: n ? Math.round((right / n) * 100) : null };
-  });
+  const per = room.quiz.questions.map((_, i) => ({ i, ...questionStats(room, i) }));
   const played = per.filter((x) => x.answered > 0);
   const hardest = played.length ? played.slice().sort((a, b) => a.pct - b.pct || a.i - b.i)[0] : null;
   const players = room.players.size;
   const avg = players ? Math.round((ranking(room).reduce((a, r) => a + r.right, 0) / players) * 10) / 10 : 0;
+  const q = hardest ? room.quiz.questions[hardest.i] : null;
   return {
     total, players, avgRight: avg,
-    hardest: hardest && hardest.pct < 100 ? { n: hardest.i + 1, q: room.quiz.questions[hardest.i].q, pct: hardest.pct, answer: room.quiz.questions[hardest.i].options[room.quiz.questions[hardest.i].correct] } : null,
+    hardest: hardest && hardest.pct < 100 ? { n: hardest.i + 1, q: q.q, pct: hardest.pct, answer: q.options[q.correct] } : null,
   };
 }
 
@@ -300,7 +329,7 @@ function hostView(room, now = Date.now()) {
     players: room.players.size,
   };
   if (room.phase === 'lobby') v.names = [...room.players.values()].slice(-60).map((p) => p.name);
-  if (room.phase === 'question' || room.phase === 'reveal') {
+  if (room.phase === 'question' || room.phase === 'closed') {
     const item = room.quiz.questions[room.qi];
     v.question = { q: item.q, options: item.options };
     v.remainingMs = remainingMs(room, now);
@@ -308,29 +337,29 @@ function hostView(room, now = Date.now()) {
     v.durMs = room.durMs;
     v.answered = room.answers[room.qi] ? room.answers[room.qi].size : 0;
   }
-  if (room.phase === 'reveal') {
-    const item = room.quiz.questions[room.qi];
-    const counts = [0, 0, 0, 0];
-    (room.answers[room.qi] || new Map()).forEach((c) => { counts[c] += 1; });
-    v.reveal = { correct: item.correct, explain: item.explain, counts };
-    v.top = ranking(room).slice(0, 5).map(({ name, score }) => ({ name, score }));
-  }
-  if (room.phase === 'end') {
+  if (finished(room)) {
     v.top = ranking(room).slice(0, 10).map(({ name, score, right }) => ({ name, score, right }));
     v.stats = classStats(room);
+  }
+  if (room.phase === 'review') {
+    const item = room.quiz.questions[room.ri];
+    const st = questionStats(room, room.ri);
+    v.ri = room.ri;
+    v.item = { q: item.q, options: item.options, correct: item.correct, explain: item.explain, counts: st.counts, pct: st.pct, answered: st.answered };
+    v.hardest = !!(v.stats.hardest && v.stats.hardest.n === room.ri + 1);
   }
   return v;
 }
 
-/** Телефон көретін күй (дұрыс жауап тек reveal-да) */
+/** Телефон көретін күй: ойын кезінде тек «қабылданды»; дұрыс/қате, ұпай, орын — тек соңында */
 function playerView(room, pid, secret, now = Date.now()) {
   tick(room, now);
   const p = player(room, pid, secret);
   const total = room.quiz.questions.length;
   const v = { phase: room.phase, qi: room.qi, total, version: room.version, topic: room.quiz.topic, lang: room.quiz.language, joined: !!p };
   if (!p) return v;
-  v.me = { name: p.name, score: p.score };
-  if (room.phase === 'question' || room.phase === 'reveal') {
+  v.me = { name: p.name };
+  if (room.phase === 'question' || room.phase === 'closed') {
     const item = room.quiz.questions[room.qi];
     v.question = { q: item.q, options: item.options };
     v.remainingMs = remainingMs(room, now);
@@ -338,18 +367,14 @@ function playerView(room, pid, secret, now = Date.now()) {
     v.durMs = room.durMs;
     const a = p.answers[room.qi];
     v.myChoice = a ? a.choice : null;
-    if (room.phase === 'reveal') {
-      v.reveal = { correct: item.correct, explain: item.explain, ok: !!(a && a.ok), gained: a ? a.gained : 0 };
-    }
   }
-  if (room.phase === 'reveal' || room.phase === 'end') {
+  if (finished(room)) {
     const rk = ranking(room);
+    v.me.score = p.score;
     v.me.rank = rk.findIndex((r) => r.pid === pid) + 1;
     v.me.of = rk.length;
     v.me.right = p.answers.filter((a) => a && a.ok).length;
-  }
-  if (room.phase === 'end') {
-    // ойын біткен соң — барлық сұрақтың дұрыс жауабы мен түсіндірмесі (үйрену үшін)
+    // әр сұрақ: өз жауабы ✓/✕, дұрыс жауап, түсіндірме (үйрену үшін)
     v.review = room.quiz.questions.map((item, i) => ({
       q: item.q, answer: item.options[item.correct], explain: item.explain,
       mine: p.answers[i] ? item.options[p.answers[i].choice] : null, ok: !!(p.answers[i] && p.answers[i].ok),
@@ -362,5 +387,5 @@ module.exports = {
   QUIZ_TTL_MS, MAX_PLAYERS, MIN_QUESTIONS, MAX_QUESTIONS,
   makeCode, makeToken, isCode, safeEq, normalizeQuestions, questionSeconds, shuffle,
   qrMatrix, qrPng, qrSvg,
-  createRoom, join, answer, hostAction, tick, hostView, playerView, ranking, classStats, cleanName,
+  createRoom, join, answer, hostAction, tick, hostView, playerView, ranking, classStats, questionStats, cleanName,
 };
