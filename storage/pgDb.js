@@ -235,6 +235,21 @@ const SCHEMA = {
     cols: { partner_id: 'TEXT', buyer_id: 'TEXT', amount: 'INTEGER', commission: 'INTEGER', created_at: 'BIGINT' },
     unique: 'ref',
   },
+  // Сыныпқа арналған квиз (core/quiz.js): сұрақтар + проектор кілті; мерзімі біткен соң өшіріледі
+  quizzes: {
+    create: `CREATE TABLE IF NOT EXISTS quizzes (
+      code TEXT PRIMARY KEY,
+      host_key TEXT,
+      chat_id TEXT,
+      job_id TEXT,
+      topic TEXT,
+      language TEXT,
+      data JSONB,
+      created_at BIGINT,
+      expires_at BIGINT
+    )`,
+    cols: { host_key: 'TEXT', chat_id: 'TEXT', job_id: 'TEXT', topic: 'TEXT', language: 'TEXT', data: 'JSONB', created_at: 'BIGINT', expires_at: 'BIGINT' },
+  },
   receipts: {
     create: `CREATE TABLE IF NOT EXISTS receipts (
       receipt_no TEXT PRIMARY KEY,
@@ -1075,12 +1090,35 @@ async function testerData() {
   };
 }
 
+// ─── Квиз ───────────────────────────────────────────────────────────────
+async function saveQuiz(z) {
+  const now = Date.now();
+  await q(`INSERT INTO quizzes (code, host_key, chat_id, job_id, topic, language, data, created_at, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9) ON CONFLICT (code) DO NOTHING`,
+  [z.code, z.hostKey, z.chatId == null ? null : String(z.chatId), z.jobId || null, String(z.topic || '').slice(0, 300), z.language || null,
+    jsonParam({ questions: z.questions }), now, z.expiresAt || now + 30 * 24 * 3600 * 1000]);
+}
+async function getQuiz(code) {
+  const r = await q('SELECT code, host_key, topic, language, data, expires_at FROM quizzes WHERE code = $1', [String(code)]);
+  const row = r.rows[0];
+  if (!row || num(row.expires_at) < Date.now()) return null;
+  const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: data.questions || [] };
+}
+async function deleteExpiredQuizzes(now = Date.now()) {
+  const r = await q('DELETE FROM quizzes WHERE expires_at < $1', [now]);
+  return r.rowCount || 0;
+}
+
 async function closeDB() {
   if (pool && typeof pool.end === 'function') await pool.end().catch(() => {});
 }
 
 module.exports = {
   backend: 'postgres',
+  saveQuiz,
+  getQuiz,
+  deleteExpiredQuizzes,
   initDB,
   closeDB,
   _setPool,

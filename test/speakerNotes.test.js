@@ -17,10 +17,18 @@ function fakeLlm(calls) {
   return async (system, user, label) => {
     calls.push({ label, user });
     if (label === 'studyGuide') {
-      return { glossary: [{ term: 'Блокчейн', meaning: 'Деректерді көп компьютерде бірдей сақтайтын тізілім.' }], questions: [{ q: 'Неге цифрландыру маңызды?', a: 'Ол уақыт пен шығынды азайтады.' }] };
+      return {
+        core: 'Цифрлық экономика — деректер мен интернетке сүйенген шаруашылық.',
+        simple: 'Бұрын бәрі қағазбен жүрді. Енді төлем, құжат, сауда телефон арқылы өтеді.',
+        analogy: 'Бұл қағаз хаттан мессенджерге көшкендей.',
+        glossary: [{ term: 'Блокчейн', meaning: 'Деректерді көп компьютерде бірдей сақтайтын тізілім.' }], questions: [{ q: 'Неге цифрландыру маңызды?', a: 'Ол уақыт пен шығынды азайтады.' }],
+      };
+    }
+    if (label === 'classQuiz') {
+      return { quiz: Array.from({ length: 10 }, (_, k) => ({ q: `Сұрақ нөмірі ${k + 1}: не дұрыс?`, options: ['Дұрыс жауап ' + k, 'Қате А' + k, 'Қате Б' + k, 'Қате В' + k], correct: 0, explain: 'Себебі слайдта солай.' })) };
     }
     const ns = JSON.parse(user.slice(user.indexOf('Slides:') + 7, user.lastIndexOf('Return')).trim()).map((f) => f.n);
-    return { notes: ns.map((n) => ({ n, point: `**Басты ой ${n}**`, speech: speech(n) })) };
+    return { notes: ns.map((n) => ({ n, point: `**Басты ой ${n}**`, cues: ['кілт ' + n, 'сөз'], speech: speech(n) })) };
   };
 }
 
@@ -30,6 +38,11 @@ test('notes for every slide + study guide; prompt carries the slide facts and th
   assert.strictEqual(r.ok, 4);
   assert.strictEqual(r.notes[1].point, 'Басты ой 2', 'markdown stripped');
   assert.ok(r.study.glossary.length === 1 && r.study.questions.length === 1);
+  assert.ok(/мессенджер/.test(r.study.overview.analogy) && r.study.overview.core);
+  assert.deepStrictEqual(r.notes[1].cues, ['кілт 2', 'сөз']);
+  assert.strictEqual(r.quiz.length, 10, 'class quiz parsed');
+  const qCall = calls.find((c) => c.label === 'classQuiz');
+  assert.ok(qCall && /ONLY facts/.test(qCall.user) && /Kazakh/.test(qCall.user), 'quiz prompt: facts only, language');
   const nCall = calls.find((c) => c.label.startsWith('speakerNotes'));
   assert.ok(/Асан/.test(nCall.user) && /72%/.test(nCall.user) && /Kazakh/.test(nCall.user));
   assert.strictEqual(applySpeakerNotes(slides.map((s) => ({ ...s })), r.notes), 4);
@@ -53,12 +66,29 @@ test('slides get PPTX notes text with the key idea first', () => {
 
 test('speech .docx: per-slide script, glossary and teacher questions', async () => {
   const r = await generateSpeakerNotes({ slides, title: 'Цифрлық экономика', language: 'Kazakh', llm: fakeLlm([]) });
-  const buf = buildSpeechDocx({ title: 'Цифрлық экономика', slides, notes: r.notes, study: r.study, language: 'Kazakh', coverMeta: { performedBy: 'Асан', group: 'ТК-21' } });
+  const links = { player: 'https://x.app/q/ABCDE', host: 'https://x.app/q/ABCDE/host?k=key' };
+  const buf = buildSpeechDocx({ title: 'Цифрлық экономика', slides, notes: r.notes, study: r.study, language: 'Kazakh', coverMeta: { performedBy: 'Асан', group: 'ТК-21' }, quiz: r.quiz, quizLinks: links });
   const zip = await JSZip.loadAsync(buf);
   const xml = await zip.file('word/document.xml').async('string');
-  for (const s of ['БАЯНДАМА МӘТІНІ', 'Слайд 2. Негізгі ұғымдар', '► Басты ой 3', 'Негізгі терминдер', 'Мұғалім қоюы мүмкін сұрақтар', 'Баяндамашы: Асан', 'Блокчейн']) {
-    assert.ok(xml.includes(s), s);
-  }
+  // сабақ ретімен: түсін → жоспар → айт → қорға → тексер
+  const order = ['БАЯНДАМАҒА ДАЙЫНДЫҚ', 'Осы құжатпен қалай дайындалу керек', '1. Тақырып қарапайым тілмен', 'қағаз хаттан мессенджерге', 'Негізгі терминдер',
+    '2. Баяндама жоспары', '[кілт 2 · сөз]', '3. Сөйлейтін мәтін', 'Сөйлеу кеңестері', 'Слайд 2. Негізгі ұғымдар', '► Басты ой 3', 'Кілт сөздер: кілт 3 · сөз',
+    '4. Мұғалім қоюы мүмкін сұрақтар', 'Жауабын білмесеңіз', '5. Өзіңді тексер: квиз', 'Жауаптар', 'Квизді сыныппен ойнау', links.host];
+  let at = -1;
+  for (const s of order) { const i = xml.indexOf(s, at + 1); assert.ok(i > at, 'order: ' + s); at = i; }
+  for (const s of ['Баяндамашы: Асан', 'Блокчейн', 'A) ', 'D) ']) assert.ok(xml.includes(s), s);
+  assert.ok(!/w:firstLine="0" w:hanging/.test(xml), 'no firstLine+hanging together');
   const ru = await JSZip.loadAsync(buildSpeechDocx({ title: 'Экономика', slides, notes: r.notes, study: null, language: 'Russian' }));
-  assert.ok((await ru.file('word/document.xml').async('string')).includes('ТЕКСТ ДОКЛАДА'));
+  const rx = await ru.file('word/document.xml').async('string');
+  assert.ok(rx.includes('ПОДГОТОВКА К ДОКЛАДУ') && !rx.includes('Квиз вместе с классом'), 'ru, no quiz section without quiz');
+});
+
+test('clients (pedagogy:false): classic prompts, no class quiz call, classic «Баяндама мәтіні»', async () => {
+  const calls = [];
+  const r = await generateSpeakerNotes({ slides, title: 'Цифрлық экономика', language: 'Kazakh', llm: fakeLlm(calls), pedagogy: false });
+  assert.ok(!calls.some((c) => c.label === 'classQuiz'), 'no quiz call for clients');
+  assert.ok(!calls.some((c) => /"cues"/.test(c.user) || /12-year-old/.test(c.user)), 'classic prompts');
+  assert.deepStrictEqual(r.quiz, []);
+  const xml = await (await JSZip.loadAsync(buildSpeechDocx({ title: 'Т', slides, notes: r.notes, study: r.study, language: 'Kazakh', pedagogy: false }))).file('word/document.xml').async('string');
+  assert.ok(xml.includes('БАЯНДАМА МӘТІНІ') && xml.includes('Мұғалім қоюы мүмкін сұрақтар') && !xml.includes('БАЯНДАМАҒА ДАЙЫНДЫҚ') && !xml.includes('Өзіңді тексер'));
 });

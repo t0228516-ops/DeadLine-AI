@@ -39,7 +39,8 @@ function emptyDB() {
     rate_prompts: {},
     events: {},
     gen_log: {},
-    tester_feedback: {}
+    tester_feedback: {},
+    quizzes: {}
   };
 }
 
@@ -64,7 +65,8 @@ function loadDB() {
       rate_prompts: db.rate_prompts || {},
       events: db.events || {},
       gen_log: db.gen_log || {},
-      tester_feedback: db.tester_feedback || {}
+      tester_feedback: db.tester_feedback || {},
+      quizzes: db.quizzes || {}
     };
   } catch (err) {
     console.error('[DB] Local read error:', err.message);
@@ -833,8 +835,36 @@ async function testerData() {
   };
 }
 
+// ─── Квиз ───────────────────────────────────────────────────────────────
+async function saveQuiz(z) {
+  const box = db.quizzes || (db.quizzes = {});
+  if (box[z.code]) return;
+  const now = Date.now();
+  box[z.code] = {
+    code: z.code, host_key: z.hostKey, chat_id: z.chatId == null ? null : String(z.chatId), job_id: z.jobId || null,
+    topic: String(z.topic || '').slice(0, 300), language: z.language || null, data: { questions: z.questions },
+    created_at: now, expires_at: z.expiresAt || now + 30 * 24 * 3600 * 1000,
+  };
+  saveDB(db);
+}
+async function getQuiz(code) {
+  const row = (db.quizzes || {})[String(code)];
+  if (!row || row.expires_at < Date.now()) return null;
+  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: (row.data && row.data.questions) || [] };
+}
+async function deleteExpiredQuizzes(now = Date.now()) {
+  const box = db.quizzes || {};
+  let n = 0;
+  for (const k of Object.keys(box)) if (box[k].expires_at < now) { delete box[k]; n += 1; }
+  if (n) saveDB(db);
+  return n;
+}
+
 module.exports = {
   backend: 'json',
+  saveQuiz,
+  getQuiz,
+  deleteExpiredQuizzes,
   closeDB: async () => {},
   initDB,
   getUser,
