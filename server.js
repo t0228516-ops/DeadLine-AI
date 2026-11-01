@@ -38,6 +38,8 @@ const isAdminId = (id) => ADMIN_IDS.includes(String(id));
 const MAINTENANCE = /^(1|true|on)$/i.test(String(process.env.MAINTENANCE || ''));
 const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
 // Сыныпқа квиз: QR пен «Квизді бастау» батырмасы осы мекенжайға апарады (жария https керек; жоқ болса — квиз қосылмайды)
+// Канал (нұсқаулық видео, жаңалықтар): әр презентацияның астында жіберіледі
+const CHANNEL_URL = (process.env.CHANNEL_URL || 'https://t.me/deadline_ai').trim();
 const QUIZ_BASE_URL = (process.env.QUIZ_BASE_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
 
 const templateNudged = new Set();
@@ -1020,7 +1022,6 @@ async function executeJob(jobId) {
         pushDesignMemory(chatId, { lib: library.id }).catch(() => {});
       } catch (e) { console.warn(`[Library] skipped: ${e.message}`); library = null; }
     }
-    const pilot = isAdminId(chatId) || !!job.payload?.tester;
     const genOpts = (lib) => ({
       ...avoid,
       designForce: lib ? undefined : (chosenDesign || undefined),
@@ -1028,9 +1029,9 @@ async function executeJob(jobId) {
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
-      // Сыныпқа квиз + жаңа «Баяндамаға дайындық» — әзірге тек админ мен тестерлерге (иесінің шешімі, 2026-11-01)
-      pedagogy: pilot,
-      quiz: pilot && QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
+      // Сыныпқа квиз + «Баяндамаға дайындық» — барлық клиентке (иесінің шешімі, 2026-11-01)
+      pedagogy: true,
+      quiz: QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
       mode: lib ? 'template' : (job.payload?.mode || 'presentation'),
       materialText: job.payload?.materialText || null,
       referencePptx: lib ? lib.deckBuf : referencePptx,
@@ -1184,12 +1185,9 @@ async function executeJob(jobId) {
             contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           });
           if (speechPath && fs.existsSync(speechPath)) {
-            const pilotDoc = isAdminId(chatId) || !!job.payload?.tester;
-            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — ${pilotDoc ? 'дайындық' : 'баяндама'}.docx`;
+            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — дайындық.docx`;
             await global.__deadlineBot.sendDocument(chatId, speechPath, {
-              caption: pilotDoc
-                ? '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.'
-                : '🎤 Баяндама мәтіні: әр слайдта не айту керек, негізгі терминдер және мұғалім қоюы мүмкін сұрақтар мен жауаптар. Бұл мәтін PPTX-тің «Заметки» бөлімінде де бар.',
+              caption: '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.',
             }, {
               filename: speechName,
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -1197,6 +1195,8 @@ async function executeJob(jobId) {
           }
           // Сыныпқа квиз: сілтемелер Telegram арқылы — сынып сілтемесі (топ чатына) + басқару беті (тек баяндамашыға)
           if (result.quiz && result.quiz.links) await sendQuizLinks(chatId, result.quiz).catch((e) => console.warn('[Job] quiz links send failed', e.message));
+          // квиз жоқ болса да — канал сілтемесі әр презентацияның астында (иесінің шешімі)
+          else if (CHANNEL_URL) await global.__deadlineBot.sendMessage(chatId, `📢 Жаңалықтар мен нұсқаулықтар (квизді қалай ойнау т.б.): ${CHANNEL_URL}`, { disable_web_page_preview: true }).catch(() => {});
         }
       }
     } catch (e) {
@@ -1281,10 +1281,12 @@ async function sendQuizLinks(chatId, quiz) {
     + '1️⃣ «📤 Сыныпқа жіберу» — сілтемені топ чатына жіберіңіз (не сынып соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n'
     + '2️⃣ «🎮 Квизді басқару» — ойынды СІЗ бастайсыз, келесі сұраққа да сіз өткізесіз. Ноутбукта ашып, проекторға шығарыңыз (телефоннан да болады).\n'
     + '📋 Кім неше сұраққа дұрыс жауап бергені — сол беттегі «Нәтижелер».\n\n'
-    + '⚠️ Басқару сілтемесін сыныпқа жібермеңіз — ол тек сізге.';
+    + '⚠️ Басқару сілтемесін сыныпқа жібермеңіз — ол тек сізге.'
+    + (CHANNEL_URL ? `\n\n🎬 Квизді қалай ойнау керек — видео нұсқаулық біздің каналда: ${CHANNEL_URL}` : '');
   await global.__deadlineBot.sendMessage(chatId, text, {
     disable_web_page_preview: true,
-    reply_markup: { inline_keyboard: [[{ text: '📤 Сыныпқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]] },
+    reply_markup: { inline_keyboard: [[{ text: '📤 Сыныпқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
+      .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []) },
   });
 }
 

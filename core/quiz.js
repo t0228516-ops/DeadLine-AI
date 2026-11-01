@@ -325,7 +325,7 @@ function hostView(room, now = Date.now()) {
   tick(room, now);
   const total = room.quiz.questions.length;
   const v = {
-    phase: room.phase, qi: room.qi, total, version: room.version,
+    phase: room.phase, qi: room.qi, ri: room.ri, total, version: room.version,
     topic: room.quiz.topic, lang: room.quiz.language,
     players: room.players.size,
   };

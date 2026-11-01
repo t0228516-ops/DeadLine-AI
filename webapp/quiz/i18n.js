@@ -87,3 +87,15 @@ window.QUIZ_I18N = {
 };
 window.QUIZ_SHAPES = ['▲', '◆', '●', '■'];
 window.qEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* Сақтандыру: мобильді желіде fetch кейде мәңгі «ілініп» қалады → бет қатып қалады. Әр сұрауға уақыт шегі. */
+window.qFetch = function (url, opts, ms) {
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  const t = setTimeout(() => { if (ctl) ctl.abort(); }, ms || 8000);
+  return fetch(url, Object.assign({ cache: 'no-store' }, opts || {}, ctl ? { signal: ctl.signal } : {})).finally(() => clearTimeout(t));
+};
+/* localStorage кейбір in-app браузерлерде (жеке режим) қате лақтырады — ойын бұзылмасын */
+window.qStore = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* жоқ болса — жай ғана сақталмайды */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* — */ } },
+};
