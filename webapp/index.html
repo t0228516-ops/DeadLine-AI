@@ -21,7 +21,7 @@
       </div>
       <div class="credits-pill" id="creditsPill" title="Кредиттер">
         <span class="coin">◆</span>
-        <span id="creditsVal">—</span>
+        <span id="creditsVal">—</span><span class="cred-word">кредит</span>
       </div>
     </header>
 
@@ -36,119 +36,129 @@
     <!-- CREATE -->
     <section id="tab-create" class="panel active">
       <p id="testerBanner" class="free-banner tester-banner hidden"></p>
-      <button type="button" class="tpl-promo" id="tplPromo">
-        <span class="tpl-promo-badge">ЖАҢА</span>
-        <span class="tpl-promo-title">🎨 Өз шаблоныңмен презентация</span>
-        <span class="tpl-promo-text">Canva / PowerPoint-тен ұнаған шаблонды жүкте — дизайны сол күйі қалады, мәтінді бот сенің тақырыбыңа жазады.</span>
-        <span class="tpl-promo-cta">Шаблонмен жасау →</span>
-      </button>
 
-      <div class="card compact">
-        <div class="chips" id="modeChips">
-          <button class="chip active" data-v="presentation">✨ AI өзі жасайды</button>
-          <button class="chip chip-new" data-v="template">🎨 Өз шаблоным</button>
-          <button class="chip" data-v="referat">📄 Реферат</button>
-        </div>
-        <p class="hint" id="modeHint" style="text-align:left">Тақырыпты жазсаңыз болды: құрылым, мәтін, сурет, дизайн — бәрін AI өзі жасайды.</p>
+      <!-- Режим: бір қатар (бұрынғы үлкен «шаблон» карточкасы алынды) -->
+      <div class="seg" id="modeChips">
+        <button type="button" class="seg-btn active" data-v="presentation">✨ Презентация</button>
+        <button type="button" class="seg-btn" data-v="referat">📄 Реферат</button>
+        <button type="button" class="seg-btn" data-v="template">🎨 Өз шаблоным</button>
       </div>
 
-      <div class="card compact tpl-only">
-        <label class="label">Шаблон жүктеу (міндетті)</label>
-        <ol class="tpl-steps">
-          <li>Canva, PowerPoint немесе Google Slides-тан ұнаған шаблонды <b>.pptx</b> форматында жүктеп алыңыз.</li>
-          <li>Төмендегі батырманы басып, сол файлды таңдаңыз.</li>
-          <li>Бот дизайнды (түс, шрифт, суреттер) сақтап, ішіндегі мәтінді сіздің тақырыбыңызға ауыстырады.</li>
-        </ol>
-        <button type="button" class="tpl-upload" id="refBtn">📎 .pptx шаблонды таңдау</button>
-        <input id="refFile" type="file" hidden accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" />
-        <div class="hint" id="refInfo">Тек .pptx файл қабылданады (PDF, Word емес).</div>
-        <div class="hint">Жүктелген шаблонның дизайн деректері (мәтінсіз, суретсіз) бот үйренуі үшін сақталады.</div>
-      </div>
+      <div class="wiz-steps" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+      <div class="wiz-label" id="wizLabel">1 / 3 · ТАҚЫРЫП</div>
 
-      <div class="card">
-        <label class="label" id="topicLabel">Тақырып</label>
-        <textarea id="topic" rows="3" placeholder="Мысалы: Жасанды интеллекттің білім берудегі рөлі" maxlength="8000"></textarea>
+      <!-- ── 1-қадам: тақырып ── -->
+      <div class="wiz-step" data-step="1">
+        <h2 class="wiz-h" id="topicLabel">Презентация не туралы?</h2>
+        <p class="wiz-sub" id="modeHint">Тақырыпты жазыңыз — құрылым, мәтін, сурет, дизайнды бот өзі жасайды.</p>
+        <textarea id="topic" class="wiz-topic" rows="3" placeholder="Мысалы: Жасанды интеллекттің білім берудегі рөлі" maxlength="8000"></textarea>
         <div class="char-count"><span id="charCount">0</span>/8000</div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card compact">
-          <label class="label">Орындағандар</label>
-          <input type="text" id="performedBy" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="120" placeholder="Аты-жөні (бірнешеу болса үтірмен)" />
-        </div>
-        <div class="card compact">
-          <label class="label">Тексерген</label>
-          <input type="text" id="checkedBy" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="120" placeholder="Оқытушы аты-жөні" />
-        </div>
-      </div>
-
-      <div class="card compact">
-        <label class="label">Титул деректері (опционал)</label>
-        <input type="text" id="university" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="100" placeholder="Университет" />
-        <input type="text" id="faculty" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="80" placeholder="Факультет" />
-        <input type="text" id="department" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="80" placeholder="Кафедра" />
-        <input type="text" id="groupName" class="input-number" style="text-align:left;font-weight:500;font-size:16px" maxlength="40" placeholder="Топ" />
-        <input type="text" id="city" class="input-number referat-only hidden" style="text-align:left;font-weight:500;font-size:16px" maxlength="40" placeholder="Қала (титулдың төменгі жағы)" />
-      </div>
-
-      <div class="grid-2">
-        <div class="card compact">
-          <label class="label" id="countLabel">Слайд саны</label>
-          <input type="number" id="slideCountInput" class="input-number" min="5" max="15" step="1" value="8" inputmode="numeric" />
-          <div class="hint" id="countHint">5–15 аралығында</div>
-        </div>
-        <div class="card compact lang-card">
-          <label class="label">Тіл</label>
-          <div class="chips" id="langChips">
-            <button class="chip active" data-v="kk">Қазақ</button>
-            <button class="chip" data-v="ru">Рус</button>
-            <button class="chip" data-v="en">EN</button>
+        <div class="grid-2">
+          <div class="card compact">
+            <label class="label" id="countLabel">Слайд саны</label>
+            <div class="stepper">
+              <button type="button" class="step-btn" id="countMinus" aria-label="Азайту">−</button>
+              <input type="number" id="slideCountInput" class="input-number" min="5" max="15" step="1" value="10" inputmode="numeric" />
+              <button type="button" class="step-btn" id="countPlus" aria-label="Көбейту">+</button>
+            </div>
+            <div class="hint" id="countHint">5–15 аралығында</div>
+          </div>
+          <div class="card compact lang-card">
+            <label class="label">Тіл</label>
+            <div class="chips" id="langChips">
+              <button class="chip active" data-v="kk">Қаз</button>
+              <button class="chip" data-v="ru">Рус</button>
+              <button class="chip" data-v="en">EN</button>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div class="card compact ai-req">
-        <label class="label">Стиль</label>
-        <div class="chips wrap" id="styleChips">
-          <button class="chip active" data-v="">Авто</button>
-          <button class="chip" data-v="минимал">Минимал</button>
-          <button class="chip" data-v="корпоратив">Корпоратив</button>
-          <button class="chip" data-v="академиялық">Академиялық</button>
-          <button class="chip" data-v="стартап">Стартап</button>
-          <button class="chip" data-v="инфографика">Инфографика</button>
+        <div class="examples ai-only" id="examples">
+          <span class="hint-left">Мысалдар:</span>
+          <button type="button" class="ex-chip">Абай шығармашылығы</button>
+          <button type="button" class="ex-chip">Қант диабеті: себептері</button>
+          <button type="button" class="ex-chip">Жасанды интеллект</button>
         </div>
       </div>
 
-      <div class="card compact referat-only hidden">
-        <label class="label">Үлгі реферат (міндетті емес)</label>
-        <ol class="tpl-steps">
-          <li>Мұғалім қабылдайтын немесе бұрын қабылдаған рефератты жүктеңіз (Word, PDF немесе TXT).</li>
-          <li>Бот оны терең талдайды: құрылымы, бөлім атаулары, кіріспедегі элементтер, жазу стилі, әдебиеттер тізімінің форматы.</li>
-          <li>Жаңа реферат сол үлгідей жазылады, бірақ мәтіні көшірілмейді.</li>
-        </ol>
-        <label for="sampleFile" class="tpl-upload" id="sampleBtn">📎 Үлгі рефератты таңдау</label>
-        <input id="sampleFile" type="file" hidden accept=".docx,.doc,.pdf,.txt,.rtf" />
-        <div class="hint" id="sampleInfo">Жүктемесеңіз де болады — реферат стандарт талаптармен жасалады.</div>
+      <!-- ── 2-қадам: стиль (презентация) / шаблон / үлгі реферат ── -->
+      <div class="wiz-step hidden" data-step="2">
+        <div class="ai-only">
+          <h2 class="wiz-h">Дизайнды таңдаңыз</h2>
+          <p class="wiz-sub">Суретті басып, толық көріністі қараңыз.</p>
+          <div class="gallery" id="styleGallery">
+            <button type="button" class="g-auto active" data-v="">🪄 <b>Авто</b> — бот тақырыпқа қарай өзі таңдайды</button>
+          </div>
+        </div>
+
+        <div class="tpl-only">
+          <h2 class="wiz-h">Шаблонды жүктеңіз</h2>
+          <ol class="tpl-steps">
+            <li>Canva, PowerPoint немесе Google Slides-тан ұнаған шаблонды <b>.pptx</b> форматында жүктеп алыңыз.</li>
+            <li>Төмендегі батырманы басып, сол файлды таңдаңыз.</li>
+            <li>Бот дизайнды (түс, шрифт, суреттер) сақтап, ішіндегі мәтінді сіздің тақырыбыңызға ауыстырады.</li>
+          </ol>
+          <button type="button" class="tpl-upload" id="refBtn">📎 .pptx шаблонды таңдау</button>
+          <input id="refFile" type="file" hidden accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+          <div class="hint" id="refInfo">Тек .pptx файл қабылданады (PDF, Word емес).</div>
+          <div class="hint">Жүктелген шаблонның дизайн деректері (мәтінсіз, суретсіз) бот үйренуі үшін сақталады.</div>
+        </div>
+
+        <div class="referat-only hidden">
+          <h2 class="wiz-h">Үлгі реферат (міндетті емес)</h2>
+          <ol class="tpl-steps">
+            <li>Мұғалім қабылдайтын немесе бұрын қабылдаған рефератты жүктеңіз (Word, PDF немесе TXT).</li>
+            <li>Бот оның құрылымын, бөлім атауларын, жазу стилін және әдебиеттер тізімінің форматын үйренеді.</li>
+            <li>Жаңа реферат сол үлгідей жазылады, бірақ мәтіні көшірілмейді.</li>
+          </ol>
+          <label for="sampleFile" class="tpl-upload" id="sampleBtn">📎 Үлгі рефератты таңдау</label>
+          <input id="sampleFile" type="file" hidden accept=".docx,.doc,.pdf,.txt,.rtf" />
+          <div class="hint" id="sampleInfo">Жүктемесеңіз де болады — реферат стандарт талаптармен жасалады.</div>
+        </div>
       </div>
 
-
-      <div class="card compact ai-req">
-        <label class="label" for="requirements" id="reqLabel">Мұғалімнің талабы (опционал)</label>
-        <textarea id="requirements" rows="3" maxlength="4000" placeholder="Мысалы: кемінде 10 слайд, әр слайдта 40 сөзден аспасын, соңында әдебиеттер тізімі"></textarea>
-        <div class="hint">Талаптар тексеріліп, орындалмағаны болса автоматты түзетіліп қайта тексеріледі</div>
+      <!-- ── 3-қадам: титул (бәрі міндетті емес) + баға ── -->
+      <div class="wiz-step hidden" data-step="3">
+        <h2 class="wiz-h">Титул парағы</h2>
+        <p class="wiz-sub">Бәрі міндетті емес — бос қалса, титулда жазылмайды.</p>
+        <div class="wiz-preview ai-only hidden" id="wizPreview"><img alt="" id="wizPreviewImg"></div>
+        <input type="text" id="performedBy" class="field" maxlength="120" placeholder="Орындаған: аты-жөні (бірнешеу болса үтірмен)" />
+        <input type="text" id="checkedBy" class="field" maxlength="120" placeholder="Тексерген: оқытушы аты-жөні" />
+        <details class="fold">
+          <summary>Университет, факультет, топ <span>қосу ›</span></summary>
+          <input type="text" id="university" class="field" maxlength="100" placeholder="Университет" />
+          <input type="text" id="faculty" class="field" maxlength="80" placeholder="Факультет" />
+          <input type="text" id="department" class="field" maxlength="80" placeholder="Кафедра" />
+          <input type="text" id="groupName" class="field" maxlength="40" placeholder="Топ" />
+          <input type="text" id="city" class="field referat-only hidden" maxlength="40" placeholder="Қала (титулдың төменгі жағы)" />
+        </details>
+        <details class="fold not-template">
+          <summary id="reqLabel">Мұғалімнің талабы <span>қосу ›</span></summary>
+          <textarea id="requirements" rows="3" maxlength="4000" placeholder="Мысалы: кемінде 10 слайд, әр слайдта 40 сөзден аспасын, соңында әдебиеттер тізімі"></textarea>
+          <div class="hint" id="reqHint">Бот талаптарды тексеріп, орындалмағанын өзі түзетеді.</div>
+        </details>
+        <div class="wiz-sum" id="wizSum"></div>
       </div>
 
-      <div class="card compact">
-        <label class="label" id="audienceLabel">Аудитория (опционал)</label>
-        <input id="audience" type="text" placeholder="Студенттер, инвесторлар, команда..." maxlength="120" />
+      <!-- төменгі батырмалар -->
+      <div class="wiz-nav">
+        <button type="button" class="btn ghost hidden" id="wizBack">← Артқа</button>
+        <button type="button" class="btn primary block" id="wizNext">Әрі қарай →</button>
+        <button id="btnGenerate" class="btn primary block hidden">
+          <span class="btn-icon">✨</span>
+          <span id="btnGenText">Презентация жасау</span>
+          <small class="btn-sub" id="genHint">1 кредит</small>
+        </button>
       </div>
-
-      <button id="btnGenerate" class="btn primary block">
-        <span class="btn-icon">✨</span>
-        <span id="btnGenText">Презентация жасау</span>
-      </button>
-      <p class="hint" id="genHint">1 кредит = 1 презентация · Сапа қақпасымен</p>
     </section>
+
+    <!-- СТИЛЬДІҢ ТОЛЫҚ КӨРІНІСІ -->
+    <div id="stylePreview" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="sp-card">
+        <div class="sp-head"><b id="spName">Стиль</b><button type="button" class="btn ghost small" id="spClose">✕</button></div>
+        <div class="sp-strip" id="spStrip"></div>
+        <button type="button" class="btn primary block" id="spPick">Осы стильді таңдау</button>
+      </div>
+    </div>
 
     <!-- PROGRESS (overlay) -->
     <div id="progressOverlay" class="overlay hidden">

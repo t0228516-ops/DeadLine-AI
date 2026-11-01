@@ -259,3 +259,48 @@ label.btn { display: flex; align-items: center; justify-content: center; cursor:
 .adm-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 16px; }
 .tabs .tab.hidden { display: none; }
 .adm-sheet .adm-grid { margin-top: 10px; }
+
+/* ── 3 қадамды «Жасау» беті (2026-11) ── */
+.cred-word { font-weight: 500; color: var(--hint); font-size: 12px; }
+.seg { display: flex; background: var(--bg2); border-radius: 12px; padding: 4px; margin-bottom: 14px; gap: 2px; }
+.seg-btn { flex: 1; border: 0; background: transparent; color: var(--hint); padding: 9px 4px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.seg-btn.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.wiz-steps { display: flex; gap: 6px; margin-bottom: 6px; }
+.wiz-steps i { flex: 1; height: 4px; border-radius: 4px; background: rgba(127,127,140,.28); }
+.wiz-steps i.on { background: var(--btn); }
+.wiz-label { font-size: 11px; color: var(--hint); font-weight: 700; letter-spacing: .06em; margin-bottom: 12px; }
+.wiz-h { font-size: 24px; line-height: 1.15; letter-spacing: -.02em; margin-bottom: 6px; }
+.wiz-sub { color: var(--hint); font-size: 14px; line-height: 1.4; margin-bottom: 14px; }
+.wiz-topic { width: 100%; min-height: 120px; font-size: 17px; line-height: 1.35; border: 1.5px solid var(--btn) !important; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper .input-number { flex: 1; min-width: 0; padding-left: 0; padding-right: 0; }
+.step-btn { flex: none; width: 36px; height: 36px; border-radius: 10px; border: 0; background: var(--bg); color: var(--text); font-size: 20px; cursor: pointer; }
+.examples { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hint-left { font-size: 12px; color: var(--hint); width: 100%; }
+.ex-chip { border: 1px solid rgba(127,127,140,.35); background: transparent; color: var(--text); border-radius: 999px; padding: 6px 11px; font-size: 13px; cursor: pointer; }
+.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.g-auto { grid-column: 1 / 3; text-align: left; background: var(--bg2); border: 2px solid transparent; color: var(--text); border-radius: 12px; padding: 12px; font-size: 14px; cursor: pointer; }
+.g-card { position: relative; background: var(--bg2); border: 2px solid transparent; border-radius: 12px; overflow: hidden; padding: 0; color: var(--text); text-align: left; cursor: pointer; }
+.g-card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.g-name { display: flex; justify-content: space-between; gap: 6px; padding: 7px 9px; font-size: 13px; font-weight: 600; }
+.g-name small { color: var(--hint); font-weight: 500; }
+.g-card.active, .g-auto.active { border-color: var(--btn); }
+.g-card.active::after { content: "✓"; position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--btn); color: #fff; display: grid; place-items: center; font-size: 14px; }
+.field { width: 100%; margin-bottom: 8px; }
+.fold { background: var(--bg2); border-radius: 12px; padding: 0 12px; margin-bottom: 8px; }
+.fold summary { list-style: none; cursor: pointer; padding: 13px 0; font-size: 15px; display: flex; justify-content: space-between; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary span { color: var(--hint); font-size: 13px; }
+.fold[open] summary span { visibility: hidden; }
+.fold[open] { padding-bottom: 10px; }
+.wiz-preview { border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
+.wiz-preview img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.wiz-sum { background: rgba(91,124,250,.12); border: 1px solid rgba(91,124,250,.35); border-radius: 12px; padding: 11px 13px; font-size: 13px; line-height: 1.5; margin-top: 6px; }
+.wiz-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.btn-sub { display: block; width: 100%; font-weight: 500; font-size: 12px; opacity: .85; }
+#btnGenerate { flex-wrap: wrap; }
+.sp-card { background: var(--bg); border-radius: 18px; padding: 14px; width: min(520px, 94vw); max-height: 90vh; overflow: auto; }
+.sp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.sp-strip { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.sp-strip img { width: 100%; border-radius: 10px; display: block; aspect-ratio: 16 / 9; }
+.wiz-step > .field, .wiz-topic { background: var(--bg2); }

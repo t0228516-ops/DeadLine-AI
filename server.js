@@ -102,6 +102,8 @@ app.use('/webapp', express.static(WEBAPP_DIR, {
 const JOBS_DIR = process.env.JOBS_DIR || path.join(__dirname, 'jobs');
 // ─── Тегін бірінші презентация — алынып тасталды (иесінің шешімі). Бұрын басталған тегін жұмыстар ғана осы шекпен аяқталады ───
 const FREE_MAX_SLIDES = 10;
+// Mini App стиль галереясындағы жүйелер (webapp/styles/<id>-1..3.jpg)
+const GALLERY_DESIGNS = new Set(['bordeaux', 'northline', 'poster', 'regalia', 'vivid', 'heritage']);
 const madeInUrl = () => (process.env.BOT_USERNAME ? `https://t.me/${process.env.BOT_USERNAME}?start=madein` : null);
 const speechFile = (jobId) => path.join(JOBS_DIR, String(jobId).replace(/[^\w-]/g, ''), 'speech.docx');
 fs.mkdirSync(JOBS_DIR, { recursive: true });
@@ -380,7 +382,7 @@ app.post('/api/generate', authMiddleware, async (req, res) => {
   let testerHold = null; // тестер-кредит алынды, бірақ жұмыс әлі жасалмады → қате болса қайтарылады
   try {
     const chatId = String(req.tgUser.id);
-    const { topic, slideCount, language, style, audience, performedBy, checkedBy, mode, pages, university, faculty, department, group, city, refId, requirements, materialIds, sampleId, learnConsent } = req.body || {};
+    const { topic, slideCount, language, style, audience, performedBy, checkedBy, mode, pages, university, faculty, department, group, city, refId, requirements, materialIds, sampleId, learnConsent, design } = req.body || {};
     const PRESENTATION_MODES = new Set(['presentation', 'template']);
     const genMode = PRESENTATION_MODES.has(String(mode)) ? String(mode) : (mode === 'referat' ? 'referat' : 'presentation');
     const isReferat = genMode === 'referat';
@@ -512,6 +514,8 @@ app.post('/api/generate', authMiddleware, async (req, res) => {
       tester: isTester,
       language: language || 'kk',
       style: style || null,
+      // Mini App галереясынан таңдалған дизайн жүйесі (тек тізімдегілер; әйтпесе — бот өзі таңдайды)
+      design: genMode === 'presentation' && GALLERY_DESIGNS.has(String(design || '')) ? String(design) : null,
       audience: audience || null,
       userInput,
       mode: genMode,
@@ -991,7 +995,16 @@ async function executeJob(jobId) {
     let library = null;
     // ұзын презентация (12-ден көп слайд) — шаблонның 8–10 макеті жетпей, мәтін қораптарға шатасып түседі: боттың өз макеттері
     const LIB_MAX_SLIDES = Number(process.env.LIBRARY_MAX_SLIDES) || 12;
-    if (!referencePptx && (job.payload?.mode || 'presentation') === 'presentation'
+    // студент галереядан стиль таңдаса — дәл сол жүйе (кітапхана шаблоны да, «соңғысы қайталанбасын» ережесі де қолданылмайды)
+    const chosenDesign = (() => {
+      const id = job.payload?.design;
+      if (!id) return null;
+      const sys = require('./products/presentation/design/systems').SYSTEMS[id];
+      if (!sys) return null;
+      const mood = (sys.moodFor && sys.moodFor(String(job.payload?.topic || ''))) || sys.moods[0];
+      return { system: id, mood };
+    })();
+    if (!referencePptx && !chosenDesign && (job.payload?.mode || 'presentation') === 'presentation'
       && !(Number(job.payload?.slideCount) > LIB_MAX_SLIDES)
       && libraryCore.eligible({ tester: !!job.payload?.tester, admin: isAdminId(chatId) })) {
       try {
@@ -1005,6 +1018,7 @@ async function executeJob(jobId) {
     }
     const genOpts = (lib) => ({
       ...avoid,
+      designForce: lib ? undefined : (chosenDesign || undefined),
       library: lib,
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },

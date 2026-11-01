@@ -142,3 +142,19 @@ test('bordeaux / northline: designer-template compositions and fonts are used on
   const other = build3DPresentationHTML(deck('ivory'), 'Хандық', { system: 'swiss' });
   assert.doesNotMatch(other, /cx-(bx|nl)-|Playfair Bold|Montserrat Bold/);
 });
+
+test('Mini App style gallery: every listed design is a real system with three preview images', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const SYS = require('../products/presentation/design/systems');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'webapp', 'app.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  const ids = [...app.match(/const STYLES = \[([\s\S]*?)\];/)[1].matchAll(/id: '(\w+)'/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 6);
+  const allowed = server.match(/GALLERY_DESIGNS = new Set\(\[([^\]]*)\]\)/)[1];
+  for (const id of ids) {
+    assert.ok(SYS.SYSTEMS[id], id);
+    assert.ok(allowed.includes(`'${id}'`), 'server whitelist: ' + id);
+    for (const n of [1, 2, 3]) assert.ok(fs.existsSync(path.join(__dirname, '..', 'webapp', 'styles', `${id}-${n}.jpg`)), `${id}-${n}.jpg`);
+  }
+});

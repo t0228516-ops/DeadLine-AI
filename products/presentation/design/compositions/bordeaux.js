@@ -54,7 +54,7 @@ module.exports = function register(def, K) {
           '<div style="position:absolute;left:142px;bottom:' + MB + 'px;width:900px">' + metaHtml + '</div>';
         return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide cx-cover bx-slide' };
       }
-      const bg = plate + texture(a, 0, 460, W, 620) + corners(p) + hero(ctx, env, 660, 470, 600, 610, 3);
+      const bg = plate + texture(a, 0, 460, W, 620) + corners(p) + hero(ctx, env, 780, 700, 360, 380, 3);
       const fg = wrap(260, 112, 1400, '<div style="text-align:center">' + pill(ctx) + '</div><div style="height:26px"></div>' +
         title(ctx, a.title, 1400, 3, [180, 156, 136, 118, 100, 88], { cls: 'center' }) + H.lead(ctx, a.subtitle, 30, { maxw: 1100, cls: 'cx-center' })) +
         '<div style="position:absolute;left:' + MX + 'px;bottom:' + MB + 'px;width:560px">' + metaHtml + '</div>';

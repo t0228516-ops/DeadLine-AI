@@ -12,10 +12,12 @@
 
   const state = {
     me: null,
-    slideCount: 8,
+    slideCount: 10,
     language: 'kk',
     mode: 'presentation',
     style: '',
+    design: '',      // галереядан таңдалған дизайн жүйесі ('' — бот өзі таңдайды)
+    step: 1,
     currentJobId: null,
     pollTimer: null,
   };
@@ -87,7 +89,14 @@
     state.slideCount = clamped;
   });
   bindChips('#langChips', 'language');
-  bindChips('#modeChips', 'mode');
+  $('#modeChips').addEventListener('click', (e) => {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    $$('#modeChips .seg-btn').forEach((x) => x.classList.toggle('active', x === b));
+    state.mode = b.dataset.v;
+    applyMode();
+    goStep(1);
+  });
 
   function applyMode() {
     const mode = state.mode;
@@ -96,54 +105,136 @@
     const isAi = mode === 'presentation';
 
     $$('.referat-only').forEach((el) => el.classList.toggle('hidden', !isReferat));
-    $$('.ai-req').forEach((el) => el.classList.toggle('hidden', !isAi));
+    $$('.ai-only').forEach((el) => el.classList.toggle('hidden', !isAi));
     $$('.tpl-only').forEach((el) => el.classList.toggle('hidden', !isTemplate));
+    $$('.not-template').forEach((el) => el.classList.toggle('hidden', isTemplate));
     $$('.lang-card').forEach((el) => el.classList.toggle('hidden', isTemplate)); // шаблонда аударудың керегі жоқ
 
     $('#countLabel').textContent = isReferat ? 'Бет саны' : 'Слайд саны';
     $('#countHint').textContent = isReferat ? '5–30 аралығында' : '5–15 аралығында';
-    $('#audienceLabel').textContent = isReferat ? 'Қосымша талаптар (опционал)' : 'Аудитория (опционал)';
-    $('#audience').placeholder = isReferat ? 'Мысалы: 3 тарау, тек қазақстандық мысалдар...' : 'Студенттер, инвесторлар, команда...';
+    // Реферат: «қосымша талаптар» сол өрісте (бұрын «Аудитория» өрісінде болатын)
+    $('#reqLabel').firstChild.textContent = isReferat ? 'Қосымша талаптар ' : 'Мұғалімнің талабы ';
+    $('#requirements').placeholder = isReferat
+      ? 'Мысалы: 3 тарау, тек қазақстандық мысалдар, 15 дереккөз'
+      : 'Мысалы: кемінде 10 слайд, әр слайдта 40 сөзден аспасын, соңында әдебиеттер тізімі';
     $('#btnGenText').textContent = isReferat ? 'Реферат жасау' : 'Презентация жасау';
-    $('#genHint').textContent = isReferat
-      ? '1 кредит = 1 реферат · Word (.docx), ГОСТ форматы'
-      : '1 кредит = 1 презентация · Сапа қақпасымен';
 
-    $('#topicLabel').textContent = isTemplate ? 'Жаңа тақырып (шаблонға салынады)' : 'Тақырып';
+    $('#topicLabel').textContent = isTemplate ? 'Шаблонға қандай тақырып жазамыз?' : isReferat ? 'Реферат не туралы?' : 'Презентация не туралы?';
     $('#topic').placeholder = isTemplate
       ? 'Мысалы: Қазақстан экономикасының даму кезеңдері'
       : 'Мысалы: Жасанды интеллекттің білім берудегі рөлі';
     $('#modeHint').textContent = isTemplate
-      ? 'Өзіңіз таңдаған .pptx шаблон: түсі, шрифті, суреттері сол күйі қалады — бот тек мәтінді сіздің тақырыбыңызға жазады. Файл PowerPoint-те өңделеді.'
+      ? 'Өзіңіз таңдаған .pptx шаблонның түсі, шрифті, суреттері сол күйі қалады — бот тек мәтінді жазады.'
       : isReferat
-        ? 'Word (.docx) реферат. Мұғалім қабылдаған үлгіні жүктесеңіз — сол үлгідей жазылады.'
-        : 'Тақырыпты жазсаңыз болды: құрылым, мәтін, сурет, дизайн — бәрін AI өзі жасайды.';
-    $('#tplPromo').classList.toggle('hidden', !isAi);
+        ? 'Word (.docx) реферат, ГОСТ форматында. Мұғалім қабылдаған үлгіні келесі қадамда жүктей аласыз.'
+        : 'Тақырыпты жазыңыз — құрылым, мәтін, сурет, дизайнды бот өзі жасайды.';
 
     const input = $('#slideCountInput');
     input.max = isReferat ? 30 : 15;
-    input.value = isReferat ? 10 : 8;
-    state.slideCount = parseInt(input.value, 10);
+    input.value = 10;
+    state.slideCount = 10;
     $('#btnGenerate').disabled = false;
   }
-  $('#modeChips').addEventListener('click', () => setTimeout(applyMode, 0));
   function selectMode(v) {
-    const chip = $(`#modeChips .chip[data-v="${v}"]`);
-    if (chip) chip.click();
+    const b = $(`#modeChips .seg-btn[data-v="${v}"]`);
+    if (b) b.click();
   }
-  $('#tplPromo').addEventListener('click', () => {
-    selectMode('template');
-    haptic('light');
-    const card = $('.tpl-only');
-    if (card) setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
-  });
   // Сілтеме арқылы бірден шаблон режимі: .../webapp/#template немесе startapp=template
   try {
     const sp = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.start_param) || '';
     if (/template/.test(location.hash) || sp === 'template') setTimeout(() => selectMode('template'), 0);
   } catch {}
-  bindChips('#styleChips', 'style');
+
+  // ── Слайд саны: −/+ ───────────────────────────────────────────────────
+  $('#countMinus').addEventListener('click', () => { slideInput.value = clampSlideCount(+slideInput.value - 1); state.slideCount = +slideInput.value; });
+  $('#countPlus').addEventListener('click', () => { slideInput.value = clampSlideCount(+slideInput.value + 1); state.slideCount = +slideInput.value; });
+
+  // ── Тақырып мысалдары ─────────────────────────────────────────────────
+  $('#examples').addEventListener('click', (e) => {
+    const b = e.target.closest('.ex-chip');
+    if (!b) return;
+    $('#topic').value = b.textContent;
+    $('#charCount').textContent = b.textContent.length;
+    haptic('light');
+  });
+
+  // ── Стиль галереясы (суреттер — webapp/styles/<id>-1..3.jpg, алдын ала салынған) ──
+  const STYLES = [
+    { id: 'bordeaux', name: 'Бордо', tag: 'тарих' },
+    { id: 'northline', name: 'Корпоратив', tag: 'жалпы' },
+    { id: 'poster', name: 'Плакат', tag: 'батыл' },
+    { id: 'regalia', name: 'Салтанат', tag: 'әдебиет' },
+    { id: 'vivid', name: 'Жарқын', tag: 'заманауи' },
+    { id: 'heritage', name: 'Мұра', tag: 'классика' },
+  ];
+  const styleName = (id) => (STYLES.find((x) => x.id === id) || {}).name || 'Авто';
+  (function buildGallery() {
+    const g = $('#styleGallery');
+    g.insertAdjacentHTML('beforeend', STYLES.map((st) =>
+      `<button type="button" class="g-card" data-v="${st.id}"><img src="styles/${st.id}-1.jpg" alt="" loading="lazy"><span class="g-name">${st.name}<small>${st.tag}</small></span></button>`).join(''));
+    g.addEventListener('click', (e) => {
+      const b = e.target.closest('.g-card, .g-auto');
+      if (!b) return;
+      if (b.classList.contains('g-auto')) { pickDesign(''); return; }
+      openStylePreview(b.dataset.v);
+    });
+  })();
+  function pickDesign(id) {
+    state.design = id;
+    $$('#styleGallery .g-card, #styleGallery .g-auto').forEach((x) => x.classList.toggle('active', (x.dataset.v || '') === id));
+    haptic('light');
+  }
+  let previewId = '';
+  function openStylePreview(id) {
+    previewId = id;
+    $('#spName').textContent = styleName(id);
+    $('#spStrip').innerHTML = [1, 2, 3].map((n) => `<img src="styles/${id}-${n}.jpg" alt="">`).join('');
+    $('#stylePreview').classList.remove('hidden');
+  }
+  $('#spPick').addEventListener('click', () => { pickDesign(previewId); $('#stylePreview').classList.add('hidden'); });
+  $('#spClose').addEventListener('click', () => $('#stylePreview').classList.add('hidden'));
+
+  // ── Қадамдар ──────────────────────────────────────────────────────────
+  const STEP_LABEL = { 1: 'ТАҚЫРЫП', 2: { presentation: 'СТИЛЬ', template: 'ШАБЛОН', referat: 'ҮЛГІ' }, 3: 'ТИТУЛ ПАРАҒЫ' };
+  function goStep(n) {
+    state.step = n;
+    $$('.wiz-step').forEach((el) => el.classList.toggle('hidden', +el.dataset.step !== n));
+    $$('.wiz-steps i').forEach((el, i) => el.classList.toggle('on', i < n));
+    const lab = n === 2 ? STEP_LABEL[2][state.mode] : STEP_LABEL[n];
+    $('#wizLabel').textContent = `${n} / 3 · ${lab}`;
+    $('#wizBack').classList.toggle('hidden', n === 1);
+    $('#wizNext').classList.toggle('hidden', n === 3);
+    $('#btnGenerate').classList.toggle('hidden', n !== 3);
+    $('#wizNext').textContent = n === 1 ? (state.mode === 'presentation' ? 'Әрі қарай → Стиль таңдау' : state.mode === 'template' ? 'Әрі қарай → Шаблон жүктеу' : 'Әрі қарай → Үлгі реферат')
+      : 'Әрі қарай → Титул парағы';
+    if (n === 3) renderSummary();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  $('#wizNext').addEventListener('click', () => {
+    if (state.step === 1 && $('#topic').value.trim().length < 3) { haptic('error'); return showToast('Тақырыпты жазыңыз'); }
+    if (state.step === 2 && state.mode === 'template' && !state.refId) { haptic('error'); return showToast('Алдымен шаблон (.pptx) жүктеңіз'); }
+    goStep(state.step + 1);
+  });
+  $('#wizBack').addEventListener('click', () => goStep(state.step - 1));
+  function renderSummary() {
+    const lang = { kk: 'қазақша', ru: 'орысша', en: 'ағылшынша' }[state.language] || '';
+    const unit = state.mode === 'referat' ? 'бет' : 'слайд';
+    const what = state.mode === 'referat' ? 'Word (.docx) реферат' : state.mode === 'template' ? 'сіздің шаблоныңыз' : `«${styleName(state.design)}» стилі`;
+    $('#wizSum').textContent = `${state.slideCount} ${unit} · ${lang} · ${what}`;
+    const pv = $('#wizPreview');
+    pv.classList.toggle('hidden', !(state.mode === 'presentation' && state.design));
+    if (state.design) $('#wizPreviewImg').src = `styles/${state.design}-1.jpg`;
+    renderPrice();
+  }
+  function renderPrice() {
+    const me = state.me || {};
+    const tester = !!(me.tester && me.tester.active && me.tester.creditsToday > 0);
+    $('#genHint').textContent = tester ? 'Тест режимі · тегін'
+      : `1 кредит${me.price ? ` · ${me.price} ₸` : ''}${me.credits != null ? ` · қалды: ${me.credits} кредит` : ''}`;
+  }
   applyMode();
+  goStep(1);
+
 
   $('#topic').addEventListener('input', () => {
     $('#charCount').textContent = $('#topic').value.length;
@@ -180,6 +271,7 @@
         $('#plusEach').textContent = `(≈ ${Math.round(me.plus.amount / me.plus.credits)}₸ / дана)`;
       }
       renderTester(me.tester);
+      renderPrice();
       $('#kaspiPhone').textContent = me.kaspi?.phone || '';
       $('#kaspiName').textContent = me.kaspi?.name || '';
       if (me.isAdmin && window.DeadlineAdmin) window.DeadlineAdmin.init({ api, esc, showToast, haptic });
@@ -291,10 +383,11 @@
           topic,
           slideCount: state.slideCount,
           language: state.language,
-          style: state.style || undefined,
-          audience: $('#audience').value.trim() || undefined,
+          design: state.mode === 'presentation' ? (state.design || undefined) : undefined,
+          // реферат: «қосымша талаптар» сервердегі бұрынғы audience өрісімен жүреді (генераторға brief)
+          audience: state.mode === 'referat' ? ((($('#requirements').value || '').trim()) || undefined) : undefined,
           mode: state.mode,
-          requirements: state.mode === 'referat' ? undefined : (($('#requirements').value || '').trim() || undefined),
+          requirements: state.mode === 'presentation' ? (($('#requirements').value || '').trim() || undefined) : undefined,
           materialIds: state.mode === 'template' ? state.materialIds : undefined,
           refId: state.mode === 'template' ? (state.refId || undefined) : undefined,
           learnConsent: state.mode === 'template' && state.refId ? !!state.learnConsent : undefined,
@@ -537,6 +630,7 @@
   $('#btnNew').addEventListener('click', () => {
     $('#resultCard').classList.add('hidden');
     state.currentJobId = null;
+    goStep(1);
   });
 
   async function download(jobId, type) {
