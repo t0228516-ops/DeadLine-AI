@@ -8,7 +8,7 @@
  *   2. ROUTE — one-page cheat sheet: slide → key idea → cue words (tell it from cues, not from a text);
  *   3. SAY — speaking tips + per slide the key idea, cue words and the spoken text;
  *   4. DEFEND — questions a teacher may ask, with answers, and what to do when you don't know;
- *   5. CHECK — the class quiz as a self-test (answers on a separate page) + how to play it with the class.
+ *   5. CHECK — the class quiz as a self-test (answers on a separate page) + how to play it with the group.
  */
 const { packDocx, para, run } = require('../referat/docx');
 const { speakingMinutes } = require('./speakerNotes');
@@ -31,7 +31,7 @@ const L10N = {
     tipsTitle: 'Сөйлеу кеңестері',
     tips: [
       'Сәлемдесіп, тақырыпты бір сөйлеммен атаңыз — алғашқы 20 секунд бүкіл баяндаманың әсерін анықтайды.',
-      'Экранға емес, сыныпқа қараңыз. Слайдты оқымаңыз — оны тыңдаушылар өздері оқиды, сіз түсіндіресіз.',
+      'Экранға емес, топқа қараңыз. Слайдты оқымаңыз — оны тыңдаушылар өздері оқиды, сіз түсіндіресіз.',
       'Баяу сөйлеңіз. Кідіріс — қате емес: ұмытып қалсаңыз, кілт сөзге қарап, сабырмен жалғастырыңыз.',
       'Сан айтқанда оның мәнін түсіндіріңіз: «бұл әр үшінші адам деген сөз».',
       'Соңында 2–3 басты қорытындыны қайталап, рахмет айтып, сұрақтарға шақырыңыз.',
@@ -40,10 +40,10 @@ const L10N = {
     unknown: 'Жауабын білмесеңіз: «Жақсы сұрақ. Мен білетінім — …» деп, тақырыптан білетініңізді айтыңыз. Ойдан сан не дерек құрастырмаңыз — «бұны нақтылап, кейін айтамын» деу әлдеқайда жақсы.',
     s5: '5. Өзіңді тексер: квиз', quizHint: '10 сұраққа жауап беріп, келесі беттегі жауаптармен салыстыр. 8-ден көп дұрыс болса — дайынсыз.',
     answers: 'Жауаптар',
-    classTitle: 'Квизді сыныппен ойнау',
-    classQuiz: 'Презентацияның соңғы слайдында QR код тұр. Баяндаманы аяқтаған соң ботпен келген «🎮 Квизді басқару» батырмасын (не соңғы слайдтағы «Квизді бастау» батырмасын) басыңыз — ойынды сіз бастайсыз, келесі сұраққа да сіз өткізесіз. Сынып QR кодты телефон камерасымен сканерлеп, атын жазып қосылады. Ойын кезінде дұрыс-қатесі көрсетілмейді — бәрі соңында: алдымен үздіктер, сосын «Жауаптарды талдау» (әр сұрақтың дұрыс жауабы, сыныптың неше пайызы тапқаны, түсіндірме). Сынып ең қиналған сұрақ белгіленеді — оны қайта түсіндіріп жіберіңіз.',
+    classTitle: 'Квизді топпен ойнау',
+    classQuiz: 'Презентацияның соңғы слайдында QR код тұр. Баяндаманы аяқтаған соң ботпен келген «🎮 Квизді басқару» батырмасын (не соңғы слайдтағы «Квизді бастау» батырмасын) басыңыз — ойынды сіз бастайсыз, келесі сұраққа да сіз өткізесіз. Топ QR кодты телефон камерасымен сканерлеп, атын жазып қосылады. Ойын кезінде дұрыс-қатесі көрсетілмейді — бәрі соңында: алдымен үздіктер, сосын «Жауаптарды талдау» (әр сұрақтың дұрыс жауабы, топтың неше пайызы тапқаны, түсіндірме). Топ ең қиналған сұрақ белгіленеді — оны қайта түсіндіріп жіберіңіз.',
     hostLink: 'Батырма ашылмаса, проектордағы компьютердің браузерінде мына сілтемені ашыңыз:',
-    playerLink: 'Сыныпқа арналған сілтеме (QR кодпен бірдей):',
+    playerLink: 'Топқа арналған сілтеме (QR кодпен бірдей):',
   },
   ru: {
     doc: 'ПОДГОТОВКА К ДОКЛАДУ', topic: 'Тема', speaker: 'Докладчик', group: 'Группа',
@@ -62,7 +62,7 @@ const L10N = {
     tipsTitle: 'Советы для выступления',
     tips: [
       'Поздоровайтесь и назовите тему одним предложением — первые 20 секунд задают впечатление от всего доклада.',
-      'Смотрите на класс, а не на экран. Не читайте слайд — его прочитают сами, а вы объясняете.',
+      'Смотрите на группу, а не на экран. Не читайте слайд — его прочитают сами, а вы объясняете.',
       'Говорите медленно. Пауза — не ошибка: если забыли, посмотрите на ключевое слово и спокойно продолжайте.',
       'Называя число, объясните его смысл: «это каждый третий человек».',
       'В конце повторите 2–3 главных вывода, поблагодарите и пригласите задавать вопросы.',
@@ -71,10 +71,10 @@ const L10N = {
     unknown: 'Если не знаете ответа: скажите «Хороший вопрос. Что я знаю — …» и расскажите, что знаете по теме. Не придумывайте цифры и факты — честное «уточню и отвечу позже» намного лучше.',
     s5: '5. Проверь себя: квиз', quizHint: 'Ответь на 10 вопросов и сверься с ответами на следующей странице. Больше 8 верных — вы готовы.',
     answers: 'Ответы',
-    classTitle: 'Квиз вместе с классом',
-    classQuiz: 'На последнем слайде презентации есть QR-код. После доклада нажмите кнопку «🎮 Квизді басқару» из сообщения бота (или «Начать квиз» на последнем слайде) — игру начинаете вы, и к следующему вопросу переходите тоже вы. Класс сканирует QR-код камерой телефона и вводит имя. Во время игры верно/неверно не показывается — всё в конце: сначала лучшие, затем «Разбор ответов» (верный ответ, сколько процентов класса ответили верно, объяснение). Самый трудный для класса вопрос отмечен — объясните его ещё раз.',
+    classTitle: 'Квиз вместе с группой',
+    classQuiz: 'На последнем слайде презентации есть QR-код. После доклада нажмите кнопку «🎮 Квизді басқару» из сообщения бота (или «Начать квиз» на последнем слайде) — игру начинаете вы, и к следующему вопросу переходите тоже вы. Группа сканирует QR-код камерой телефона и вводит имя. Во время игры верно/неверно не показывается — всё в конце: сначала лучшие, затем «Разбор ответов» (верный ответ, сколько процентов группы ответили верно, объяснение). Самый трудный для группы вопрос отмечен — объясните его ещё раз.',
     hostLink: 'Если кнопка не открывается, откройте эту ссылку в браузере компьютера с проектором:',
-    playerLink: 'Ссылка для класса (то же, что QR-код):',
+    playerLink: 'Ссылка для группы (то же, что QR-код):',
   },
   en: {
     doc: 'PRESENTATION PREP', topic: 'Topic', speaker: 'Speaker', group: 'Group',
@@ -92,8 +92,8 @@ const L10N = {
     how: '► — the key idea of the slide. Do not memorise the text: remember the idea and say it in your own words, using the cue words.',
     tipsTitle: 'Speaking tips',
     tips: [
-      'Greet the class and name the topic in one sentence — the first 20 seconds set the tone for the whole talk.',
-      'Look at the class, not at the screen. Do not read the slide — they can read it; you explain.',
+      'Greet the group and name the topic in one sentence — the first 20 seconds set the tone for the whole talk.',
+      'Look at the group, not at the screen. Do not read the slide — they can read it; you explain.',
       'Speak slowly. A pause is not a mistake: if you forget, glance at a cue word and calmly go on.',
       'When you give a number, say what it means: "that is one person in three".',
       'At the end repeat the 2–3 main conclusions, thank the audience and invite questions.',
@@ -102,10 +102,10 @@ const L10N = {
     unknown: 'If you do not know: say "Good question. What I know is…" and tell what you do know about the topic. Never invent numbers or facts — an honest "I will check and come back to you" is much better.',
     s5: '5. Check yourself: quiz', quizHint: 'Answer the 10 questions and compare with the answers on the next page. More than 8 right — you are ready.',
     answers: 'Answers',
-    classTitle: 'Play the quiz with the class',
-    classQuiz: 'The last slide of the presentation has a QR code. After the talk tap "🎮 Квизді басқару" in the bot’s message (or "Start quiz" on the last slide) — you start the game and you move to each next question. The class scans the QR code with their phone cameras and types a name. Right or wrong is not shown during the game — everything comes at the end: first the top players, then "Review answers" (the right answer, what share of the class got it, a short explanation). The hardest question for the class is marked — explain it once more.',
+    classTitle: 'Play the quiz with the group',
+    classQuiz: 'The last slide of the presentation has a QR code. After the talk tap "🎮 Квизді басқару" in the bot’s message (or "Start quiz" on the last slide) — you start the game and you move to each next question. The group scans the QR code with their phone cameras and types a name. Right or wrong is not shown during the game — everything comes at the end: first the top players, then "Review answers" (the right answer, what share of the group got it, a short explanation). The hardest question for the group is marked — explain it once more.',
     hostLink: 'If the button does not open, open this link in the browser of the projector computer:',
-    playerLink: 'Link for the class (same as the QR code):',
+    playerLink: 'Link for the group (same as the QR code):',
   },
 };
 

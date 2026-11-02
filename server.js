@@ -37,7 +37,7 @@ const ADMIN_IDS = String(process.env.ADMIN_CHAT_ID || '').split(',').map((x) => 
 const isAdminId = (id) => ADMIN_IDS.includes(String(id));
 const MAINTENANCE = /^(1|true|on)$/i.test(String(process.env.MAINTENANCE || ''));
 const WEBAPP_URL = process.env.WEBAPP_URL || `http://localhost:${PORT}`;
-// Сыныпқа квиз: QR пен «Квизді бастау» батырмасы осы мекенжайға апарады (жария https керек; жоқ болса — квиз қосылмайды)
+// Топқа квиз: QR пен «Квизді бастау» батырмасы осы мекенжайға апарады (жария https керек; жоқ болса — квиз қосылмайды)
 // Канал (нұсқаулық видео, жаңалықтар): әр презентацияның астында жіберіледі
 const CHANNEL_URL = (process.env.CHANNEL_URL || 'https://t.me/deadline_ai').trim();
 const QUIZ_BASE_URL = (process.env.QUIZ_BASE_URL || process.env.WEBAPP_URL || '').replace(/\/+$/, '');
@@ -93,7 +93,7 @@ const sendIndex = (req, res) => {
   } catch (e) { res.status(500).send('webapp error'); }
 };
 app.get(['/webapp', '/webapp/', '/webapp/index.html'], sendIndex);
-// Сыныпқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
+// Топқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
 app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz, addQuizResults, listQuizResults }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts') }));
 app.use('/webapp', express.static(WEBAPP_DIR, {
   index: false,
@@ -1029,7 +1029,7 @@ async function executeJob(jobId) {
       // таңдалған сәтте жадқа жазамыз — студенттің қатар жіберген екінші тапсырысы сол дизайнды алмасын
       onDesign: (d) => { if (d && d.system) pushDesignMemory(chatId, { system: d.system, mood: d.mood }).catch(() => {}); },
       language: job.payload?.language,
-      // Сыныпқа квиз + «Баяндамаға дайындық» — барлық клиентке (иесінің шешімі, 2026-11-01)
+      // Топқа квиз + «Баяндамаға дайындық» — барлық клиентке (иесінің шешімі, 2026-11-01)
       pedagogy: true,
       quiz: QUIZ_BASE_URL ? { baseUrl: QUIZ_BASE_URL } : null,
       mode: lib ? 'template' : (job.payload?.mode || 'presentation'),
@@ -1104,7 +1104,7 @@ async function executeJob(jobId) {
       try { fs.unlinkSync(result.speechPath); } catch {}
     }
 
-    // Сыныпқа квиз: слайдтағы QR осы кодқа апарады → базаға (30 күн)
+    // Топқа квиз: слайдтағы QR осы кодқа апарады → базаға (30 күн)
     if (result.quiz) {
       try {
         await saveQuiz({ ...result.quiz, chatId, jobId, expiresAt: Date.now() + require('./core/quiz').QUIZ_TTL_MS });
@@ -1193,7 +1193,7 @@ async function executeJob(jobId) {
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             }).catch((e) => console.warn('[Job] speech send failed', e.message));
           }
-          // Сыныпқа квиз: сілтемелер Telegram арқылы — сынып сілтемесі (топ чатына) + басқару беті (тек баяндамашыға)
+          // Топқа квиз: сілтемелер Telegram арқылы — топ сілтемесі (топ чатына) + басқару беті (тек баяндамашыға)
           if (result.quiz && result.quiz.links) await sendQuizLinks(chatId, result.quiz).catch((e) => console.warn('[Job] quiz links send failed', e.message));
           // квиз жоқ болса да — канал сілтемесі әр презентацияның астында (иесінің шешімі)
           else if (CHANNEL_URL) await global.__deadlineBot.sendMessage(chatId, `📢 Жаңалықтар мен нұсқаулықтар (квизді қалай ойнау т.б.): ${CHANNEL_URL}`, { disable_web_page_preview: true }).catch(() => {});
@@ -1271,21 +1271,21 @@ function removeOldFiles(dir, cutoff, keep = new Set()) {
   return n;
 }
 
-/** Квиз сілтемелері ботпен: «📤 Сыныпқа жіберу» (Telegram бөлісу терезесі) + «🎮 Квизді басқару» (бастау, келесі сұрақ, нәтижелер) */
+/** Квиз сілтемелері ботпен: «📤 Топқа жіберу» (Telegram бөлісу терезесі) + «🎮 Квизді басқару» (бастау, келесі сұрақ, нәтижелер) */
 async function sendQuizLinks(chatId, quiz) {
   if (!global.__deadlineBot || !quiz || !quiz.links) return;
   const n = (quiz.questions || []).length || 10;
   const shareText = `🎯 Квиз: «${String(quiz.topic || '').slice(0, 120)}» — сілтемені ашып, атыңызды жазыңыз`;
   const share = `https://t.me/share/url?url=${encodeURIComponent(quiz.links.player)}&text=${encodeURIComponent(shareText)}`;
-  const text = `🎯 Сыныпқа квиз дайын — ${n} сұрақ.\n\n`
-    + '1️⃣ «📤 Сыныпқа жіберу» — сілтемені топ чатына жіберіңіз (не сынып соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n'
+  const text = `🎯 Топқа квиз дайын — ${n} сұрақ.\n\n`
+    + '1️⃣ «📤 Топқа жіберу» — сілтемені топ чатына жіберіңіз (не топ соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n'
     + '2️⃣ «🎮 Квизді басқару» — ойынды СІЗ бастайсыз, келесі сұраққа да сіз өткізесіз. Ноутбукта ашып, проекторға шығарыңыз (телефоннан да болады).\n'
     + '📋 Кім неше сұраққа дұрыс жауап бергені — сол беттегі «Нәтижелер».\n\n'
-    + '⚠️ Басқару сілтемесін сыныпқа жібермеңіз — ол тек сізге.'
+    + '⚠️ Басқару сілтемесін топқа жібермеңіз — ол тек сізге.'
     + (CHANNEL_URL ? `\n\n🎬 Квизді қалай ойнау керек — видео нұсқаулық біздің каналда: ${CHANNEL_URL}` : '');
   await global.__deadlineBot.sendMessage(chatId, text, {
     disable_web_page_preview: true,
-    reply_markup: { inline_keyboard: [[{ text: '📤 Сыныпқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
+    reply_markup: { inline_keyboard: [[{ text: '📤 Топқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
       .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []) },
   });
 }
