@@ -18,15 +18,15 @@ const EMU_PER_PX = 12192000 / BASE_W;          // 6350
 
 const TEXT = {
   kk: {
-    kicker: 'СЫНЫПҚА КВИЗ', title: 'Тексеріп көрейік!', body: (n) => `${n} сұрақ · телефон камерасымен QR кодты сканерлеңіз`,
+    kicker: 'ТОПҚА КВИЗ', title: 'Тексеріп көрейік!', body: (n) => `${n} сұрақ · телефон камерасымен QR кодты сканерлеңіз`,
     button: 'Квизді бастау', hint: 'Көрсету режимінде басыңыз — ойын проекторда ашылады',
   },
   ru: {
-    kicker: 'КВИЗ ДЛЯ КЛАССА', title: 'Проверим себя!', body: (n) => `${n} вопросов · отсканируйте QR-код камерой телефона`,
+    kicker: 'КВИЗ ДЛЯ ГРУППЫ', title: 'Проверим себя!', body: (n) => `${n} вопросов · отсканируйте QR-код камерой телефона`,
     button: 'Начать квиз', hint: 'Нажмите в режиме показа — игра откроется на проекторе',
   },
   en: {
-    kicker: 'CLASS QUIZ', title: "Let's check!", body: (n) => `${n} questions · scan the QR code with your phone camera`,
+    kicker: 'GROUP QUIZ', title: "Let's check!", body: (n) => `${n} questions · scan the QR code with your phone camera`,
     button: 'Start quiz', hint: 'Click it in slide-show mode — the game opens on the projector',
   },
 };
