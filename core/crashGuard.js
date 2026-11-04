@@ -50,6 +50,8 @@ function hardenBot(bot, opts = {}) {
   if (!bot || bot.__hardened) return bot;
   bot.__hardened = true;
   const send = bot.sendMessage.bind(bot);
+  // broadcast үшін: бір адамға тура БІР сұраныс (fallback-сыз) — формат алдын ала бір рет тексеріледі
+  bot.__rawSendMessage = send;
   const blocked = (chatId) => (err) => {
     if (BLOCKED_ERR.test(String((err && err.message) || '')) && opts.onBlocked) opts.onBlocked(chatId);
     throw err;

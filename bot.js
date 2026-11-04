@@ -704,49 +704,75 @@ bot.on('callback_query', async (cq) => {
 });
 
 // ─── /broadcast <хабар> — тек admin, барлық пайдаланушыға жіберу ─────────
+// Бір мезгілде тек бір broadcast (екіншісі бір адамға екі рет жіберер еді).
+// Логика core/broadcast.js-те: формат бір рет тексеріледі, 429 болса күтіп қайталайды, прогресс көрінеді.
+const BC = require('./core/broadcast');
+const { plainText } = require('./core/crashGuard');
+let broadcastBusy = false;
+let lastBroadcast = null; // { body, opts, failed } — /broadcast_retry үшін (процесс қайта қосылғанша)
+
+async function doBroadcast(adminChat, ids, rawText, title) {
+  if (broadcastBusy) return bot.sendMessage(adminChat, '⏳ Алдыңғы broadcast әлі жүріп жатыр — аяқталуын күтіңіз.');
+  broadcastBusy = true;
+  try {
+    const raw = bot.__rawSendMessage || bot.sendMessage.bind(bot);
+    // 1) Формат: админге алдын ала көрініс Markdown-пен; талданбаса — бәріне форматсыз (әр адамға бір сұраныс)
+    let body = rawText, opts = { parse_mode: 'Markdown' };
+    const mode = await BC.decideFormat(() => raw(adminChat, rawText, opts));
+    if (mode === 'plain') {
+      body = plainText(rawText); opts = {};
+      await raw(adminChat, body, opts).catch(() => {});
+    }
+    const targets = [...new Set(ids.map(String))].filter((id) => id !== String(adminChat)); // админ көріністі алды
+    console.log(`[Broadcast] start total=${targets.length} format=${mode}`);
+    const status = await bot.sendMessage(adminChat,
+      `👆 Хабар осылай көрінеді${mode === 'plain' ? ' (Markdown белгілері талданбады — форматсыз жіберіледі)' : ''}.\n\n` +
+      BC.progressText({ done: 0, total: targets.length, sent: 0, blocked: 0, failed: [] }, title));
+    const edit = (s) => bot.editMessageText(BC.progressText(s, title), { chat_id: adminChat, message_id: status.message_id }).catch(() => {});
+
+    const st = await BC.runBroadcast({
+      ids: targets,
+      send: (id) => raw(id, body, opts),
+      onBlocked: (id) => setBlocked(id, true).catch(() => {}),
+      onProgress: edit,
+    });
+    console.log(`[Broadcast] done total=${st.total} sent=${st.sent} blocked=${st.blocked} failed=${st.failed.length} retries=${st.retries}`);
+    lastBroadcast = { body, opts, failed: st.failed };
+    await edit(st);
+    await bot.sendMessage(adminChat,
+      `✅ ${title} аяқталды!\n\n📨 Жеткізілді: ${st.sent}\n⛔ Бұғаттаған/өшірілген: ${st.blocked} (келесі рассылкаға кірмейді)\n❌ Жетпеді: ${st.failed.length}` +
+      (st.failed.length ? '\n\nЖетпегендерге қайта жіберу: /broadcast_retry' : ''));
+  } catch (err) {
+    console.error('[Broadcast] error:', err.message);
+    bot.sendMessage(adminChat, `❌ Broadcast тоқтады: ${err.message}`).catch(() => {});
+  } finally {
+    broadcastBusy = false;
+  }
+}
+
+// /broadcast <хабар> — тек admin, барлық пайдаланушыға
 bot.onText(/\/broadcast ([\s\S]+)/, async (msg, match) => {
   if (String(msg.chat.id) !== String(ADMIN_ID)) return;
-
   const text = match[1].trim();
-  if (!text) {
-    return bot.sendMessage(msg.chat.id, '❌ Хабар мәтінін жазыңыз: /broadcast Мәтін...');
-  }
-
+  if (!text) return bot.sendMessage(msg.chat.id, '❌ Хабар мәтінін жазыңыз: /broadcast Мәтін...');
   const chatIds = await getAllChatIds();
-  await bot.sendMessage(
-    msg.chat.id,
-    `📤 Broadcast басталды: *${chatIds.length}* пайдаланушыға жіберіледі...\n\n_Бұл біраз уақыт алуы мүмкін (~${Math.ceil(chatIds.length / 25)} секунд)._`,
-    { parse_mode: 'Markdown' }
-  );
+  return doBroadcast(msg.chat.id, chatIds, text, '📤 Broadcast');
+});
 
-  let sent = 0;
-  let failed = 0;
-  let blocked = 0;
+// /broadcast_to 123,456 ⏎ Мәтін — тек көрсетілген адамдарға (мысалы бұрын жетпегендерге)
+bot.onText(/^\/broadcast_to(?:@\w+)?\s+([\s\S]+)/, async (msg, match) => {
+  if (String(msg.chat.id) !== String(ADMIN_ID)) return;
+  const t = BC.parseTargeted(match[1]);
+  if (!t) return bot.sendMessage(msg.chat.id, '❌ Үлгі:\n/broadcast_to 111111, 222222\nХабар мәтіні (жаңа жолдан)');
+  return doBroadcast(msg.chat.id, t.ids, t.text, `📤 Broadcast (${t.ids.length} адамға)`);
+});
 
-  // Telegram-нің rate limit-і секундына ~30 хабарлама шамасында —
-  // сол шектен аспау үшін әр хабардан кейін ~40мс кідіріс қоямыз
-  // (шамамен секундына 25 хабар). Бір адамға жіберу сәтсіз болса
-  // (мысалы, бот блокталған/чат жойылған), соны есептеп, циклді
-  // ТОҚТАТПАЙ, қалған пайдаланушыларға жалғастырамыз — бір адамның
-  // қатесі бүкіл broadcast-ты бұзбауы керек.
-  for (const chatId of chatIds) {
-    try {
-      await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
-      sent++;
-    } catch (err) {
-      failed++;
-      // бұғаттаған / өшірілген аккаунт → келесі рассылкаға кірмейді (қайта /start басса — қосылады)
-      if (/403|blocked|deactivated|chat not found/i.test(String(err.message))) { blocked++; setBlocked(chatId, true).catch(() => {}); }
-      else console.warn(`[Broadcast] failed for ${chatId}: ${err.message}`);
-    }
-    await new Promise(r => setTimeout(r, 40));
-  }
-
-  bot.sendMessage(
-    msg.chat.id,
-    `✅ Broadcast аяқталды!\n\n📨 Жеткізілді: *${sent}*\n❌ Сәтсіз: *${failed}* (оның ішінде бұғаттаған/өшірілген: *${blocked}* — келесі рассылкаға кірмейді)`,
-    { parse_mode: 'Markdown' }
-  );
+// /broadcast_retry — соңғы broadcast-та жетпегендерге сол мәтінді қайта жіберу
+bot.onText(/^\/broadcast_retry(?:@\w+)?\s*$/, async (msg) => {
+  if (String(msg.chat.id) !== String(ADMIN_ID)) return;
+  if (!lastBroadcast || !lastBroadcast.failed.length) return bot.sendMessage(msg.chat.id, 'Қайта жіберетін ешкім жоқ (немесе бот қайта қосылған).');
+  const { body, failed } = lastBroadcast;
+  return doBroadcast(msg.chat.id, failed, body, `🔁 Қайта жіберу (${failed.length} адамға)`);
 });
 
 // ─── Негізгі хабар обработчигі ────────────────────────────────────────────
