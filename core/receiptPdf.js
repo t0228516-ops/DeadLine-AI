@@ -51,7 +51,8 @@ const PROFILES = [
       const imgs = (s.match(/\/Subtype\s*\/Image\b/g) || []).length;
       if (imgs < 8) reasons.push(`суреттер саны тым аз (${imgs}) — Kaspi чегінде әр жол бөлек сурет`);
       const content = pageContent(s, buf);
-      if (!content || !/^q Q q 0 100 [\d.]+ [\d.]+ re W n \/Perceptual ri q [\d.]+ 0 0 [\d.]+ 0 100 cm\s*\/Im1 Do Q Q/.test(content)) reasons.push('бет мазмұны Kaspi чегіне сай емес');
+      // Quartz ұзын жолды кез келген бос орыннан бөледі («Do Q\nQ», «cm\n/Im1»), сондықтан бос орын = \s+
+      if (!content || !/^q\s+Q\s+q\s+0\s+100\s+[\d.]+\s+[\d.]+\s+re\s+W\s+n\s+\/Perceptual\s+ri\s+q\s+[\d.]+\s+0\s+0\s+[\d.]+\s+0\s+100\s+cm\s+\/Im1\s+Do\s+Q\s+Q/.test(content)) reasons.push('бет мазмұны Kaspi чегіне сай емес');
       if (/ BT\b|\bTj\b|\bTJ\b/.test(content || '')) reasons.push('бетте мәтін бар (Kaspi чегінде жоқ)');
     },
   },
