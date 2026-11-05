@@ -53,5 +53,6 @@ module.exports = {
   iconStroke: 1.3,
   iconMax: 240,
   ownComps: true,
+  galleryOnly: true,   // фоны тек қараңғы — «авто» таңдамайды, тек клиент галереядан таңдаса
   css,
 };

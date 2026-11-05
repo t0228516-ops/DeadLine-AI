@@ -166,6 +166,13 @@
     { id: 'regalia', name: 'Салтанат', tag: 'әдебиет' },
     { id: 'vivid', name: 'Жарқын', tag: 'заманауи' },
     { id: 'heritage', name: 'Мұра', tag: 'классика' },
+    { id: 'vital', name: 'Таза', tag: 'медицина' },
+    { id: 'verde', name: 'Ромб', tag: 'экономика' },
+    { id: 'hexa', name: 'Алтыбұрыш', tag: 'білім' },
+    { id: 'meadow', name: 'Алқап', tag: 'мектеп' },
+    { id: 'libro', name: 'Кітап', tag: 'әдебиет' },
+    { id: 'terra', name: 'Табиғат', tag: 'экология' },
+    { id: 'aurum', name: 'Алтын', tag: 'құқық' },
   ];
   const styleName = (id) => (STYLES.find((x) => x.id === id) || {}).name || 'Авто';
   (function buildGallery() {

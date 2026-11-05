@@ -109,7 +109,7 @@ const JOBS_DIR = process.env.JOBS_DIR || path.join(__dirname, 'jobs');
 // ─── Тегін бірінші презентация — алынып тасталды (иесінің шешімі). Бұрын басталған тегін жұмыстар ғана осы шекпен аяқталады ───
 const FREE_MAX_SLIDES = 10;
 // Mini App стиль галереясындағы жүйелер (webapp/styles/<id>-1..3.jpg)
-const GALLERY_DESIGNS = new Set(['bordeaux', 'northline', 'poster', 'regalia', 'vivid', 'heritage']);
+const GALLERY_DESIGNS = new Set(['bordeaux', 'northline', 'poster', 'regalia', 'vivid', 'heritage', 'vital', 'verde', 'hexa', 'meadow', 'libro', 'terra', 'aurum']);
 const madeInUrl = () => (process.env.BOT_USERNAME ? `https://t.me/${process.env.BOT_USERNAME}?start=madein` : null);
 const speechFile = (jobId) => path.join(JOBS_DIR, String(jobId).replace(/[^\w-]/g, ''), 'speech.docx');
 fs.mkdirSync(JOBS_DIR, { recursive: true });

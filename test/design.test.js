@@ -70,11 +70,11 @@ test('auto-picked palettes are light unless the client asks for a dark backgroun
   assert.ok(!T.isLightMood(dark.mood), 'asked for dark → dark');
 });
 
-test('regalia: humanities topics alternate heritage/regalia/bordeaux; colour follows the topic; cover, section and closing use the deep palette', () => {
+test('regalia: humanities topics alternate heritage/regalia/bordeaux/libro; colour follows the topic; cover, section and closing use the deep palette', () => {
   const SYS = require('../products/presentation/design/systems');
   const seen = new Set();
   for (let i = 0; i < 40; i++) seen.add(SYS.pickDesign({ seed: 's' + i, brief: 'Қазақ хандығының тарихы' }).system);
-  assert.deepStrictEqual([...seen].sort(), ['bordeaux', 'heritage', 'regalia']);
+  assert.deepStrictEqual([...seen].sort(), ['bordeaux', 'heritage', 'libro', 'regalia']);
   // студенттің соңғы жүйесі regalia болса — келесісі heritage
   assert.strictEqual(SYS.pickDesign({ seed: 's1', brief: 'Қазақ хандығының тарихы', avoidSystems: ['regalia'] }).system, 'heritage');
   const R = SYS.SYSTEMS.regalia;
