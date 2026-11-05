@@ -163,6 +163,35 @@ test('vital («Таза»): Canva-measured compositions, Inter + Open Sans, acce
   assert.doesNotMatch(other, /cx-vt-/);
 });
 
+test('Canva-measured styles (verde, hexa, terra, libro, aurum, meadow): own layouts for every slide kind, only in their own system, no fit problems in markup', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const SYS = require('../products/presentation/design/systems').SYSTEMS;
+  const T = require('../products/presentation/design/tokens');
+  const PREFIX = { verde: 'vd', hexa: 'hx', terra: 'tr', libro: 'lb', aurum: 'au', meadow: 'md' };
+  for (const [id, px] of Object.entries(PREFIX)) {
+    const sys = SYS[id];
+    assert.ok(sys && sys.ownComps, id);
+    for (const m of sys.moods) assert.strictEqual(T.MOODS[m].own, id, m);
+    const mood = sys.moodFor('Қазақстан экономикасы');
+    assert.ok(sys.moods.includes(mood), id + ' ' + mood);
+    const c = (x = {}) => ({ ...x, mood });
+    const deck = [
+      { title: 'Қазақстан экономикасы', subtitle: 'Баяндама', bullets: ['Орындаған: А. Сейт', 'Топ: ЭК-23'], composition: c({ visualPurpose: 'cover' }) },
+      { title: 'Өзектілігі', body: 'Бұл тақырып бүгінгі қоғам үшін аса маңызды, себебі өзгерістер көп адамның өміріне әсер етті.', composition: c() },
+      { title: 'Негізгі бағыттар', bullets: ['Қолдау: несие мен грант', 'Цифрландыру: онлайн қызмет', 'Білім: оқыту бағдарламасы'], composition: c() },
+      { title: 'Сандармен', stats: [{ value: '36%', label: 'ІЖӨ үлесі' }, { value: '4,2 млн', label: 'жұмыс орны' }], composition: c() },
+      { title: 'Кезеңдер', bullets: ['Талдау: жағдайды зерттеу', 'Жоспар: мақсатты анықтау', 'Іске асыру: енгізу'], composition: c({ visualPurpose: 'process' }) },
+      { title: 'Екінші бөлім', subtitle: 'Мәселелер', composition: c({ visualPurpose: 'section' }) },
+      { title: 'Қорытынды', bullets: ['Тақырып өзекті', 'Бірлескен жұмыс қажет', 'Әр адамның үлесі маңызды'], composition: c({ visualPurpose: 'conclusion' }) },
+    ];
+    const html = build3DPresentationHTML(deck, 'Экономика', { system: id });
+    const own = (html.match(new RegExp('data-layout="cx-' + px + '-', 'g')) || []).length;
+    assert.ok(own >= 6, id + ': ' + (html.match(/data-layout="[^"]+"/g) || []).join(' '));
+    const other = build3DPresentationHTML(deck.map((s) => ({ ...s, composition: { ...s.composition, mood: 'ivory' } })), 'Экономика', { system: 'swiss' });
+    assert.doesNotMatch(other, new RegExp('cx-' + px + '-'), id);
+  }
+});
+
 test('Mini App style gallery: every listed design is a real system with three preview images', () => {
   const fs = require('fs');
   const path = require('path');

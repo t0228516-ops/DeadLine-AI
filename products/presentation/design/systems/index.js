@@ -18,7 +18,7 @@ const T = require('../tokens');
 const { formatNum } = require('./numbers');
 
 const SYSTEMS = {};
-for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster', 'bordeaux', 'northline', 'vital']) {
+for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster', 'bordeaux', 'northline', 'vital', 'verde', 'hexa', 'terra', 'libro', 'aurum', 'meadow']) {
   const sys = require('./' + id);
   SYSTEMS[sys.id] = sys;
 }

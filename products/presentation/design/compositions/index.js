@@ -343,6 +343,12 @@ require('./northline')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT
 require('./bordeaux')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 require('./poster')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 require('./vital')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./verde')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./hexa')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./terra')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./libro')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./aurum')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./meadow')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 
 /**
  * Композиция таңдау. env: { used:Set (әшекей), comps:Set (колодада қолданылған), recent:string[], seed:number }

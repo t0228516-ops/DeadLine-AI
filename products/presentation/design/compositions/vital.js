@@ -10,7 +10,7 @@
  * Шаблонның файлдары қолданылмайды (тек тор, өлшем, түс қатынасы).
  */
 module.exports = function register(def, K) {
-  const { P, H, I, esc, t, fs, wrap, MX, MT, MB, W, HH } = K;
+  const { P, H, I, esc, t, fs, wrap, MT, MB, W, HH } = K;
   const SYS = ['vital'];
   const D = require('../decor');
   const LX = 110;                                         // шаблонның сол жиегі
@@ -22,7 +22,6 @@ module.exports = function register(def, K) {
   const head = (ctx, w = 1100, lines = 2, scale = [106, 96, 86, 76, 66]) => H.titleH1(ctx, ctx.a.title, { width: w, maxLines: lines, scale, hl: false }) + bar;
   const body = (txt, size = 34, extra = '') => '<div style="' + fs(size) + ';line-height:1.5;color:var(--text)' + extra + '">' + esc(txt) + '</div>';
   const hasP = (a, w) => a.hasPhoto && I.sharpEnough(a.img, w);
-  const label = (ctx, fallback) => H.sectionLabel(ctx) || fallback;
   // тақырып бір жолға сыя ма (Inter Bold ≈ 0.62 em, ~90 px) — астындағы блок соған қарай төмен түседі
   const twoLines = (txt, w, size = 90) => String(txt || '').length * size * 0.62 > w;
   const icon = (ctx, txt, used) => D.pickIconDecor(ctx.deckTitle + ' ' + txt, used || new Set(), 1)[0];
@@ -74,9 +73,9 @@ module.exports = function register(def, K) {
   // ── ТІЗІМ (2-слайд «Contents» тілі): тақырып, сызық, астында жіңішке сызықпен бөлінген қатарлар; оң жақта фото ──
   def({
     id: 'vt-list', kind: 'list', systems: SYS,
-    fits: (a, sh) => sh.items.length >= 3 && sh.items.length <= 6,
+    fits: (a, sh) => sh.items.length >= 3 && sh.items.length <= 6 && sh.items.reduce((k, m) => k + m.label.length + (m.detail || '').length, 0) <= 380,
     render(ctx, sh) {
-      const p = ctx.palette; const n = sh.items.length; const size = n > 4 ? 30 : 34;
+      const p = ctx.palette; const n = sh.items.length; const total = sh.items.reduce((k, m) => k + m.label.length + (m.detail || '').length, 0); const size = n > 4 || total > 260 ? 30 : 34;
       const line = P.mix('#ffffff', p.text, 0.14);
       const rows = sh.items.map((m, i) => '<div data-role="row" style="display:flex;gap:28px;align-items:baseline;padding:14px 0;border-bottom:2px solid ' + line + '">' +
         '<span class="vt-acc" style="flex:none;font-family:var(--f-display);font-weight:700;' + fs(size + 4) + '">' + esc(H.num(ctx, i + 1)) + '</span>' +
@@ -136,7 +135,7 @@ module.exports = function register(def, K) {
       const y = top + i * rowH;
       bg += dot(p, lineX, y + 30);
       const marker = m.date || String(i + 1).padStart(2, '0');
-      const mSize = m.date ? Math.min(60, Math.floor(150 / (String(m.date).length * 0.62))) : 74;
+      const mSize = m.date ? Math.min(54, Math.floor(140 / (String(m.date).length * 0.68))) : 74;
       fg += t('row', 80, y, 150, '<div class="vt-acc" style="font-family:var(--f-display);font-weight:700;' + fs(mSize) + ';line-height:.9;text-align:left">' + esc(marker) + '</div>');
       fg += t('row', 330, y - 4, 770, '<div style="' + fs(big ? 38 : 32) + ';line-height:1.25;font-weight:700;color:var(--text)">' + esc(m.label || '') + '</div>' +
         (m.detail ? '<div style="margin-top:6px;' + fs(big ? 32 : 27) + ';line-height:1.4;color:var(--text2)">' + esc(m.detail) + '</div>' : ''), 'max-height:' + (rowH - 8) + 'px');
@@ -159,7 +158,7 @@ module.exports = function register(def, K) {
     fits: (a, sh) => sh.stats.length >= 2 && sh.stats.length <= 3 && sh.stats.every((s) => String(s.value).length <= 9 && String(s.label || '').length <= 90),
     render(ctx, sh) {
       const a = ctx.a; const p = ctx.palette; const n = sh.stats.length;
-      const top = 310; const rowH = (HH - 80 - top) / n; const colW = 960;
+      const top = (twoLines(a.title, 1100, 100) ? 420 : 310) + (a.subtitle ? 40 : 0); const rowH = (HH - 60 - top) / n; const colW = 960;
       const longest = Math.max(...sh.stats.map((s) => String(s.value).length));
       const size = Math.min(150, Math.floor(390 / (longest * 0.66)), Math.floor(rowH * 0.78));
       let bg = plate;
