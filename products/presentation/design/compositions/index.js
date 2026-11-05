@@ -342,6 +342,7 @@ require('./more2')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB
 require('./northline')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 require('./bordeaux')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 require('./poster')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
+require('./vital')(def, { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH });
 
 /**
  * Композиция таңдау. env: { used:Set (әшекей), comps:Set (колодада қолданылған), recent:string[], seed:number }

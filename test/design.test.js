@@ -143,6 +143,26 @@ test('bordeaux / northline: designer-template compositions and fonts are used on
   assert.doesNotMatch(other, /cx-(bx|nl)-|Playfair Bold|Montserrat Bold/);
 });
 
+test('vital («Таза»): Canva-measured compositions, Inter + Open Sans, accent follows the topic, only its own system uses them', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const V = require('../products/presentation/design/systems').SYSTEMS.vital;
+  assert.strictEqual(V.moodFor('Жүрек ауруларының алдын алу'), 'vital_red');
+  assert.strictEqual(V.moodFor('Жасуша биологиясы'), 'vital_teal');
+  assert.strictEqual(V.moodFor('Цифрлық экономика'), 'vital_blue');
+  const c = { mood: 'vital_red' };
+  const deck = [
+    { title: 'Жүрек денсаулығы', subtitle: 'Медицина негіздері', composition: { ...c, visualPurpose: 'cover' } },
+    { title: 'Қауіп факторлары', bullets: ['Қан қысымы: жүктеме', 'Темекі: тамыр зақымы', 'Тамақ: холестерин', 'Қимылсыздық: әлсіздік'], composition: c },
+    { title: 'Сандар', stats: [{ value: '80%', label: 'алдын алуға болады' }, { value: '17,9 млн', label: 'жыл сайын' }], composition: c },
+    { title: 'Қорытынды', bullets: ['Тексерілу', 'Пайдалы әдет', 'Жүрекке қамқорлық'], composition: { ...c, visualPurpose: 'conclusion' } },
+  ];
+  const html = build3DPresentationHTML(deck, 'Жүрек', { system: 'vital' });
+  assert.ok((html.match(/data-layout="cx-vt-/g) || []).length >= 3, html.match(/data-layout="[^"]+"/g).join(' '));
+  assert.match(html, /font-family:'Inter'/);
+  const other = build3DPresentationHTML(deck.map((s) => ({ ...s, composition: { ...s.composition, mood: 'ivory' } })), 'Жүрек', { system: 'swiss' });
+  assert.doesNotMatch(other, /cx-vt-/);
+});
+
 test('Mini App style gallery: every listed design is a real system with three preview images', () => {
   const fs = require('fs');
   const path = require('path');

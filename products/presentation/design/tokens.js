@@ -168,6 +168,10 @@ const MOODS = ({
   northline_lime:  { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#a3e635', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
   northline_sky:   { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#38bdf8', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
   northline_coral: { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#fb7185', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
+  // «Таза» (Canva «Preventing Heart Disease» шаблонының өлшенген түстері): ақ фон, қою көк мәтін, бір екпін түсі
+  vital_red:  { bg: '#ffffff', text: '#12355b', accent: '#dd2132', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
+  vital_teal: { bg: '#ffffff', text: '#12355b', accent: '#0d9488', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
+  vital_blue: { bg: '#ffffff', text: '#12355b', accent: '#2563eb', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
   // олардың қою жұбы — мұқаба, бөлім, қорытынды слайдтары (sys.deepMood)
   vivid_cobalt_deep:  { bg: '#213ce7', text: '#ffffff', accent: '#ffd23f', accent2: '#ff8a6b', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },
   vivid_emerald_deep: { bg: '#00663e', text: '#ffffff', accent: '#ffd23f', accent2: '#b6f09c', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },
