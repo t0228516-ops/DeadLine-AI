@@ -69,6 +69,12 @@ test('iPhone Kaspi PDF passes; its creation time must not be before the payment'
   assert.strictEqual(createdOk({ created: null }, paid), null, 'Android PDFs carry no date');
 });
 
+test('iPhone: Quartz may break lines anywhere («Do Q\\nQ», real 11-05 receipt) — still a Kaspi receipt', () => {
+  const content = 'q Q q 0 100 366 599 re W n /Perceptual ri q 366 0 0 599 0 100 cm /Im1 Do Q\nQ q 24 659 318 16 re W n /Perceptual ri q 318 0 0 16 24 659 cm /Im2 Do Q Q\n';
+  const r = kaspiPdfProfile(kaspiIos({ content }));
+  assert.strictEqual(r.ok, true, r.reasons.join('; '));
+});
+
 test('iPhone: printed image, edited in Preview, or without Kaspi author is caught', () => {
   for (const [name, o] of Object.entries({
     'iPhone "print" of a single image': { images: 1, author: null },
