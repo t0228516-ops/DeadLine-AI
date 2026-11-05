@@ -168,6 +168,34 @@ const MOODS = ({
   northline_lime:  { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#a3e635', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
   northline_sky:   { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#38bdf8', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
   northline_coral: { bg: '#f8f9fb', text: '#2b2b2b', accent: '#0f172a', accent2: '#fb7185', tone: 'technical', deco: 'grid', img: 'saturate(1.02) contrast(1.03)', scrim: 0.0, own: 'northline' },
+  // «Таза» (Canva «Preventing Heart Disease» шаблонының өлшенген түстері): ақ фон, қою көк мәтін, бір екпін түсі
+  vital_red:  { bg: '#ffffff', text: '#12355b', accent: '#dd2132', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
+  vital_teal: { bg: '#ffffff', text: '#12355b', accent: '#0d9488', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
+  vital_blue: { bg: '#ffffff', text: '#12355b', accent: '#2563eb', accent2: '#eef2f9', tone: 'technical', deco: 'grid', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'vital' },
+  // «Ромб» (Canva «Company Profile» шаблонының өлшенген түстері): ақшыл фон, қою екпін + жарқын екінші реңк
+  verde_green: { bg: '#f7fbff', text: '#1d2733', accent: '#047650', accent2: '#00b176', tone: 'modern', deco: 'bands', img: 'saturate(1.04) contrast(1.03)', scrim: 0.0, own: 'verde' },
+  verde_blue:  { bg: '#f7fbff', text: '#1d2733', accent: '#0b4f8a', accent2: '#1e8fe0', tone: 'modern', deco: 'bands', img: 'saturate(1.04) contrast(1.03)', scrim: 0.0, own: 'verde' },
+  verde_plum:  { bg: '#fbf8fd', text: '#251d2b', accent: '#5b2a86', accent2: '#a24fd0', tone: 'modern', deco: 'bands', img: 'saturate(1.04) contrast(1.03)', scrim: 0.0, own: 'verde' },
+  // «Алтыбұрыш» (Canva «The Future of Education» шаблонының өлшенген түстері): ақ фон, қара мәтін, екпін + қою реңк
+  hexa_indigo:  { bg: '#ffffff', text: '#000000', accent: '#1800ad', accent2: '#0c0054', tone: 'modern', deco: 'bands', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'hexa' },
+  hexa_teal:    { bg: '#ffffff', text: '#000000', accent: '#00757f', accent2: '#003a40', tone: 'modern', deco: 'bands', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'hexa' },
+  hexa_crimson: { bg: '#ffffff', text: '#000000', accent: '#b0103a', accent2: '#4a0418', tone: 'modern', deco: 'bands', img: 'saturate(1.03) contrast(1.03)', scrim: 0.0, own: 'hexa' },
+  // «Табиғат» (Canva «Climate Change» шаблонының өлшенген түстері): қою табиғи фон, ақ тақырып, ашық екпін
+  terra_forest: { bg: '#08352e', text: '#f4f7f5', accent: '#5aafd2', accent2: '#9fd3c7', tone: 'modern', deco: 'bands', img: 'saturate(1.02) contrast(1.04)', scrim: 0.45, own: 'terra' },
+  terra_ocean:  { bg: '#0a2a3d', text: '#f3f7fa', accent: '#f2c35b', accent2: '#8fd0e8', tone: 'modern', deco: 'bands', img: 'saturate(1.02) contrast(1.04)', scrim: 0.45, own: 'terra' },
+  terra_earth:  { bg: '#2a1c12', text: '#f8f3ec', accent: '#e3a857', accent2: '#c9b48a', tone: 'modern', deco: 'bands', img: 'saturate(1.0) contrast(1.04)', scrim: 0.45, own: 'terra' },
+  // «Кітап» (Canva «Silent Library» шаблонының өлшенген түстері): тыныш ашық фон, қою жылы мәтін
+  libro_sage: { bg: '#e0e6d8', text: '#3b2919', accent: '#3b2919', accent2: '#7d6a4f', tone: 'editorial', deco: 'rings', img: 'saturate(.92) contrast(1.03)', scrim: 0.0, own: 'libro' },
+  libro_rose: { bg: '#ecdfd8', text: '#3a201b', accent: '#3a201b', accent2: '#8a5a4c', tone: 'editorial', deco: 'rings', img: 'saturate(.92) contrast(1.03)', scrim: 0.0, own: 'libro' },
+  libro_mist: { bg: '#dde4e8', text: '#1d2b38', accent: '#1d2b38', accent2: '#5a7184', tone: 'editorial', deco: 'rings', img: 'saturate(.92) contrast(1.03)', scrim: 0.0, own: 'libro' },
+  // «Алтын» (Canva «Law Firm» шаблонының өлшенген түстері): қара фон, ақ мәтін, алтын екпін
+  aurum_gold:   { bg: '#100f0f', text: '#ffffff', accent: '#bd860c', accent2: '#1d1d1e', tone: 'editorial', deco: 'rings', img: 'saturate(.98) contrast(1.05)', scrim: 0.5, own: 'aurum' },
+  aurum_silver: { bg: '#0f1012', text: '#ffffff', accent: '#aebbc8', accent2: '#1c1d20', tone: 'editorial', deco: 'rings', img: 'saturate(.98) contrast(1.05)', scrim: 0.5, own: 'aurum' },
+  aurum_rose:   { bg: '#120f10', text: '#ffffff', accent: '#d39a8c', accent2: '#1f1c1d', tone: 'editorial', deco: 'rings', img: 'saturate(.98) contrast(1.05)', scrim: 0.5, own: 'aurum' },
+  // «Алқап» (Canva «Landforms of the Earth» шаблонының өлшенген түстері): ашық аспан фон, қою қоңыр тақырып, жасыл пилюля
+  meadow_green:  { bg: '#e6f6ff', text: '#3c2007', accent: '#0a7a12', accent2: '#3aa6e6', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.03)', scrim: 0.0, own: 'meadow' },
+  meadow_autumn: { bg: '#fff4e3', text: '#3c2007', accent: '#c4570e', accent2: '#3a8fd0', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.03)', scrim: 0.0, own: 'meadow' },
+  meadow_snow:   { bg: '#eef3fb', text: '#1b2a4a', accent: '#2856c4', accent2: '#5bb6e8', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.03)', scrim: 0.0, own: 'meadow' },
   // олардың қою жұбы — мұқаба, бөлім, қорытынды слайдтары (sys.deepMood)
   vivid_cobalt_deep:  { bg: '#213ce7', text: '#ffffff', accent: '#ffd23f', accent2: '#ff8a6b', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },
   vivid_emerald_deep: { bg: '#00663e', text: '#ffffff', accent: '#ffd23f', accent2: '#b6f09c', tone: 'modern', deco: 'bands', img: 'saturate(1.05) contrast(1.04)', scrim: 0.5, own: 'vivid' },

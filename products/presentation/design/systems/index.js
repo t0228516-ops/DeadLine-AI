@@ -18,7 +18,7 @@ const T = require('../tokens');
 const { formatNum } = require('./numbers');
 
 const SYSTEMS = {};
-for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster', 'bordeaux', 'northline']) {
+for (const id of ['aurora', 'journal', 'swiss', 'academy', 'mono', 'atelier', 'heritage', 'campus', 'blueprint', 'ledger', 'regalia', 'vivid', 'poster', 'bordeaux', 'northline', 'vital', 'verde', 'hexa', 'terra', 'libro', 'aurum', 'meadow']) {
   const sys = require('./' + id);
   SYSTEMS[sys.id] = sys;
 }
@@ -57,7 +57,13 @@ function typeStyleFor(sys, palette) {
  */
 // Сала → жүйе (тақырыпқа қарай, студенттің мамандығына емес). Тек салаға арналған жүйелер жалпы пулға кірмейді.
 // Бір салаға бірнеше жүйе болса — тұқым бойынша кезектеседі, студенттің соңғысы қайталанбайды.
-const FIELD_SYSTEMS = { humanities: ['heritage', 'regalia', 'bordeaux'], law: ['heritage', 'regalia', 'bordeaux'], education: ['campus'], it: ['blueprint'], engineering: ['blueprint'], science: ['blueprint'], business: ['ledger'] };
+// Canva шаблондарынан өлшенген жаңа стильдер (2026-11-05) салалық тізімдерге қосылды: бір саладағы презентациялар бір-біріне ұқсамасын
+const FIELD_SYSTEMS = {
+  humanities: ['heritage', 'regalia', 'bordeaux', 'libro'], law: ['heritage', 'regalia', 'bordeaux', 'libro'],
+  education: ['campus', 'meadow', 'hexa'], it: ['blueprint', 'hexa'], engineering: ['blueprint', 'hexa'], science: ['blueprint', 'meadow'],
+  business: ['ledger', 'verde'], medicine: ['vital', 'hexa'],
+};
+// фоны тек қараңғы стильдер (terra, aurum) «авто»-да таңдалмайды — проектор ережесі; оларды тек галереядан таңдауға болады
 const FIELD_ONLY = new Set(Object.values(FIELD_SYSTEMS).flat());
 const FIELD_RE = {
   humanities: /тарих|хандық|хандығ|соғыс|мұрағат|қолжазба|шежіре|ғасыр|история|хански|войн|архив|рукопис|war\b|khanate|archive|manuscript|әдебиет|философ|ойшыл|ақын|жазушы|абай|фараби|мәдениет|өнертану|этнограф|фольклор|истори|литератур|философ|культур|поэт|писател|history|historical|literature|philosoph|culture|poet|heritage/i,
@@ -66,6 +72,7 @@ FIELD_RE.it = /бағдарлама|программ|алгоритм|жасан
 FIELD_RE.engineering = /инженер|мұнай|газ|энергетика|құрылыс|механика|теңіз|кеме|өнеркәсіп|нефт|энергетик|строител|механик|морск|судо|промышлен|engineer|oil|gas|energy|construction|mechanic|maritime|ship|industr/i;
 FIELD_RE.business = /бизнес|экономика|маркетинг|менеджмент|қаржы|кәсіпкер|стартап|туризм|нарық|бухгалтер|бизнес|экономик|маркетинг|менеджмент|финанс|предприним|стартап|туризм|рынок|business|econom|marketing|management|finance|startup|tourism|market/i;
 FIELD_RE.education = /педагог|психолог|оқыту|сабақ|оқушы|тәрбие|мектеп|спорт|дене шынықтыру|жаттығу|эмоци|стресс|педагогик|психологи|обучени|урок|школ|воспитан|спорт|education|teaching|pedagog|psycholog|school|lesson|sport|fitness/i;
+FIELD_RE.medicine = /медицин|денсаулық|ауру|емдеу|дәрігер|жүрек|қан |иммун|вирус|медиц|здоров|болезн|лечен|врач|сердц|иммун|вирус|medic|health|disease|doctor|heart|immun|virus/i;
 function fieldOf(text) {
   const t = String(text || '');
   return Object.keys(FIELD_RE).find((k) => FIELD_RE[k].test(t)) || null;
@@ -75,7 +82,7 @@ function pickDesign(o = {}) {
   const seed = String(o.seed || '');
   const avoidS = (o.avoidSystems || []).filter(Boolean);
   const avoidM = (o.avoidMoods || []).filter(Boolean);
-  let pool = (STYLE_SYSTEMS[String(o.style || '').toLowerCase()] || Object.keys(SYSTEMS)).filter((id) => SYSTEMS[id] && !FIELD_ONLY.has(id));
+  let pool = (STYLE_SYSTEMS[String(o.style || '').toLowerCase()] || Object.keys(SYSTEMS)).filter((id) => SYSTEMS[id] && !FIELD_ONLY.has(id) && !SYSTEMS[id].galleryOnly);
   // салаға тән жүйе: тақырып гуманитарлық болса — «Мұра» (студенттің соңғы жүйесі болмаса)
   const field = (o.field && FIELD_SYSTEMS[o.field] ? o.field : null) || fieldOf(o.brief);
   if (field && FIELD_SYSTEMS[field]) {

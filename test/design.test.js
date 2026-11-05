@@ -70,11 +70,11 @@ test('auto-picked palettes are light unless the client asks for a dark backgroun
   assert.ok(!T.isLightMood(dark.mood), 'asked for dark → dark');
 });
 
-test('regalia: humanities topics alternate heritage/regalia/bordeaux; colour follows the topic; cover, section and closing use the deep palette', () => {
+test('regalia: humanities topics alternate heritage/regalia/bordeaux/libro; colour follows the topic; cover, section and closing use the deep palette', () => {
   const SYS = require('../products/presentation/design/systems');
   const seen = new Set();
   for (let i = 0; i < 40; i++) seen.add(SYS.pickDesign({ seed: 's' + i, brief: 'Қазақ хандығының тарихы' }).system);
-  assert.deepStrictEqual([...seen].sort(), ['bordeaux', 'heritage', 'regalia']);
+  assert.deepStrictEqual([...seen].sort(), ['bordeaux', 'heritage', 'libro', 'regalia']);
   // студенттің соңғы жүйесі regalia болса — келесісі heritage
   assert.strictEqual(SYS.pickDesign({ seed: 's1', brief: 'Қазақ хандығының тарихы', avoidSystems: ['regalia'] }).system, 'heritage');
   const R = SYS.SYSTEMS.regalia;
@@ -141,6 +141,55 @@ test('bordeaux / northline: designer-template compositions and fonts are used on
   assert.match(nl, /font-family:'Montserrat Bold'/);
   const other = build3DPresentationHTML(deck('ivory'), 'Хандық', { system: 'swiss' });
   assert.doesNotMatch(other, /cx-(bx|nl)-|Playfair Bold|Montserrat Bold/);
+});
+
+test('vital («Таза»): Canva-measured compositions, Inter + Open Sans, accent follows the topic, only its own system uses them', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const V = require('../products/presentation/design/systems').SYSTEMS.vital;
+  assert.strictEqual(V.moodFor('Жүрек ауруларының алдын алу'), 'vital_red');
+  assert.strictEqual(V.moodFor('Жасуша биологиясы'), 'vital_teal');
+  assert.strictEqual(V.moodFor('Цифрлық экономика'), 'vital_blue');
+  const c = { mood: 'vital_red' };
+  const deck = [
+    { title: 'Жүрек денсаулығы', subtitle: 'Медицина негіздері', composition: { ...c, visualPurpose: 'cover' } },
+    { title: 'Қауіп факторлары', bullets: ['Қан қысымы: жүктеме', 'Темекі: тамыр зақымы', 'Тамақ: холестерин', 'Қимылсыздық: әлсіздік'], composition: c },
+    { title: 'Сандар', stats: [{ value: '80%', label: 'алдын алуға болады' }, { value: '17,9 млн', label: 'жыл сайын' }], composition: c },
+    { title: 'Қорытынды', bullets: ['Тексерілу', 'Пайдалы әдет', 'Жүрекке қамқорлық'], composition: { ...c, visualPurpose: 'conclusion' } },
+  ];
+  const html = build3DPresentationHTML(deck, 'Жүрек', { system: 'vital' });
+  assert.ok((html.match(/data-layout="cx-vt-/g) || []).length >= 3, html.match(/data-layout="[^"]+"/g).join(' '));
+  assert.match(html, /font-family:'Inter'/);
+  const other = build3DPresentationHTML(deck.map((s) => ({ ...s, composition: { ...s.composition, mood: 'ivory' } })), 'Жүрек', { system: 'swiss' });
+  assert.doesNotMatch(other, /cx-vt-/);
+});
+
+test('Canva-measured styles (verde, hexa, terra, libro, aurum, meadow): own layouts for every slide kind, only in their own system, no fit problems in markup', () => {
+  const { build3DPresentationHTML } = require('../products/presentation/html3DBuilder');
+  const SYS = require('../products/presentation/design/systems').SYSTEMS;
+  const T = require('../products/presentation/design/tokens');
+  const PREFIX = { verde: 'vd', hexa: 'hx', terra: 'tr', libro: 'lb', aurum: 'au', meadow: 'md' };
+  for (const [id, px] of Object.entries(PREFIX)) {
+    const sys = SYS[id];
+    assert.ok(sys && sys.ownComps, id);
+    for (const m of sys.moods) assert.strictEqual(T.MOODS[m].own, id, m);
+    const mood = sys.moodFor('Қазақстан экономикасы');
+    assert.ok(sys.moods.includes(mood), id + ' ' + mood);
+    const c = (x = {}) => ({ ...x, mood });
+    const deck = [
+      { title: 'Қазақстан экономикасы', subtitle: 'Баяндама', bullets: ['Орындаған: А. Сейт', 'Топ: ЭК-23'], composition: c({ visualPurpose: 'cover' }) },
+      { title: 'Өзектілігі', body: 'Бұл тақырып бүгінгі қоғам үшін аса маңызды, себебі өзгерістер көп адамның өміріне әсер етті.', composition: c() },
+      { title: 'Негізгі бағыттар', bullets: ['Қолдау: несие мен грант', 'Цифрландыру: онлайн қызмет', 'Білім: оқыту бағдарламасы'], composition: c() },
+      { title: 'Сандармен', stats: [{ value: '36%', label: 'ІЖӨ үлесі' }, { value: '4,2 млн', label: 'жұмыс орны' }], composition: c() },
+      { title: 'Кезеңдер', bullets: ['Талдау: жағдайды зерттеу', 'Жоспар: мақсатты анықтау', 'Іске асыру: енгізу'], composition: c({ visualPurpose: 'process' }) },
+      { title: 'Екінші бөлім', subtitle: 'Мәселелер', composition: c({ visualPurpose: 'section' }) },
+      { title: 'Қорытынды', bullets: ['Тақырып өзекті', 'Бірлескен жұмыс қажет', 'Әр адамның үлесі маңызды'], composition: c({ visualPurpose: 'conclusion' }) },
+    ];
+    const html = build3DPresentationHTML(deck, 'Экономика', { system: id });
+    const own = (html.match(new RegExp('data-layout="cx-' + px + '-', 'g')) || []).length;
+    assert.ok(own >= 6, id + ': ' + (html.match(/data-layout="[^"]+"/g) || []).join(' '));
+    const other = build3DPresentationHTML(deck.map((s) => ({ ...s, composition: { ...s.composition, mood: 'ivory' } })), 'Экономика', { system: 'swiss' });
+    assert.doesNotMatch(other, new RegExp('cx-' + px + '-'), id);
+  }
 });
 
 test('Mini App style gallery: every listed design is a real system with three preview images', () => {
