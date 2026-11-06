@@ -42,6 +42,15 @@ function slab(x, y, w, h, c, u = 1, o = {}) {
   s += FO(x + 52, y + 40, w - 104, h - 80, textHTML(c), 'carved');
   return g(s, `translate(0 ${dy.toFixed(1)})`);
 }
+/** free in-world text (no card): parts pop in one after another from t0.
+ *  style: 'halo' (dark ink, white outline — day sky), 'halo dark' (white, dark outline — night), 'paint' (ochre on a cave wall), 'chalk' (board) */
+function freeText(x, y, w, h, c, t, t0, style = 'halo', o = {}) {
+  const parts = []; if (c.k) parts.push(`<div class="k">${c.k}</div>`); if (c.title) parts.push(`<h1>${c.title}</h1>`); if (c.big) parts.push(`<div class="big">${c.big}</div>`);
+  if (c.lab) parts.push(`<div class="lab">${c.lab}</div>`); (c.lines || []).forEach((l) => parts.push(`<ul><li>${l}</li></ul>`));
+  const html = parts.map((p, i) => { const u = seg(t, t0 + i * (o.step ?? .32), t0 + i * (o.step ?? .32) + .35, 'back'); const op = clamp(u * 1.6, 0, 1);
+    return p.replace(/^<(\w+) /, `<$1 style="opacity:${op.toFixed(3)};transform:translateY(${((1 - Math.min(u, 1)) * 40).toFixed(1)}px) scale(${(.85 + .15 * u).toFixed(3)})" `).replace(/^<(\w+)>/, `<$1 style="opacity:${op.toFixed(3)};transform:translateY(${((1 - Math.min(u, 1)) * 40).toFixed(1)}px) scale(${(.85 + .15 * u).toFixed(3)})">`); }).join('');
+  return `<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><div xmlns="http://www.w3.org/1999/xhtml" class="free ${style}" style="${o.css ?? ''}">${html}</div></foreignObject>`;
+}
 /** speech bubble: (x,y) bubble centre, (tx,ty) tail tip; t/t0/t1 — visible window with pop */
 function bubble(x, y, w, h, text, tx, ty, t, t0, t1, o = {}) {
   if (t < t0 || t > t1 + .2) return '';
@@ -67,7 +76,8 @@ function hero(p, o = {}) {
     let h = `<path d="M${-HR - 4 * s} ${-2 * s} Q${-HR} ${-HR * 1.32} 0 ${-HR - 7 * s} Q${HR} ${-HR * 1.32} ${HR + 4 * s} ${-2 * s} Z" fill="#E63946" stroke="${INK}" stroke-width="${5 * s}" stroke-linejoin="round"/>`;
     if (f) h += `<path d="M${f * HR * 0.2} ${-6 * s} L${f * (HR + 30 * s)} ${-4 * s} L${f * (HR + 30 * s)} ${4 * s} L${f * HR * 0.2} ${2 * s}Z" fill="#E63946" stroke="${INK}" stroke-width="${4.5 * s}" stroke-linejoin="round"/>`;
     else h += ell(0, -2 * s, HR + 10 * s, 8 * s, { f: '#E63946', w: 4.5 * s });
-    return g(h, `translate(${J.hc[0].toFixed(1)} ${J.hc[1].toFixed(1)}) rotate(${J.ha.toFixed(1)})`);
+    // front view: the cap sits higher so the eyes stay visible
+    return g(h, `translate(${J.hc[0].toFixed(1)} ${J.hc[1].toFixed(1)}) rotate(${J.ha.toFixed(1)})${f ? '' : ` translate(0 ${(-HR * .42).toFixed(1)})`}`);
   };
   const pack = (J, q) => { const f = q.face || 1; const m = [(J.hip[0] + J.neck[0]) / 2 - f * 26 * J.s, (J.hip[1] + J.neck[1]) / 2 + 4 * J.s];
     return rect(m[0] - 30 * J.s, m[1] - 44 * J.s, 60 * J.s, 86 * J.s, { f: '#2E86DE', w: 6 * J.s }) + rect(m[0] - 22 * J.s, m[1] + 4 * J.s, 44 * J.s, 26 * J.s, { f: '#5DA9F0', w: 4 * J.s }); };
@@ -108,6 +118,61 @@ function portal(x, y, t, u) { if (u <= 0) return ''; let s = '';
   return `<circle cx="${x}" cy="${y}" r="${230 * u}" fill="#2a1c66" opacity="${(.35 * u).toFixed(2)}"/>` + s + circ(x, y, 30 * u, { f: '#fff', w: 0, j: .3 }); }
 function sparkle(x, y, r, op = 1) { return `<path d="M${x} ${y - r}L${x + r * .22} ${y - r * .22}L${x + r} ${y}L${x + r * .22} ${y + r * .22}L${x} ${y + r}L${x - r * .22} ${y + r * .22}L${x - r} ${y}L${x - r * .22} ${y - r * .22}Z" fill="#fff" opacity="${op}"/>`; }
 function bird(x, y, s, t) { const f = Math.sin(t * 9) * 10 * s; return `<path d="M${x - 22 * s} ${y + f}Q${x - 10 * s} ${y - 8 * s} ${x} ${y}Q${x + 10 * s} ${y - 8 * s} ${x + 22 * s} ${y + f}" stroke="${INK}" stroke-width="${4 * s}" fill="none" stroke-linecap="round"/>`; }
+
+/* ---------- props: ancient world ---------- */
+function glow(x, y, r, c = '#FFB347', op = .45, id = 'gl') { return `<defs><radialGradient id="${id}"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${r}" fill="url(#${id})"/>`; }
+/** campfire; k = 0..1 size of the flame (0 = just logs) */
+function fire(x, y, t, k = 1) {
+  let s = line(x - 70, y + 4, x + 60, y - 18, { w: 16, c: '#6B4226' }) + line(x - 60, y - 18, x + 70, y + 2, { w: 16, c: '#7A4B2A' });
+  if (k <= 0) return s;
+  const fl = (dx, h, c, ph) => { const hh = h * k * (0.85 + 0.15 * Math.sin(t * 13 + ph)); const sw = Math.sin(t * 9 + ph) * 10 * k;
+    return blob([[x + dx - 34 * k, y - 6], [x + dx - 26 * k + sw * .3, y - hh * .5], [x + dx + sw, y - hh], [x + dx + 24 * k + sw * .3, y - hh * .45], [x + dx + 34 * k, y - 6]], { f: c, w: 5, j: 1 }); };
+  return glow(x, y - 60, 520 * k, '#FFB347', .5, 'fg' + Math.round(x)) + s + fl(-20, 170, '#FF6B1A', 0) + fl(22, 140, '#FF8C1A', 2) + fl(0, 120, '#FFD23F', 4) + fl(4, 60, '#FFF3B0', 1);
+}
+function spear(x, y, a, len = 230) { const d = dv(a); const ex = x + d[0] * len, ey = y + d[1] * len; const n = [-d[1], d[0]];
+  return line(x - d[0] * 40, y - d[1] * 40, ex, ey, { w: 8, c: '#7A4B2A' }) + blob([[ex + n[0] * 12, ey + n[1] * 12], [ex + d[0] * 46, ey + d[1] * 46], [ex - n[0] * 12, ey - n[1] * 12]], { sharp: true, f: '#9C958A', w: 4, j: .5 }); }
+/** woolly mammoth facing left; (x,y) = feet line centre; trunk 0 down … 1 raised */
+function mammoth(x, y, s = 1, t = 0, o = {}) {
+  const tr = o.trunk ?? 0; const step = o.step ?? 0; const C = '#7A4A2A', D = '#5B3519';
+  let m = '';
+  const leg = (lx, ph) => rect(x + lx * s - 26 * s, y - 210 * s + Math.max(0, Math.sin(step + ph)) * -14 * s, 52 * s, 210 * s, { f: D, w: 6 });
+  m += leg(90, 0) + leg(-60, Math.PI);
+  m += ell(x + 30 * s, y - 280 * s, 230 * s, 160 * s, { f: C, w: 7 });
+  for (let i = 0; i < 9; i++) m += line(x - 150 * s + i * 40 * s, y - 180 * s, x - 160 * s + i * 40 * s, y - 130 * s, { w: 5, c: D });
+  m += leg(120, Math.PI) + leg(-30, 0);
+  m += ell(x - 170 * s, y - 360 * s, 110 * s, 100 * s, { f: C, w: 7 }) + ell(x - 120 * s, y - 430 * s, 70 * s, 50 * s, { f: C, w: 6 });
+  m += ell(x - 110 * s, y - 350 * s, 40 * s, 58 * s, { f: D, w: 5 });
+  const tx = x - 250 * s, ty = y - 330 * s;
+  const tip = [lerp(tx - 20 * s, tx - 120 * s, tr), lerp(y - 90 * s, y - 520 * s, tr)];
+  m += `<path d="M${tx + 40 * s} ${ty} Q${lerp(tx - 40 * s, tx - 150 * s, tr)} ${lerp(ty + 120 * s, ty - 40 * s, tr)} ${tip[0]} ${tip[1]}" stroke="${INK}" stroke-width="${48 * s}" fill="none" stroke-linecap="round"/><path d="M${tx + 40 * s} ${ty} Q${lerp(tx - 40 * s, tx - 150 * s, tr)} ${lerp(ty + 120 * s, ty - 40 * s, tr)} ${tip[0]} ${tip[1]}" stroke="${C}" stroke-width="${36 * s}" fill="none" stroke-linecap="round"/>`;
+  m += `<path d="M${tx + 30 * s} ${ty + 40 * s} Q${tx - 120 * s} ${ty + 150 * s} ${tx - 150 * s} ${ty + 20 * s}" stroke="${INK}" stroke-width="${22 * s}" fill="none" stroke-linecap="round"/><path d="M${tx + 30 * s} ${ty + 40 * s} Q${tx - 120 * s} ${ty + 150 * s} ${tx - 150 * s} ${ty + 20 * s}" stroke="#FFF8E7" stroke-width="${13 * s}" fill="none" stroke-linecap="round"/>`;
+  m += circ(x - 210 * s, y - 380 * s, 9 * s, { f: INK, w: 0 }) + (o.angry ? line(x - 232 * s, y - 408 * s, x - 192 * s, y - 396 * s, { w: 6 }) : '');
+  return m;
+}
+/** horse facing right; (x,y) feet line centre; rear 0..1 rears up on hind legs */
+function horse(x, y, s = 1, t = 0, o = {}) {
+  const C = o.c ?? '#A0623A', D = '#5B3519'; const st = o.step ?? 0;
+  let h = '';
+  const leg = (lx, ph) => line(x + lx * s, y - 150 * s, x + lx * s + Math.sin(st + ph) * 18 * s, y - 6 * s, { w: 16 * s, c: D });
+  h += leg(-70, 0) + leg(60, Math.PI);
+  h += ell(x, y - 200 * s, 140 * s, 62 * s, { f: C, w: 6 });
+  h += blob([[x + 90 * s, y - 230 * s], [x + 130 * s, y - 330 * s], [x + 170 * s, y - 340 * s], [x + 150 * s, y - 230 * s]], { f: C, w: 6 });
+  h += ell(x + 190 * s, y - 330 * s, 56 * s, 26 * s, { f: C, w: 6, rot: 30 });
+  h += circ(x + 186 * s, y - 344 * s, 5 * s, { f: INK, w: 0 }) + line(x + 160 * s, y - 360 * s, x + 168 * s, y - 384 * s, { w: 7 * s });
+  for (let i = 0; i < 5; i++) h += line(x + (100 + i * 10) * s, y - (250 + i * 18) * s, x + (84 + i * 10) * s, y - (236 + i * 18) * s, { w: 7 * s, c: D });
+  h += `<path d="M${x - 136 * s} ${y - 214 * s} Q${x - 190 * s} ${y - 180 * s} ${x - 176 * s} ${y - 110 * s}" stroke="${D}" stroke-width="${14 * s}" fill="none" stroke-linecap="round"/>`;
+  h += leg(-40, Math.PI) + leg(90, 0);
+  const r = (o.rear ?? 0) * -32;
+  return r ? `<g transform="rotate(${r.toFixed(1)} ${x - 70 * s} ${y})">${h}</g>` : h;
+}
+function torch(x, y, t) { return line(x, y, x - 10, y + 120, { w: 14, c: '#6B4226' }) + glow(x, y - 30, 380, '#FFB347', .45, 'tg' + Math.round(x)) +
+  blob([[x - 22, y], [x - 14, y - 50 - Math.sin(t * 12) * 8], [x + Math.sin(t * 9) * 8, y - 86], [x + 16, y - 46], [x + 22, y]], { f: '#FF8C1A', w: 5, j: 1 }) + blob([[x - 10, y - 4], [x, y - 52 - Math.sin(t * 11) * 6], [x + 10, y - 4]], { f: '#FFE07A', w: 0, j: .6 }); }
+function handprint(x, y, s = 1, c = '#C2441C', op = 1) { let h = ell(x, y, 34 * s, 40 * s, { f: c, w: 0, j: 1.5 });
+  [[-34, -40, -40], [-14, -58, -14], [8, -62, 6], [28, -52, 22], [44, -6, 70]].forEach(([dx, dy, a]) => { h += ell(x + dx * s, y + dy * s, 10 * s, 26 * s, { f: c, w: 0, rot: a, j: 1 }); });
+  return `<g opacity="${op}">${h}</g>`; }
+/** bison drawn progressively (u 0..1) in ochre/charcoal, cave-art style */
+function bison(x, y, s, u = 1) { const L = 2200; const d = `M${x - 160 * s} ${y} Q${x - 170 * s} ${y - 120 * s} ${x - 60 * s} ${y - 150 * s} Q${x + 40 * s} ${y - 210 * s} ${x + 120 * s} ${y - 120 * s} Q${x + 190 * s} ${y - 110 * s} ${x + 190 * s} ${y - 40 * s} L${x + 150 * s} ${y + 10 * s} M${x - 120 * s} ${y} L${x - 130 * s} ${y + 90 * s} M${x - 60 * s} ${y + 6 * s} L${x - 50 * s} ${y + 90 * s} M${x + 60 * s} ${y + 6 * s} L${x + 70 * s} ${y + 90 * s} M${x + 120 * s} ${y} L${x + 130 * s} ${y + 90 * s} M${x + 160 * s} ${y - 110 * s} Q${x + 200 * s} ${y - 170 * s} ${x + 170 * s} ${y - 190 * s}`;
+  return `<path d="${d}" fill="none" stroke="#2a1a10" stroke-width="${12 * s}" stroke-linecap="round" stroke-dasharray="${L}" stroke-dashoffset="${(L * (1 - u)).toFixed(0)}"/>` + (u > .9 ? `<path d="M${x - 140 * s} ${y - 10 * s} Q${x - 120 * s} ${y - 110 * s} ${x - 40 * s} ${y - 130 * s} Q${x + 40 * s} ${y - 180 * s} ${x + 110 * s} ${y - 110 * s} Q${x + 170 * s} ${y - 90 * s} ${x + 170 * s} ${y - 40 * s} L${x + 140 * s} ${y} Z" fill="#C2441C" opacity="${((u - .9) * 6).toFixed(2)}"/>` : ''); }
 
 /* ---------- render loop ---------- */
 let CSC, CSTAGE;

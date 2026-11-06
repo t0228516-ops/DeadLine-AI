@@ -77,6 +77,20 @@ def fx(name):
         n = int(2.5 * SR); out = np.zeros(n)
         for _ in range(500): k = rng.integers(0, n - 800); out[k:k + 600] += band(noise(600 / SR), 800, 6000) * env(600, .0005, .004)
         return norm(out * np.minimum(1, np.linspace(2.5, 0, n)), .6)
+    if name == 'powerdown':
+        return norm(tone(880, 110, .7, r=.35, harm=(1, 3)), .55)
+    if name == 'spray':
+        s = band(noise(.45), 1200, 7000) * env(int(.45 * SR), .02, .15); return norm(s, .7)
+    if name == 'neigh':             # cartoon horse whinny
+        n = int(1.0 * SR); t = np.arange(n) / SR; f = 700 + 350 * np.sin(2 * np.pi * 11 * t) * np.exp(-t * 2) - 300 * t
+        ph = 2 * np.pi * np.cumsum(f) / SR; s = sum(np.sin(ph * k) / k for k in range(1, 5))
+        return norm(s * env(n, .02) * np.clip((1.0 - t) / .4, 0, 1), .6)
+    if name == 'hay':
+        s = band(noise(.6), 800, 5000) * env(int(.6 * SR), .005, .2); s[:int(.3 * SR)] += tone(120, 60, .3, r=.08) * .6; return norm(s, .8)
+    if name == 'chalk':
+        out = np.zeros(int(.8 * SR))
+        for i in range(6): k = int(i * .12 * SR); out[k:k + 2500] += band(noise(2500 / SR), 2500, 9000) * env(2500, .002, .02)
+        return norm(out, .35)
     raise ValueError('unknown sfx ' + name)
 
 def music(dur, bpm=100, seed=3):
