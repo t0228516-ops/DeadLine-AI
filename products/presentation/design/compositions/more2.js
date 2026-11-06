@@ -186,7 +186,8 @@ module.exports = function register(def, K) {
       const val = String(s.value); const size = val.length <= 2 ? 460 : val.length <= 4 ? 340 : 250;
       const bg = '<div class="plate"></div>' + P.panel(0, 0, 900, HH, P.mix(p.bg, p.accent, 0.12)) + P.grain(P.mix(p.bg, p.text, 0.06)) +
         (v ? P.visualImg(v, 120, 160, 660, 660, { opacity: 0.35 }) : P.div(P.pos(150, 190, 600, 600) + ';border-radius:50%;border:2px solid ' + P.mix(p.bg, p.accent, 0.5)));
-      const fg = vBox(MX, MT, 780, HH - MT - MB, t('number', 0, 0, 780, esc(val), 'position:static;text-align:center;' + disp + ';' + fs(size) + ';line-height:1;letter-spacing:-.04em;color:' + p.accent)) +
+      // сан ешқашан екі жолға бөлінбейді («1 / млн»): бір жолда — өскенде ені шекті, QA сыйғанша ғана үлкейтеді
+      const fg = vBox(MX, MT, 780, HH - MT - MB, t('number', 0, 0, 780, esc(val), 'position:static;text-align:center;white-space:nowrap;' + disp + ';' + fs(size) + ';line-height:1;letter-spacing:-.04em;color:' + p.accent)) +
         vBox(1010, MT, W - 1010 - MX, HH - MT - MB, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: W - 1010 - MX, maxLines: 3, scale: [64, 56, 50, 44], hl: true }) +
           '<div style="width:80px;height:4px;background:' + p.accent + ';margin:28px 0"></div>' +
           t('lead', 0, 0, W - 1010 - MX, esc(s.label || a.subtitle || ''), 'position:static;' + fs(32) + ';line-height:1.45;color:var(--text2)') +
