@@ -38,7 +38,8 @@ const PROFILES = [
       const objs = (s.match(/\n\d+ 0 obj\b/g) || []).length;
       if (objs < 6 || objs > 10) reasons.push(`құрылымы басқа (${objs} нысан)`);
       const content = pageContent(s, buf);
-      if (!content || !/^1 0 0 -1 0 842 cm\nq\n0 0 595 842 re\nW\* n\nq\n340 0 0 -[\d.]+ 20 [\d.]+ cm\n0 0 0 RG 0 0 0 rg\n\/G\d+ gs\n\/X\d+ Do\nQ\nQ\n$/.test(content)) reasons.push('бет мазмұны Kaspi чегіне сай емес');
+      // ескі Skia (m100) түс жолын («0 0 0 RG 0 0 0 rg») жазбайды және ағынды сықпайды — екеуі де шын Kaspi чегі (06.11.2026)
+      if (!content || !/^1 0 0 -1 0 842 cm\nq\n0 0 595 842 re\nW\* n\nq\n340 0 0 -[\d.]+ 20 [\d.]+ cm\n(?:0 0 0 RG 0 0 0 rg\n)?\/G\d+ gs\n\/X\d+ Do\nQ\nQ\n$/.test(content)) reasons.push('бет мазмұны Kaspi чегіне сай емес');
     },
   },
   {

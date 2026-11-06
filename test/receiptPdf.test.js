@@ -84,3 +84,8 @@ test('iPhone: printed image, edited in Preview, or without Kaspi author is caugh
     'text drawn on page': { content: 'q Q q 0 100 392 599.6667 re W n /Perceptual ri q 392 0 0 599.6667 0 100 cm\n/Im1 Do Q Q BT /F1 12 Tf (100) Tj ET\n' },
   })) assert.strictEqual(kaspiPdfProfile(kaspiIos(o)).ok, false, name);
 });
+
+test('Android: older Skia (m100) writes no colour line and may leave the content stream uncompressed (real 06.11 receipt)', () => {
+  const r = kaspiPdfProfile(kaspiLike({ content: '1 0 0 -1 0 842 cm\nq\n0 0 595 842 re\nW* n\nq\n340 0 0 -362 20 382 cm\n/G3 gs\n/X4 Do\nQ\nQ\n' }));
+  assert.deepStrictEqual(r.reasons, []);
+});
