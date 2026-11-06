@@ -49,13 +49,30 @@ test('photo rescue: nothing fits → DeepSeek suggests real archive subjects (Ru
   assert.ok(calls.some((c) => c.q === 'Колхоз Казахстан 1930'), 'орысша атау Commons-та ізделді');
 });
 
-test('last resort: nothing passes even after the rescue round → the best photo seen (fit ≥ 5) still goes on the slide', async () => {
+// 2026-11-06 (иесінің келісімі): соңғы сақтандыру 7 күнде 4 рет нашар фото қойған (fit 5–6, appeal 5, blurry/cluttered) →
+// енді тек ақаусыз, fit ≥ 6 әрі appeal ≥ 6 фото; әйтпесе слайд нашар фотомен емес, AI суретпен не таза мәтінмен қалады
+test('last resort: a weak or flawed photo (fit 5, «modern») is NOT forced onto the slide', async () => {
   global.fetch = async () => {
     const content = JSON.stringify({ queries: [], commons: [] });
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content }, finish_reason: 'stop' }], usage: {} }), text: async () => content };
   };
   const scores = new Map();
   const vision = async (batch) => { batch.forEach((c) => scores.set(c.url, { fit: 5, appeal: 6, bg: 5, flaw: 'modern' })); return []; };
+  vision.scoreOf = (c) => scores.get(c.url) || null;
+  const got = await _fetchPhotoVision({ title: 'Ұжымдастыру саясаты' }, {
+    query: 'Kazakh village collectivization 1930s', topic: 'Ұжымдастыру', topicTitle: 'Ұжымдастыру',
+    used: new Set(), avoid: new Set(), vision, budget: { left: 5 },
+  });
+  assert.strictEqual(got.dataUri, null);
+});
+
+test('last resort: a clean photo close to the topic (fit 6, appeal 7, no flaw) still goes on the slide', async () => {
+  global.fetch = async () => {
+    const content = JSON.stringify({ queries: [], commons: [] });
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content }, finish_reason: 'stop' }], usage: {} }), text: async () => content };
+  };
+  const scores = new Map();
+  const vision = async (batch) => { batch.forEach((c) => scores.set(c.url, { fit: 6, appeal: 7, bg: 5, flaw: '' })); return []; };
   vision.scoreOf = (c) => scores.get(c.url) || null;
   const got = await _fetchPhotoVision({ title: 'Ұжымдастыру саясаты' }, {
     query: 'Kazakh village collectivization 1930s', topic: 'Ұжымдастыру', topicTitle: 'Ұжымдастыру',

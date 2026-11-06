@@ -29,10 +29,18 @@ function photoFriendly(s) {
   return (n >= 3 && n <= 5) || (!n && String(s.body || '').trim().length > 40);
 }
 
-function mayCarryPhoto(slide) {
+const isNone = (q) => /^\s*none\s*$/i.test(String(q || ''));
+
+/** Студент фото сұрады ма («добавь их фото», «суреттерімен», «with pictures») */
+// «фотосинтез», «фотон», «фотоэффект», «photosynthesis» — фото сұрау емес
+const WANTS_PHOTOS = /фото(?!синтез|эффект|н)|сурет|картин|изображ|рисун|\bphotos?\b|\bpictures?\b|\bimages?\b/i;
+function wantsPhotos(text) { return WANTS_PHOTOS.test(String(text || '')); }
+
+function mayCarryPhoto(slide, opts = {}) {
   const s = slide || {};
-  // LLM «суретке түсетін нақты нәрсе жоқ» деді (абстракт ұғым) — жақын-жуық стоктық фото емес, фотосыз макет
-  if (/^\s*none\s*$/i.test(String(s.imageQuery || ''))) return false;
+  // LLM «суретке түсетін нақты нәрсе жоқ» деді (абстракт ұғым) — жақын-жуық стоктық фото емес, фотосыз макет.
+  // Бірақ студент өзі фото сұраса, «NONE» еленбейді (сұраныс сосын слайдтың тақырыбынан құрастырылады)
+  if (isNone(s.imageQuery) && !opts.ignoreNone) return false;
   // DeepSeek ырғақ үшін мазмұн слайдына да image:"none" қояды — макетті композиция қозғалтқышы өзі таңдайды, фото жарайтын слайд фотосыз қалмасын
   if (s.composition && s.composition.image === 'none' && !photoFriendly(s)) return false;
   if (validateInfographic(s.infographic)) return false;
@@ -41,13 +49,19 @@ function mayCarryPhoto(slide) {
 
 /**
  * @param {object[]} slides
- * @param {{ budget?: number, skin?: boolean }} [opts]
+ * @param {{ budget?: number, skin?: boolean, wantsPhotos?: boolean }} [opts]
  * @returns {{ indexes: Set<number>, planned: string[] }} slides to search a photo for + their planned layouts
  */
 function planPhotoSlides(slides, opts = {}) {
   const list = Array.isArray(slides) ? slides : [];
   const budget = Number.isFinite(opts.budget) ? opts.budget : 4;
-  const sim = list.map((s) => Object.assign({}, s, { webImageUrl: mayCarryPhoto(s) ? PLACEHOLDER : '' }));
+  // 2026-11-06: «Лони мен Қарағанды» (студент «добавь их фото» деп жазған) — LLM 7 слайдтың бәріне imageQuery "NONE"
+  // қойып, бірде-бір фото ізделмеді. Студент фото сұраса — NONE еленбейді; барлық слайд NONE болса (≥4) — мұқабаға ғана іздеу
+  const ignoreNone = !!opts.wantsPhotos;
+  const allNone = list.length >= 4 && list.every((s) => isNone(/** @type {any} */ (s || {}).imageQuery));
+  const sim = list.map((s, i) => Object.assign({}, s, {
+    webImageUrl: mayCarryPhoto(s, { ignoreNone: ignoreNone || (allNone && i === 0) }) ? PLACEHOLDER : '',
+  }));
   const plan = A.planDeck(sim);
   const cands = [];
   // композиция қозғалтқышында қорытынды (closing-seal) мен бөлім (section-band) фотоны көрсетпейді — оларға іздеу бекер
@@ -71,4 +85,4 @@ function planPhotoSlides(slides, opts = {}) {
   return { indexes: new Set(keep.map((c) => c.i)), planned: plan.map((p) => p.layout) };
 }
 
-module.exports = { planPhotoSlides, mayCarryPhoto, SHOWS_PHOTO };
+module.exports = { planPhotoSlides, mayCarryPhoto, SHOWS_PHOTO, wantsPhotos, isNone };

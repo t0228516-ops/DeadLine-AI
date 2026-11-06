@@ -3,6 +3,8 @@
 const axios = require('axios');
 
 const MAX_IMAGE_BYTES = 1_500_000;   // бір сурет ≤ 1.5MB (HTML-ге base64 болып ендіріледі → +33%)
+// одан үлкені лақтырылмайды — кішірейтіліп сығылады (imageShrink); 12 МБ-тан асқан файл жүктелмейді
+const MAX_DOWNLOAD_BYTES = 12_000_000;
 const DL_TIMEOUT_MS   = 12_000;
 
 /**
@@ -96,7 +98,7 @@ async function downloadAsDataUri(url, attempt = 0) {
     const res = await axios.get(url, {
       responseType: 'arraybuffer',
       timeout: DL_TIMEOUT_MS,
-      maxContentLength: MAX_IMAGE_BYTES * 3,   // тым үлкен файлды тоқтату
+      maxContentLength: MAX_DOWNLOAD_BYTES,   // тым үлкен файлды тоқтату
       // Wikimedia (upload.wikimedia.org) әдепкі axios User-Agent-ті 403/429-мен қайтарады
       headers: { 'User-Agent': imageUA(url), Accept: 'image/jpeg,image/png,image/webp,image/*;q=0.8' },
       validateStatus: s => s === 200,
@@ -106,12 +108,20 @@ async function downloadAsDataUri(url, attempt = 0) {
       console.warn(`[Image] unexpected content-type: ${type}`);
       return null;
     }
-    const buf = Buffer.from(res.data);
+    let buf = Buffer.from(res.data);
+    let mime = type;
     if (buf.length > MAX_IMAGE_BYTES) {
-      console.warn(`[Image] image too large (${Math.round(buf.length / 1024)}KB) — skipped`);
-      return null;
+      const kb = Math.round(buf.length / 1024);
+      const small = await module.exports.shrinkImage(buf, type, MAX_IMAGE_BYTES);
+      if (!small) {
+        console.warn(`[Image] image too large (${kb}KB), could not shrink — skipped`);
+        return null;
+      }
+      console.log(`[Image] large photo shrunk ${kb}KB ${small.from.join('x')} → ${Math.round(small.buf.length / 1024)}KB ${small.w}x${small.h}`);
+      buf = small.buf;
+      mime = small.type;
     }
-    return `data:${type};base64,${buf.toString('base64')}`;
+    return `data:${mime};base64,${buf.toString('base64')}`;
   } catch (error) {
     const status = error.response?.status;
     const transient = status === 429 || status >= 500 ||
@@ -132,4 +142,6 @@ async function fetchImage(query) {
 }
 
 module.exports = {
-  imageUA, fetchImage, searchImage, downloadAsDataUri };
+  imageUA, fetchImage, searchImage, downloadAsDataUri, MAX_IMAGE_BYTES,
+  // тестте ауыстыруға болады
+  shrinkImage: (...a) => require('./imageShrink').shrinkImage(...a) };

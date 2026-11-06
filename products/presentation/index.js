@@ -34,7 +34,7 @@ const { runVisionCritic } = require('./visionCritic');
 const { uniqueId } = require('../../core/tmpFiles');
 const { generateSpeakerNotes, applySpeakerNotes } = require('./speakerNotes');
 const { validateInfographic } = require('./design/infographics');
-const { planPhotoSlides } = require('./photoPlan');
+const { planPhotoSlides, wantsPhotos, isNone } = require('./photoPlan');
 const { makePhotoJudge } = require('./photoJudge');
 const { makeVisionChooser } = require('./photoVision');
 const { gatherTopic } = require('./research');
@@ -54,13 +54,17 @@ function simplifyQuery(query) {
 
 // Толық brief емес, тек қысқа кілт сөз (толық brief Unsplash-та 414 қатесін береді)
 
-const LAST_FIT = Number(process.env.PHOTO_LAST_RESORT_FIT) || 5;
+// Соңғы сақтандыру: 7 күнде 4 рет іске қосылып, төртеуі де нашар фото қойған (fit 5–6, appeal 5, «blurry», «cluttered») →
+// енді тек ақаусыз (flaw жоқ), тақырыпқа жуық әрі көрікті фото; болмаса — AI сурет не таза мәтінді слайд
+const LAST_FIT = Number(process.env.PHOTO_LAST_RESORT_FIT) || 6;
+const LAST_APPEAL = Number(process.env.PHOTO_LAST_RESORT_APPEAL) || 6;
 async function bestSeen(seen, ctx, place) {
   const { canonKey, fitsPlace, downloadCached, imageMeta } = require('./images');
   const { BAD_FLAW } = require('./photoVision');
   const used = ctx.used instanceof Set ? ctx.used : new Set();
   const pool = seen
-    .filter((x) => x.s.fit >= LAST_FIT && x.s.appeal >= 5 && !BAD_FLAW.test(x.s.flaw || '') && !used.has(x.c.url) && !used.has(canonKey(x.c.url)))
+    .filter((x) => x.s.fit >= LAST_FIT && x.s.appeal >= LAST_APPEAL && !String(x.s.flaw || '').trim() && !BAD_FLAW.test(x.s.flaw || '')
+      && !used.has(x.c.url) && !used.has(canonKey(x.c.url)))
     .sort((a, b) => (b.s.fit * 0.6 + b.s.appeal * 0.4) - (a.s.fit * 0.6 + a.s.appeal * 0.4));
   for (const x of pool.slice(0, 3)) {
     const key = canonKey(x.c.url);
@@ -150,7 +154,7 @@ async function fetchPhotoVision(slide, ctx) {
       if (hit && hit.dataUri) { console.log(`[Image] rescue ok q="${t.q.slice(0, 60)}"${t.archive ? ' (archive)' : ''}`); return pack(hit); }
     }
   }
-  // Соңғы сақтандыру: көрілгендердің ішінен тақырыпқа жуық (fit ≥ 5), көрікті (appeal ≥ 5), жарнамасыз/белгісіз ең жақсысы
+  // Соңғы сақтандыру: көрілгендердің ішінен тақырыпқа жуық (fit ≥ 6), көрікті (appeal ≥ 6), ақаусыз ең жақсысы
   const best = await bestSeen(seen, ctx, place);
   if (best) return best;
   // нақты тұлға/оқиға/жыл — AI-мен жасалмайды (жалған тарих); жер/халық атауы («Kazakh steppe») — жасалады
@@ -244,7 +248,7 @@ async function swapLibraryPhotos(buf, slides, ctx) {
     // broad: слайдқа дәл фото табылмаса — тақырыптың жалпы көрінісі (мыс. «Kazakh steppe»): үлкен фото орны бос түсті тіктөртбұрыш болып қалмасын
     const search = async (slot, broad) => {
       const slide = slides[slot.slide] || {};
-      const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
+      const raw = typeof slide.imageQuery === 'string' && !isNone(slide.imageQuery) ? slide.imageQuery.trim() : '';
       const query = !broad && isLatinQuery(raw) ? raw : fallbackQueries('', ctx.topic, [])[0] || '';
       if (!query) return null;
       const text = broad ? '' : [slide.subtitle, slide.body].concat(Array.isArray(slide.bullets) ? slide.bullets.slice(0, 3) : [])
@@ -818,13 +822,13 @@ async function generatePresentation(userInput, options = {}) {
   await onProgress('media', 'Суреттер мен диаграммалар...');
   console.log('[Pipeline] Fetching images + drawing visuals...');
   const usedImages = new Set(); // бір сурет екі слайдқа түспесін
-  const deckQueries = slides.map((sl) => (typeof sl.imageQuery === 'string' ? sl.imageQuery.trim() : '')).filter(isLatinQuery);
+  const deckQueries = slides.map((sl) => (typeof sl.imageQuery === 'string' ? sl.imageQuery.trim() : '')).filter((q) => isLatinQuery(q) && !isNone(q));
   // Фото тек макеті шынымен фото КӨРСЕТЕТІН слайдтарға ізделеді (бұрын әр слайдқа → API лимиті тез бітетін)
   // ұзын колодада фото көбірек (13 слайдқа 4 фото — тым аз): ~45% слайд, ең көбі 7 (тегінде ~30%, ең көбі 5)
   const photoBudget = options.free
     ? Math.max(Number(process.env.PHOTO_BUDGET_FREE) || 3, Math.min(5, Math.round(slides.length * 0.3)))
     : Math.max(Number(process.env.PHOTO_BUDGET) || 4, Math.min(7, Math.round(slides.length * 0.45)));
-  const photoPlan = planPhotoSlides(slides, { budget: photoBudget, skin: !!(refAnalysis && refAnalysis.skin) });
+  const photoPlan = planPhotoSlides(slides, { budget: photoBudget, skin: !!(refAnalysis && refAnalysis.skin), wantsPhotos: wantsPhotos(topic) });
   const sysDef = require('./design/systems').getSystem(design && design.system);
   const sysCover = (sysDef && sysDef.cover) || 'classic';
   const sysClosing = (sysDef && sysDef.closing) || 'rows';
@@ -835,7 +839,8 @@ async function generatePresentation(userInput, options = {}) {
   const imagesTask = mapLimit(slides, 3, async (slide, idx) => {
     if (!photoPlan.indexes.has(idx)) return null;
     // Сурет іздеу тек ағылшынша (латын) сұранысқа. Қазақша/орысша сұраныс ЕШҚАШАН жіберілмейді.
-    const raw = typeof slide.imageQuery === 'string' ? slide.imageQuery.trim() : '';
+    // «NONE» — сұраныс емес (жоспар оны еленбеді: студент фото сұраған) → сұранысты rescue слайдтың тақырыбынан құрастырады
+    const raw = typeof slide.imageQuery === 'string' && !isNone(slide.imageQuery) ? slide.imageQuery.trim() : '';
     const query = isLatinQuery(raw) ? raw : '';
     if (raw && !query) console.warn(`[Image] non-English imageQuery ignored: "${raw.slice(0, 60)}"`);
     // кесте/диаграмма слайдтарын фото жоспары әлдеқашан шығарып тастаған (photoPlan.mayCarryPhoto)
