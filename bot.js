@@ -839,6 +839,7 @@ bot.on('message', async (msg) => {
   const text   = msg.text;
 
   if (text && text.startsWith('/')) return;
+  if (msg.successful_payment) return; // Stars төлемі — төмендегі бөлек өңдеуші (onStarsPaid)
 
   // Тестер пікір күтіп тұрса — мәтін соған жазылады (мәзір батырмалары өтеді)
   try {
@@ -911,14 +912,14 @@ bot.on('message', async (msg) => {
         `🎁 Бірінші презентация — *${FIRST_PRICE}₸* (әдепкі баға ${PRICE}₸)!\n${plusLine}\n\n` +
         `💳 Kaspi арқылы төлеңіз:\n📱 *${KASPI_PHONE}*\n👤 ${KASPI_NAME}\n\n` +
         `Сомасы: *${FIRST_PRICE}₸*\n\nТөлегеннен кейін *чекті (PDF)* осы ботқа жіберіңіз ✅`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', ...starsButton() }
       );
     }
     waitingForCount.add(chatId);
     return bot.sendMessage(
       chatId,
       `💰 *Кредит сатып алу*\n\n💵 Баға: *${PRICE}₸* — 1 презентация\n${plusLine}\n\nНеше презентация керек? Санын жазыңыз (немесе plus):`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', ...starsButton() }
     );
   }
 
@@ -1090,6 +1091,64 @@ bot.on('message', async (msg) => {
   return sendMiniAppHint(chatId);
 });
 
+// ─── Telegram Stars (халықаралық төлем; әдепкіде өшік — STARS_ENABLED=1) ─────────────
+const Stars = require('./core/stars');
+/** Сатып алу хабарының астына «⭐ Stars» батырмасы (тек қосулы болса) */
+function starsButton() {
+  if (!Stars.enabled()) return {};
+  return { reply_markup: { inline_keyboard: [[{ text: '⭐ Telegram Stars (шетелден / картамен)', callback_data: 'st:menu' }]] } };
+}
+bot.on('callback_query', async (cq) => {
+  const data = cq.data || '';
+  if (!data.startsWith('st:')) return;
+  const chatId = cq.message && cq.message.chat && cq.message.chat.id;
+  if (!chatId) return;
+  try {
+    if (!Stars.enabled()) return bot.answerCallbackQuery(cq.id, { text: 'Stars қазір өшік — Kaspi арқылы төлеңіз', show_alert: true });
+    await bot.answerCallbackQuery(cq.id).catch(() => {});
+    if (data === 'st:menu') {
+      return bot.sendMessage(chatId, '⭐ *Telegram Stars арқылы төлеу*\nКез келген елден: карта, Apple Pay, Google Pay. Кредит төлемнен кейін бірден қосылады.', {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: Stars.offers().map((o) => [{ text: `${o.title} — ${o.stars} ⭐`, callback_data: 'st:' + o.id }]) },
+      });
+    }
+    const offer = Stars.offerById(data.slice(3));
+    if (!offer) return;
+    const inv = Stars.invoiceFor(offer, cq.from.id);
+    await bot.sendInvoice(chatId, inv.title, inv.description, inv.payload, '', inv.currency, inv.prices);
+  } catch (e) {
+    console.warn('[Stars] invoice failed:', e.message);
+    bot.sendMessage(chatId, '⚠️ Шот ашылмады. Кейінірек қайталаңыз не Kaspi арқылы төлеңіз.').catch(() => {});
+  }
+});
+// Telegram төлемді бастамас бұрын сұрайды (10 с ішінде жауап керек): шот осы адамдікі әрі сомасы сай ма
+bot.on('pre_checkout_query', (q) => {
+  const v = Stars.checkPreCheckout(q);
+  if (!v.ok) console.warn(`[Stars] pre-checkout refused for ${q.from && q.from.id}: ${q.invoice_payload} ${q.total_amount}`);
+  bot.answerPreCheckoutQuery(q.id, v.ok, v.ok ? {} : { error_message: v.error }).catch((e) => console.warn('[Stars] pre-checkout answer failed:', e.message));
+});
+/** Төлем өтті → кредит (charge id — чек нөмірі: екі рет есептелмейді) */
+async function onStarsPaid(msg) {
+  const chatId = msg.chat.id;
+  const sp = msg.successful_payment;
+  const c = Stars.creditFor(sp);
+  if (!c) {
+    console.warn(`[Stars] unknown payment from ${chatId}: ${sp && sp.invoice_payload}`);
+    if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⚠️ Stars: түсінбеген төлем ${chatId} · ${sp && sp.total_amount}⭐ · ${sp && sp.invoice_payload} · ${sp && sp.telegram_payment_charge_id}`).catch(() => {});
+    return bot.sendMessage(chatId, '⚠️ Төлем түсті, бірақ пакет танылмады — админ қолмен қосады. Кешірім сұраймыз.').catch(() => {});
+  }
+  const applied = await applyReceipt(chatId, c.receiptNo, c.kzt, c.credits);
+  if (!applied.applied) return; // бұл төлем бұрын есептелген
+  logEvent(chatId, 'paid').catch(() => {});
+  logPayment(chatId, c.kzt, c.credits, c.receiptNo).catch((e) => console.warn('[Pay] log failed', e.message));
+  console.log(`[Stars] ${chatId} paid ${c.stars}⭐ → +${c.credits} credits (${c.receiptNo})${c.priceChanged ? ' (price changed since invoice)' : ''}`);
+  await bot.sendMessage(chatId,
+    `✅ Төлем өтті!\n\n💳 *${c.credits}* презентация кредиті қосылды.\n📦 Жалпы кредитіңіз: *${applied.user.credits}*\n\n«📱 Mini App ашу» батырмасы арқылы бастаңыз! 🚀`,
+    { parse_mode: 'Markdown', ...MAIN_KEYBOARD }).catch(() => {});
+  if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⭐ Stars: ${chatId} → +${c.credits} кредит (${c.stars}⭐, ≈${c.kzt}₸)`).catch(() => {});
+}
+bot.on('message', (msg) => { if (msg.successful_payment) onStarsPaid(msg).catch((e) => console.error('[Stars] credit failed:', e.message)); });
+
 /** Пакетті сатып алу нұсқауы: дәл сома маңызды — чек сомасы бойынша пакет танылады */
 function sendBundleOffer(chatId, b) {
   const icon = b === PLUS ? '⭐' : '🎒';
@@ -1128,13 +1187,14 @@ async function startBot(opts = {}) {
   // басқа сервер) тек ['message'] деп қойса, inline батырма басқанда
   // callback_query боттың өзіне келмейді (Telegram-да тек жалтырап тұрады).
   // Сондықтан нақты көрсетіп, бір рет қолмен қайта орнатамыз.
-  const ALLOWED = JSON.stringify(['message', 'callback_query']);
+  // pre_checkout_query — Telegram Stars төлемі (онсыз төлем 10 с-тан соң «бот жауап бермеді» деп құлайды)
+  const ALLOWED = JSON.stringify(['message', 'callback_query', 'pre_checkout_query']);
   await bot.deleteWebHook().catch(() => {});
   await bot.getUpdates({ timeout: 0, limit: 1, allowed_updates: ALLOWED })
     .catch(err => console.error('[Bot] allowed_updates reset error:', err.message));
   bot.options.polling = { params: { allowed_updates: ALLOWED } };
   bot.startPolling({ restart: true });
-  console.log('[Bot] Іске қосылды (allowed_updates: message, callback_query)');
+  console.log('[Bot] Іске қосылды (allowed_updates: message, callback_query, pre_checkout_query)');
   return bot;
 }
 
