@@ -100,6 +100,12 @@
 
   function applyMode() {
     const mode = state.mode;
+    // Тегін квиз — шеберден бөлек бөлім (webapp/quizmaker.js)
+    const isQuiz = mode === 'quiz';
+    $('#wizard').classList.toggle('hidden', isQuiz);
+    $('#quizMaker').classList.toggle('hidden', !isQuiz);
+    $('#quizPromo').classList.toggle('hidden', isQuiz);
+    if (isQuiz) { if (window.DeadlineQuiz) window.DeadlineQuiz.open(); return; }
     const isReferat = mode === 'referat';
     const isTemplate = mode === 'template';
     const isAi = mode === 'presentation';
@@ -139,10 +145,13 @@
     const b = $(`#modeChips .seg-btn[data-v="${v}"]`);
     if (b) b.click();
   }
-  // Сілтеме арқылы бірден шаблон режимі: .../webapp/#template немесе startapp=template
+  if (window.DeadlineQuiz) window.DeadlineQuiz.init({ api, esc, showToast, haptic, tg, initDataHeader });
+  $('#quizPromo').addEventListener('click', () => { haptic('light'); selectMode('quiz'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  // Сілтеме арқылы бірден шаблон / квиз режимі: .../webapp/#template, #quiz немесе startapp=template|quiz
   try {
     const sp = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.start_param) || '';
     if (/template/.test(location.hash) || sp === 'template') setTimeout(() => selectMode('template'), 0);
+    else if (/quiz/.test(location.hash) || sp === 'quiz') setTimeout(() => selectMode('quiz'), 0);
   } catch {}
 
   // ── Слайд саны: −/+ ───────────────────────────────────────────────────

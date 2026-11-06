@@ -37,13 +37,22 @@
     <section id="tab-create" class="panel active">
       <p id="testerBanner" class="free-banner tester-banner hidden"></p>
 
+      <!-- Тегін квиз: бірден көзге түседі (иесінің талабы) -->
+      <button type="button" class="quiz-promo" id="quizPromo">
+        <span class="qp-ic" aria-hidden="true">🎯</span>
+        <span class="qp-txt"><b>Тегін квиз — 30 секундта</b><small>Kahoot сияқты: топ телефонмен ойнайды</small></span>
+        <span class="qp-go">Жасау →</span>
+      </button>
+
       <!-- Режим: бір қатар (бұрынғы үлкен «шаблон» карточкасы алынды) -->
       <div class="seg" id="modeChips">
-        <button type="button" class="seg-btn active" data-v="presentation">✨ Презентация</button>
-        <button type="button" class="seg-btn" data-v="referat">📄 Реферат</button>
-        <button type="button" class="seg-btn" data-v="template">🎨 Өз шаблоным</button>
+        <button type="button" class="seg-btn active" data-v="presentation"><i>✨</i>Презентация</button>
+        <button type="button" class="seg-btn" data-v="referat"><i>📄</i>Реферат</button>
+        <button type="button" class="seg-btn" data-v="template"><i>🎨</i>Шаблон</button>
+        <button type="button" class="seg-btn seg-quiz" data-v="quiz"><i>🎯</i>Квиз<span class="seg-free">тегін</span></button>
       </div>
 
+      <div id="wizard">
       <div class="wiz-steps" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
       <div class="wiz-label" id="wizLabel">1 / 3 · ТАҚЫРЫП</div>
 
@@ -148,6 +157,81 @@
           <span id="btnGenText">Презентация жасау</span>
           <small class="btn-sub" id="genHint">1 кредит</small>
         </button>
+      </div>
+      </div><!-- /wizard -->
+
+      <!-- ── ТЕГІН КВИЗ (webapp/quizmaker.js) ── -->
+      <div id="quizMaker" class="hidden">
+        <!-- форма -->
+        <div id="qmForm">
+          <p class="free-banner qm-left" id="qmLeft">🎁 Квиз тегін · күніне 3 квиз</p>
+          <h2 class="wiz-h">Квиз не туралы?</h2>
+          <p class="wiz-sub">Тақырыпты жазыңыз — сұрақтарды бот өзі құрастырады (~30 секунд). Топ телефонмен ойнайды, тіркелу керек емес.</p>
+          <textarea id="qmTopic" class="wiz-topic" rows="2" maxlength="300" placeholder="Мысалы: Абай Құнанбайұлы: өмірі мен шығармашылығы"></textarea>
+          <div class="examples" id="qmExamples">
+            <span class="hint-left">Мысалдар:</span>
+            <button type="button" class="ex-chip">Фотосинтез</button>
+            <button type="button" class="ex-chip">Қазақ хандығының құрылуы</button>
+            <button type="button" class="ex-chip">Ньютон заңдары</button>
+          </div>
+          <div class="qm-grid">
+            <div class="card compact">
+              <label class="label">Сұрақ саны</label>
+              <div class="stepper">
+                <button type="button" class="step-btn" id="qmMinus" aria-label="Азайту">−</button>
+                <input type="number" id="qmCount" class="input-number" min="5" max="15" step="1" value="10" inputmode="numeric" />
+                <button type="button" class="step-btn" id="qmPlus" aria-label="Көбейту">+</button>
+              </div>
+              <div class="hint">5–15 аралығында</div>
+            </div>
+            <div class="card compact">
+              <label class="label">Тіл</label>
+              <div class="chips" id="qmLang">
+                <button type="button" class="chip active" data-v="kk">Қаз</button>
+                <button type="button" class="chip" data-v="ru">Рус</button>
+                <button type="button" class="chip" data-v="en">EN</button>
+              </div>
+            </div>
+          </div>
+          <details class="fold qm-mat" id="qmMat">
+            <summary>📎 Өз материалым <span>міндетті емес ›</span></summary>
+            <p class="hint qm-mat-hint">Лекция не оқулық мәтінін қойыңыз немесе файл жүктеңіз — сұрақтар тек сол мәтіннен құрылады.</p>
+            <textarea id="qmText" rows="5" maxlength="60000" placeholder="Мәтінді осы жерге қойыңыз…"></textarea>
+            <label for="qmFile" class="tpl-upload qm-file" id="qmFileBtn">📄 Файл жүктеу (PDF, Word, PPT, TXT)</label>
+            <input id="qmFile" type="file" hidden accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.md,.rtf" />
+            <div class="hint" id="qmFileInfo"></div>
+          </details>
+          <button type="button" class="btn primary block qm-go" id="qmCreate">🎯 Квиз жасау · тегін</button>
+          <div class="qm-mine hidden" id="qmMineWrap">
+            <div class="qm-mine-h">Менің квиздерім</div>
+            <div id="qmMine"></div>
+          </div>
+        </div>
+
+        <!-- жасалуда -->
+        <div id="qmLoading" class="hidden qm-loading">
+          <div class="spinner"></div>
+          <div class="qm-load-t">Сұрақтар құрастырылып жатыр…</div>
+          <div class="qm-load-s" id="qmLoadStep">Тақырып талдануда</div>
+          <div class="progress-bar"><div class="progress-fill" id="qmLoadFill"></div></div>
+        </div>
+
+        <!-- дайын: тексеру, бастау, бөлісу -->
+        <div id="qmReview" class="hidden">
+          <div class="qm-ok" id="qmOk">✅ Квиз дайын</div>
+          <p class="wiz-sub qm-rev-sub">Сұрақтарды тексеріңіз: ұнамағанын өшіріңіз не басқасына ауыстырыңыз. Дұрыс жауапты тек сіз көресіз.</p>
+          <div id="qmList"></div>
+          <div class="qm-actions">
+            <button type="button" class="btn primary block" id="qmStart">▶ Ойынды бастау</button>
+            <div class="qm-share">
+              <button type="button" class="btn secondary" id="qmWa">📲 WhatsApp</button>
+              <button type="button" class="btn secondary" id="qmTg">📤 Telegram</button>
+              <button type="button" class="btn secondary" id="qmCopy">🔗 Сілтеме</button>
+            </div>
+          </div>
+          <p class="hint qm-how">«Ойынды бастау» басқару бетін ашады: ноутбукта ашып, проекторға шығарыңыз — QR код сол жерде. Топ сілтемені не QR-ды ашып, атын жазып қосылады.</p>
+          <button type="button" class="btn ghost block" id="qmNew">＋ Жаңа квиз</button>
+        </div>
       </div>
     </section>
 
@@ -286,6 +370,7 @@
       </div>
     </section>
   </div>
+  <script src="quizmaker.js"></script>
   <script src="app.js"></script>
   <script src="admin.js"></script>
 </body>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="kk"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Caveat;font-weight:700;src:url(fonts/Caveat-700.ttf)}
+@font-face{font-family:Caveat;font-weight:400;src:url(fonts/Caveat-400.ttf)}
+@font-face{font-family:Nunito;font-weight:400;src:url(fonts/Nunito-400.ttf)}
+@font-face{font-family:Nunito;font-weight:700;src:url(fonts/Nunito-700.ttf)}
+@font-face{font-family:Mont;font-weight:900;src:url(fonts/Montserrat-900.ttf)}
+@font-face{font-family:Mont;font-weight:800;src:url(fonts/Montserrat-800.ttf)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#000}
+svg#stage{position:absolute;inset:0;width:1920px;height:1080px}
+/* in-world text (stone slab, cave wall, board): readable, «carved» look */
+.tb{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:18px;font-family:Nunito;color:var(--ink,#2b2621)}
+.tb .k{font-family:Mont;font-weight:800;font-size:26px;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+.tb h1{font-family:Mont;font-weight:900;font-size:var(--h1,88px);line-height:1.02;letter-spacing:-.01em}
+.tb .big{font-family:Caveat;font-weight:700;font-size:var(--bigfs,132px);line-height:.85;color:var(--acc,#C4561D)}
+.tb .lab{font-weight:700;font-size:34px;line-height:1.2;margin-top:-4px}
+.tb ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.tb li{font-size:34px;line-height:1.26;font-weight:700;padding-left:40px;position:relative}
+.tb li:before{content:"";position:absolute;left:4px;top:14px;width:18px;height:18px;border-radius:50%;background:var(--acc,#C4561D)}
+.carved{text-shadow:1px 1px 0 rgba(255,255,255,.35),-1px -1px 0 rgba(0,0,0,.25)}
+.free{width:100%;display:flex;flex-direction:column;gap:16px;font-family:Nunito;color:var(--fc,#2b2621)}
+.free>*{transform-origin:0 50%}
+.free .k{font-family:Mont;font-weight:800;font-size:28px;letter-spacing:.14em;text-transform:uppercase}
+.free h1{font-family:Mont;font-weight:900;font-size:var(--h1,104px);line-height:1;letter-spacing:-.01em}
+.free .big{font-family:Caveat;font-weight:700;font-size:var(--bigfs,150px);line-height:.8;color:var(--acc,#C4561D)}
+.free .lab{font-weight:700;font-size:38px;line-height:1.2}
+.free ul{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.free li{font-size:38px;line-height:1.22;font-weight:700;padding-left:44px;position:relative}
+.free li:before{content:"";position:absolute;left:4px;top:15px;width:20px;height:20px;border-radius:50%;background:var(--acc,#C4561D)}
+.free.halo *{-webkit-text-stroke:var(--sw,12px) var(--sc,#fff);paint-order:stroke fill;stroke-linejoin:round}
+.free.dark{--fc:#fff;--sc:#0b1022}
+.free.paint{--fc:#3a1d0d;font-family:Caveat}.free.paint h1,.free.paint .k,.free.paint .lab,.free.paint li{font-family:Caveat;font-weight:700}
+.free.paint h1{font-size:120px;color:#C2441C}.free.paint li{font-size:46px}.free.paint .lab{font-size:44px}.free.paint .k{font-size:36px;letter-spacing:.06em;text-transform:none}
+.free.paint li:before{background:#C2441C;border-radius:40% 60% 50% 45%}
+.free.chalk{--fc:#F4F7F2;font-family:Caveat}.free.chalk h1,.free.chalk .k,.free.chalk .lab,.free.chalk li{font-family:Caveat;font-weight:700}
+.free.chalk h1{font-size:116px;line-height:.95}.free.chalk li{font-size:54px;padding-left:50px}.free.chalk li:before{top:24px}.free.chalk .lab{font-size:50px}.free.chalk .k{font-size:44px;letter-spacing:.04em;text-transform:none;color:#FFE59A}
+.free.chalk .big{color:#FFE59A}.free.chalk li:before{background:#F4F7F2}
+.bub{font-family:Nunito;font-weight:700;color:#1d1d1f;text-align:center;line-height:1.15}
+</style>
+</head><body>
+<svg id="stage" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>window.CINEMA=true</script>
+<script src="engine.js"></script>
+<script src="cinema.js"></script>
+</body></html>

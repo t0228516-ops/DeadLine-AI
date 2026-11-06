@@ -844,7 +844,8 @@ async function saveQuiz(z) {
   const now = Date.now();
   box[z.code] = {
     code: z.code, host_key: z.hostKey, chat_id: z.chatId == null ? null : String(z.chatId), job_id: z.jobId || null,
-    topic: String(z.topic || '').slice(0, 300), language: z.language || null, data: { questions: z.questions },
+    topic: String(z.topic || '').slice(0, 300), language: z.language || null,
+    data: { questions: z.questions, ...(z.kind ? { kind: String(z.kind) } : {}), ...(z.material ? { material: String(z.material) } : {}) },
     created_at: now, expires_at: z.expiresAt || now + 30 * 24 * 3600 * 1000,
   };
   saveDB(db);
@@ -852,7 +853,36 @@ async function saveQuiz(z) {
 async function getQuiz(code) {
   const row = (db.quizzes || {})[String(code)];
   if (!row || row.expires_at < Date.now()) return null;
-  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: (row.data && row.data.questions) || [] };
+  const d = row.data || {};
+  return {
+    code: row.code, hostKey: row.host_key, chatId: row.chat_id || null, topic: row.topic, language: row.language,
+    questions: d.questions || [], kind: d.kind || null, material: d.material || '',
+  };
+}
+async function updateQuizQuestions(code, questions) {
+  const row = (db.quizzes || {})[String(code)];
+  if (!row) return;
+  row.data = { ...(row.data || {}), questions: questions || [] };
+  saveDB(db);
+}
+async function countFreeQuizzes({ chatId = null, since = 0 } = {}) {
+  return Object.values(db.quizzes || {}).filter((z) => !z.job_id && z.created_at >= since && (chatId == null || z.chat_id === String(chatId))).length;
+}
+async function listFreeQuizzes(chatId, limit = 10) {
+  const now = Date.now();
+  return Object.values(db.quizzes || {})
+    .filter((z) => !z.job_id && z.chat_id === String(chatId) && z.expires_at > now)
+    .sort((a, b) => b.created_at - a.created_at).slice(0, limit)
+    .map((z) => ({ code: z.code, hostKey: z.host_key, topic: z.topic, language: z.language, n: ((z.data && z.data.questions) || []).length, createdAt: z.created_at }));
+}
+async function freeQuizStats(since) {
+  const free = Object.values(db.quizzes || {}).filter((z) => !z.job_id);
+  const codes = new Set(free.map((z) => z.code));
+  const rows = (db.quiz_results || []).filter((r) => codes.has(r.code));
+  return {
+    today: free.filter((z) => z.created_at >= since).length, total: free.length,
+    makers: new Set(free.map((z) => z.chat_id)).size, games: new Set(rows.map((r) => r.code)).size, players: rows.length,
+  };
 }
 async function deleteExpiredQuizzes(now = Date.now()) {
   const box = db.quizzes || {};
@@ -877,6 +907,10 @@ async function listQuizResults(code, limit = 500) {
 module.exports = {
   backend: 'json',
   saveQuiz,
+  updateQuizQuestions,
+  countFreeQuizzes,
+  listFreeQuizzes,
+  freeQuizStats,
   getQuiz,
   deleteExpiredQuizzes,
   addQuizResults,

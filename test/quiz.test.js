@@ -219,3 +219,135 @@ test('a double tap on «next» (or a network retry) never skips a question', asy
     assert.ok(b2.stale && b2.state.qi === 1, 'second tap ignored');
   } finally { srv.close(); }
 });
+
+test('presenter is told in Telegram when the class waits in the lobby and the control page is closed', async () => {
+  const express = require('express');
+  const mk = (code) => ({ code, hostKey: 'hk', chatId: '777', topic: 'Т', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) });
+  const quizzes = { AAAAA: mk('AAAAA'), BBBBB: mk('BBBBB'), CCCCC: mk('CCCCC') };
+  const sent = [];
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({
+    db: { getQuiz: async (c) => quizzes[c] || null },
+    webappDir: path.join(__dirname, '..', 'webapp'), baseUrl: 'https://x.app',
+    onLobbyWaiting: async (x) => { sent.push(x); },
+    nudge: { delayMs: 40, gapMs: 120, hostFreshMs: 1000 },
+  }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  const post = (u, b) => fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  const joinN = async (c, n) => { for (let i = 0; i < n; i++) await post(`/api/quiz/${c}/join`, { name: `Оқушы ${i}` }); };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    // 1) 3 адам күтіп отыр, басқару беті ешқашан ашылмаған → ескерту, сосын әлі басталмаса — екінші (ең көбі 2)
+    await joinN('AAAAA', 3);
+    await wait(80);
+    const a = sent.filter((x) => x.code === 'AAAAA');
+    assert.strictEqual(a.length, 1);
+    assert.deepStrictEqual([a[0].chatId, a[0].players, a[0].nudge], ['777', 3, 1]);
+    assert.strictEqual(a[0].hostUrl, 'https://x.app/q/AAAAA/host?k=hk');
+    await joinN('AAAAA', 2); // қосымша адамдар таймерді көбейтпейді
+    await wait(200);
+    await wait(200);
+    assert.deepStrictEqual(sent.filter((x) => x.code === 'AAAAA').map((x) => x.nudge), [1, 2], 'second reminder, then stop');
+
+    // 2) басқару беті ашық (проекторда) → ескерту жоқ; ойын басталса да жоқ
+    await fetch(`${base}/api/quiz/BBBBB/host/state?k=hk`);
+    await joinN('BBBBB', 4);
+    await wait(80);
+    await post('/api/quiz/BBBBB/host', { k: 'hk', action: 'start' });
+    await wait(200);
+    assert.strictEqual(sent.filter((x) => x.code === 'BBBBB').length, 0);
+
+    // 3) тек 2 адам (баяндамашының өзі + досы тексерді) → ескерту жоқ
+    await joinN('CCCCC', 2);
+    await wait(80);
+    assert.strictEqual(sent.filter((x) => x.code === 'CCCCC').length, 0);
+  } finally { srv.close(); }
+});
+
+test('the presenter key is never sent to players; the lobby reminder goes only to the deck owner', async () => {
+  const express = require('express');
+  const quiz = { code: 'DDDDD', hostKey: 'only-me', chatId: '555', topic: 'Т', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({ db: { getQuiz: async () => quiz }, webappDir: path.join(__dirname, '..', 'webapp'), onLobbyWaiting: async () => {}, nudge: { delayMs: 10 } }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const r = await fetch(`${base}/api/quiz/DDDDD/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'А' }) });
+    const me = await r.json();
+    const info = await (await fetch(`${base}/api/quiz/DDDDD/info`)).text();
+    const st = await (await fetch(`${base}/api/quiz/DDDDD/state?pid=${me.pid}&s=${me.secret}`)).text();
+    for (const body of [JSON.stringify(me), info, st]) { assert.ok(!body.includes('only-me')); assert.ok(!body.includes('555')); }
+  } finally { srv.close(); }
+});
+
+test('free quiz: the owner reviews questions, deletes and replaces them before the game; never during it', async () => {
+  const express = require('express');
+  const quiz = { code: 'EEEEE', hostKey: 'hk', chatId: '9', topic: 'Т', language: 'kk', kind: 'free', material: 'ҚҰПИЯ МАТЕРИАЛ',
+    questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
+  const saved = [];
+  const calls = [];
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({
+    db: { getQuiz: async () => quiz, updateQuizQuestions: async (c, qs) => { saved.push({ c, n: qs.length }); } },
+    webappDir: path.join(__dirname, '..', 'webapp'), botUrl: 'https://t.me/TestBot/',
+    replaceQuestion: async (x) => { calls.push(x); return { q: 'Жаңа сұрақ осы ма?', options: ['а', 'ә', 'б', 'в'], correct: 2, explain: 'себебі' }; },
+  }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  const post = async (u, b) => { const r = await fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); return { status: r.status, body: await r.json() }; };
+  try {
+    const info = await (await fetch(base + '/api/quiz/EEEEE/info')).json();
+    assert.deepStrictEqual([info.free, info.bot], [true, 'https://t.me/TestBot']);
+    assert.ok(!JSON.stringify(info).includes('ҚҰПИЯ') && !JSON.stringify(info).includes('hk'), 'material and key never reach players');
+    assert.strictEqual((await fetch(base + '/api/quiz/EEEEE/questions?k=bad')).status, 403);
+    const qs = await (await fetch(base + '/api/quiz/EEEEE/questions?k=hk')).json();
+    assert.strictEqual(qs.questions.length, 10); assert.ok('correct' in qs.questions[0]);
+    // кілтсіз өзгерту жоқ
+    assert.strictEqual((await post('/api/quiz/EEEEE/edit', { k: 'x', action: 'delete', qi: 0 })).status, 403);
+    // өшіру
+    const del = await post('/api/quiz/EEEEE/edit', { k: 'hk', action: 'delete', qi: 0 });
+    assert.strictEqual(del.status, 200); assert.strictEqual(del.body.questions.length, 9);
+    // ауыстыру: материал мен қалған сұрақтар генераторға беріледі
+    const rep = await post('/api/quiz/EEEEE/edit', { k: 'hk', action: 'replace', qi: 3 });
+    assert.strictEqual(rep.status, 200); assert.strictEqual(rep.body.questions[3].q, 'Жаңа сұрақ осы ма?');
+    assert.strictEqual(calls[0].material, 'ҚҰПИЯ МАТЕРИАЛ'); assert.strictEqual(calls[0].questions.length, 9); assert.strictEqual(calls[0].qi, 3);
+    assert.deepStrictEqual(saved.map((x) => x.n), [9, 9], 'every edit is saved');
+    assert.strictEqual((await post('/api/quiz/EEEEE/edit', { k: 'hk', action: 'nope', qi: 0 })).status, 400);
+    assert.strictEqual((await post('/api/quiz/EEEEE/edit', { k: 'hk', action: 'delete', qi: 99 })).status, 400);
+    // ойын басталды → өзгерту жоқ; ойыншы жаңа сұрақты көреді
+    await post('/api/quiz/EEEEE/join', { name: 'Айгүл' });
+    await post('/api/quiz/EEEEE/host', { k: 'hk', action: 'start' });
+    assert.strictEqual((await post('/api/quiz/EEEEE/edit', { k: 'hk', action: 'delete', qi: 0 })).status, 409);
+    const hs = await (await fetch(base + '/api/quiz/EEEEE/host/state?k=hk')).json();
+    assert.strictEqual(hs.total, 9); assert.strictEqual(hs.bot, 'https://t.me/TestBot');
+  } finally { srv.close(); }
+});
+
+test('free quiz: at least 3 questions stay; a quiz from a presentation does not advertise the presentation offer', async () => {
+  const express = require('express');
+  const three = Q.normalizeQuestions({ quiz: ten() }, () => 0, { min: 1, max: 3 });
+  const deckQuiz = { code: 'FFFFF', hostKey: 'hk', topic: 'Т', language: 'kk', questions: three };
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({ db: { getQuiz: async () => deckQuiz }, webappDir: path.join(__dirname, '..', 'webapp'), botUrl: 'https://t.me/TestBot' }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const r = await fetch(base + '/api/quiz/FFFFF/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: 'hk', action: 'delete', qi: 0 }) });
+    assert.strictEqual(r.status, 409);
+    const rr = await fetch(base + '/api/quiz/FFFFF/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ k: 'hk', action: 'replace', qi: 0 }) });
+    assert.strictEqual(rr.status, 501, 'no generator wired → replace unavailable');
+    const info = await (await fetch(base + '/api/quiz/FFFFF/info')).json();
+    assert.strictEqual(info.free, false);
+  } finally { srv.close(); }
+});
+
+test('end of game with no answers is not praised as «everyone answered well»', () => {
+  const quiz = { code: 'GGGGG', hostKey: 'k', topic: 'Т', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
+  const room = Q.createRoom(quiz);
+  Q.join(room, 'Айгүл');
+  Q.hostAction(room, 'start');
+  for (let i = 0; i < 40 && room.phase !== 'end'; i++) Q.hostAction(room, 'next');
+  const v = Q.hostView(room);
+  assert.strictEqual(v.phase, 'end');
+  assert.strictEqual(v.stats.anyAnswer, false);
+  assert.strictEqual(v.stats.hardest, null);
+  assert.strictEqual(Q.resultsSummary(quiz, [{ name: 'А', right: 0, total: 10, answers: [] }]).anyAnswer, false);
+  assert.strictEqual(Q.resultsSummary(quiz, [{ name: 'А', right: 1, total: 10, answers: [quiz.questions[0].correct] }]).anyAnswer, true);
+});

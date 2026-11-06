@@ -4,7 +4,7 @@ require('dotenv').config();
 
 const TelegramBot = require('node-telegram-bot-api');
 const { extractPdfText, parseReceiptText, validateReceipt } = require('./core/receipt');
-const { initDB, getUser, registerUser, addCredits, applyReceipt, getAllChatIds, REFERRALS_PER_BONUS, getPartner, requestPartner, setPartnerStatus, creditPartnerCommission, payoutPartner, listPartners, PARTNER_RATE, listLearnedTemplates, listLearnUses, setFeedback, getJob, freeFunnel, countFreeDecksSince, setBlocked, logEvent, funnelStats, funnelDay, setUserProfile, logPayment, getTester, logTesterFeedback } = require('./db');
+const { initDB, getUser, registerUser, addCredits, applyReceipt, getAllChatIds, REFERRALS_PER_BONUS, getPartner, requestPartner, setPartnerStatus, creditPartnerCommission, payoutPartner, listPartners, PARTNER_RATE, listLearnedTemplates, listLearnUses, setFeedback, getJob, freeFunnel, countFreeDecksSince, setBlocked, logEvent, funnelStats, funnelDay, setUserProfile, logPayment, getTester, logTesterFeedback, freeQuizStats } = require('./db');
 const testerCore = require('./core/tester');
 const { ratingKeyboard, commentPromptText, commentKeyboard, parseCommentCallback, parseFeedbackCallback, jobTagOf } = require('./core/feedbackUi');
 
@@ -59,7 +59,7 @@ let WEBAPP_URL = process.env.WEBAPP_URL || '';
 const MAIN_KEYBOARD = {
   reply_markup: {
     keyboard: [
-      [{ text: '📱 Mini App ашу' }],
+      [{ text: '📱 Mini App ашу' }, { text: '🎯 Тегін квиз' }],
       [{ text: '💰 Кредит сатып алу' }, { text: '💳 Менің есепшотым' }],
       [{ text: '🔗 Реферал сілтемем' }, { text: '🤝 Серіктес болу' }],
       [{ text: '❓ Көмек' }],
@@ -76,9 +76,22 @@ function webAppKeyboard() {
     inline_keyboard: [[
       { text: '📱 DeadLine Mini App', web_app: { url: WEBAPP_URL.replace(/\/$/, '') + '/webapp/' } },
     ], [
+      { text: '🎯 Тегін квиз жасау', web_app: { url: WEBAPP_URL.replace(/\/$/, '') + '/webapp/#quiz' } },
+    ], [
       { text: '🎨 Өз шаблоныммен жасау', web_app: { url: WEBAPP_URL.replace(/\/$/, '') + '/webapp/#template' } },
     ]],
   };
+}
+
+/** Тегін квиз: Mini App бірден «Квиз» бөлімімен ашылады */
+function sendQuizOffer(chatId) {
+  if (!WEBAPP_URL) return bot.sendMessage(chatId, 'Mini App URL әлі бапталмаған (WEBAPP_URL).').catch(() => {});
+  return bot.sendMessage(chatId,
+    '🎯 *Тегін квиз — 30 секундта*\n\n'
+    + 'Kahoot сияқты тірі ойын: тақырыпты жазыңыз (не лекция мәтінін қойыңыз) — сұрақтарды бот өзі құрастырады. '
+    + 'Топ телефонмен ойнайды, тіркелу керек емес. Күніне 3 квиз тегін.',
+    { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🎯 Квиз жасау — тегін', web_app: { url: WEBAPP_URL.replace(/\/$/, '') + '/webapp/#quiz' } }]] } }
+  ).catch((e) => console.warn('[Bot] quiz offer:', e.message));
 }
 
 const ADMIN_IDS = String(ADMIN_ID || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -124,6 +137,7 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     chatId,
     '👋 *Сәлем!* DeadLine — кәсіби AI презентация студиясы.\n\n' +
     `💳 *Баға:* ${PRICE}₸ — 1 презентация\n${plusLine}\n\n` +
+    '🎯 *Тегін:* кез келген тақырыпқа 30 секундта квиз — Kahoot сияқты, топ телефонмен ойнайды.\n\n' +
     '🆕 *Жаңа:* ұнаған шаблоныңызды (.pptx) жүктеңіз — бот дизайнын сақтап, мәтінді сіздің тақырыбыңызға жазады.\n\n' +
     '📱 Презентация мен реферат *Mini App* ішінде жасалады: шаблон, тіл, слайд саны, прогресс және тарих бір жерде.',
     { parse_mode: 'Markdown', reply_markup: MAIN_KEYBOARD.reply_markup }
@@ -134,7 +148,10 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
         reply_markup: isAdminChat(chatId) ? adminKeyboard() : kb,
       });
     }
-  });
+  }).then(() => {
+    // квиз ойнаған адам «өз квизіңді жаса» батырмасын басып келді → бірден квиз жасау батырмасы
+    if (source === 'quiz_make') return sendQuizOffer(chatId);
+  }).catch((e) => console.warn('[Bot] /start:', e.message));
 });
 
 // ─── /balance & "Менің есепшотым" ─────────────────────────────────────────
@@ -164,9 +181,12 @@ bot.onText(/\/stats/, async (msg) => {
     const conv = ff.freeUsers ? Math.round((ff.paidAfter / ff.freeUsers) * 100) : 0;
     const [fToday, fYest] = await Promise.all([funnelStats(funnelDay()), funnelStats(funnelDay(Date.now() - 86400e3))]);
     const src = (ff.sources || []).map((x) => `• ${x.source}: ${x.users} адам · тегін ${x.free} · төлеген ${x.paid}`).join('\n');
+    const qz = await freeQuizStats(today).catch(() => null);
+    const quizLine = qz ? `🎯 Тегін квиз: бүгін ${qz.today} · барлығы ${qz.total} · жасаған ${qz.makers} адам · ойналды ${qz.games} рет · ойыншы ${qz.players}\n` : '';
     await bot.sendMessage(msg.chat.id,
       `📊 Статистика\n\n🖼 Суреттер (сервер іске қосылғаннан бері):\n${prov || '—'}\n• кэштен алынды: ${img.cacheHits} · кэш ${img.imageCacheMB} МБ\n\n` +
-      `🎁 Тегін презентация: бүгін ${freeToday} · барлығы ${ff.freeUsers} · кейін төлегендер ${ff.paidAfter} (${conv}%)\n\n` +
+      `🎁 Тегін презентация: бүгін ${freeToday} · барлығы ${ff.freeUsers} · кейін төлегендер ${ff.paidAfter} (${conv}%)\n` +
+      `${quizLine}\n` +
       `🔗 Арналар (барлық уақыт):\n${src || '—'}\n\n` +
       require('./core/funnel').funnelText(fToday, fYest));
   } catch (e) {
@@ -860,6 +880,8 @@ bot.on('message', async (msg) => {
   if (text === '❓ Көмек')           return showHelp(chatId);
   if (text === '🔗 Реферал сілтемем') return showReferral(chatId);
   if (text === '🤝 Серіктес болу') return showPartner(chatId, msg.from);
+
+  if (text === '🎯 Тегін квиз') return sendQuizOffer(chatId);
 
   if (text === '📱 Mini App ашу') {
     const kb = webAppKeyboard();

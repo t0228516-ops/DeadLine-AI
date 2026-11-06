@@ -138,3 +138,20 @@ Needs Node + playwright (pre-installed Chromium), ffmpeg, python-pptx and Pillow
 - **Autoplay and loop in PowerPoint are unverified.** The PPTX uses the standard "Start: Automatically + Loop until stopped" timing XML, but it was not tested in real PowerPoint here. Ask the owner to check once. PowerPoint 2010 and older may not play MP4.
 - **Canva:** the Canva connector's upload endpoint rejects PPTX and MP4 ("Unsupported file format"). The user uploads the MP4s in Canva themselves (Uploads → drag the files → one per page, full-page).
 - **Rendering cost:** about 1 s of wall time per 3 frames per slide. Render slides in parallel, which `render.js` already does.
+
+## Cinema mode (full-screen cartoon with sound)
+When the owner wants «мультфильм сияқты», not text-plus-panel: every slide is one 1920×1080 scene, the text lives **in the world**
+(no cards: `freeText(...)` with styles `halo` (day sky), `halo dark` (night), `paint` (cave wall), `chalk` (board)), characters are big,
+and each slide has sound. Reference: `examples/ancient/deck.js` («Ежелгі адамдар», 8 slides, approved direction).
+- Deck: `CINE[n] = {D, T, poster, music:'bed', sfx:[[t,name,gain]], notes, draw(t)}`. `D` = scripted intro, `T` = total clip;
+  after `D` the scene keeps living (idle) so the presenter can talk. The PPTX plays it **once with sound** and holds the last frame.
+- Engine (`cinema.js`): `hero()` (red cap + backpack), `caveman()` (hair, fur, beard), `bubble()`, `sfxWord()`, `camG()`, `skyF/ridge/groundF/tufts/acacia`,
+  props `phone stoneTool melon/melonHalf portal fire spear mammoth horse torch handprint bison`.
+- Sound (`audio.py`): every effect and the music bed are synthesised with numpy (no third-party audio). Names:
+  `whoosh thud bigthud pop twinkle crack boing chop spark ignite crackle trumpet run ding step applause powerdown spray neigh hay chalk`.
+```bash
+node $E/snap_cinema.js deck.js $OUT/snap '{"1":[2,5],"2":[4.6]}'   # look at the frames first
+node $E/render_cinema.js deck.js $OUT/out --par 4                   # 8 slides ≈ 3 min; muxes sound, writes preview.mp4
+python3 $E/build_pptx.py $OUT/out "<Title>.pptx"
+```
+- QA: text never under a character or a bubble; characters stay inside the frame; chalk/paint text must fit its board/wall.

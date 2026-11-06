@@ -1111,14 +1111,56 @@ async function saveQuiz(z) {
   await q(`INSERT INTO quizzes (code, host_key, chat_id, job_id, topic, language, data, created_at, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9) ON CONFLICT (code) DO NOTHING`,
   [z.code, z.hostKey, z.chatId == null ? null : String(z.chatId), z.jobId || null, String(z.topic || '').slice(0, 300), z.language || null,
-    jsonParam({ questions: z.questions }), now, z.expiresAt || now + 30 * 24 * 3600 * 1000]);
+    jsonParam(quizData(z)), now, z.expiresAt || now + 30 * 24 * 3600 * 1000]);
+}
+/** quizzes.data: сұрақтар + (тегін квизде) түрі мен мұғалімнің материалы — ауыстыру сол материалдан жасалады */
+function quizData(z) {
+  const d = { questions: z.questions };
+  if (z.kind) d.kind = String(z.kind);
+  if (z.material) d.material = String(z.material);
+  return d;
 }
 async function getQuiz(code) {
-  const r = await q('SELECT code, host_key, topic, language, data, expires_at FROM quizzes WHERE code = $1', [String(code)]);
+  const r = await q('SELECT code, host_key, chat_id, topic, language, data, expires_at FROM quizzes WHERE code = $1', [String(code)]);
   const row = r.rows[0];
   if (!row || num(row.expires_at) < Date.now()) return null;
   const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: data.questions || [] };
+  return {
+    code: row.code, hostKey: row.host_key, chatId: row.chat_id || null, topic: row.topic, language: row.language,
+    questions: data.questions || [], kind: data.kind || null, material: data.material || '',
+  };
+}
+/** Сұрақтар өзгерді (мұғалім өшірді/ауыстырды) — материал мен түрі сақталады */
+async function updateQuizQuestions(code, questions) {
+  await q(`UPDATE quizzes SET data = jsonb_set(COALESCE(data, '{}'::jsonb), '{questions}', $2::jsonb) WHERE code = $1`,
+    [String(code), JSON.stringify(questions || [])]);
+}
+/** Тегін квиздер (job_id жоқ): бір адамның не барлығының since-тен бергі саны — күндік шек үшін */
+async function countFreeQuizzes({ chatId = null, since = 0 } = {}) {
+  const r = chatId == null
+    ? await q('SELECT COUNT(*)::int AS n FROM quizzes WHERE job_id IS NULL AND created_at >= $1', [since])
+    : await q('SELECT COUNT(*)::int AS n FROM quizzes WHERE job_id IS NULL AND chat_id = $1 AND created_at >= $2', [String(chatId), since]);
+  return num(r.rows[0] && r.rows[0].n);
+}
+/** Адамның өз тегін квиздері (жаңасы бірінші) — Mini App-та қайта ашу үшін; host_key тек иесіне */
+async function listFreeQuizzes(chatId, limit = 10) {
+  const r = await q(`SELECT code, host_key, topic, language, data, created_at FROM quizzes
+     WHERE job_id IS NULL AND chat_id = $1 AND expires_at > $2 ORDER BY created_at DESC LIMIT $3`, [String(chatId), Date.now(), limit]);
+  return r.rows.map((x) => {
+    const d = typeof x.data === 'string' ? JSON.parse(x.data) : (x.data || {});
+    return { code: x.code, hostKey: x.host_key, topic: x.topic, language: x.language, n: (d.questions || []).length, createdAt: num(x.created_at) };
+  });
+}
+/** /stats: тегін квиз — бүгін/барлығы жасалғаны, жасаушылар, ойналған ойындар мен ойыншылар */
+async function freeQuizStats(since) {
+  const r = await q(`SELECT
+      (SELECT COUNT(*) FROM quizzes WHERE job_id IS NULL AND created_at >= $1)::int AS today,
+      (SELECT COUNT(*) FROM quizzes WHERE job_id IS NULL)::int AS total,
+      (SELECT COUNT(DISTINCT chat_id) FROM quizzes WHERE job_id IS NULL)::int AS makers,
+      (SELECT COUNT(DISTINCT r.code) FROM quiz_results r JOIN quizzes z ON z.code = r.code WHERE z.job_id IS NULL)::int AS games,
+      (SELECT COUNT(*) FROM quiz_results r JOIN quizzes z ON z.code = r.code WHERE z.job_id IS NULL)::int AS players`, [since]);
+  const x = r.rows[0] || {};
+  return { today: num(x.today), total: num(x.total), makers: num(x.makers), games: num(x.games), players: num(x.players) };
 }
 async function deleteExpiredQuizzes(now = Date.now()) {
   await q('DELETE FROM quiz_results WHERE code IN (SELECT code FROM quizzes WHERE expires_at < $1)', [now]);
@@ -1149,6 +1191,10 @@ async function closeDB() {
 module.exports = {
   backend: 'postgres',
   saveQuiz,
+  updateQuizQuestions,
+  countFreeQuizzes,
+  listFreeQuizzes,
+  freeQuizStats,
   getQuiz,
   deleteExpiredQuizzes,
   addQuizResults,

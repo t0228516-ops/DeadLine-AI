@@ -161,7 +161,7 @@ window.render=function(t){const F=.6;SEED=Math.floor(t*8)+1;CT=0;
  capB.style.opacity=bv?1:0;capB.style.transform=`scale(${.6+.4*pop})`;};
 window.deckMeta=()=>({title:DECK_TITLE,slides:Object.keys(SCENES).map(Number).sort((a,b)=>a-b).map(n=>({n,D:SCENES[n].D,notes:NOTES[n]||'',poster:SCENES[n].poster??.6}))});
 let DECK_TITLE='deck';
-window.ready=new Promise((res,rej)=>{const q=new URLSearchParams(location.search);const N=+(q.get('s')||1);
+if(!window.CINEMA)window.ready=new Promise((res,rej)=>{const q=new URLSearchParams(location.search);const N=+(q.get('s')||1);
  const sc=document.createElement('script');sc.src=q.get('deck');sc.onerror=()=>rej(new Error('deck not found: '+q.get('deck')));
  sc.onload=async()=>{for(const[k,v]of Object.entries(THEME))document.documentElement.style.setProperty('--'+k,v);
   if(THEME.accent)RED=THEME.accent;

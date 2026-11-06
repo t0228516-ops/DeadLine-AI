@@ -140,3 +140,32 @@ test('pgDb: тестер режимі — күніне 3, пікірсіз ке�
     await pool.end();
   }
 });
+
+test('pgDb: тегін квиз — сақтау, сұрақтарды жаңарту (материал сақталады), күндік санау, тізім, /stats', { skip }, async () => {
+  delete require.cache[require.resolve('../storage/pgDb')];
+  const db = require('../storage/pgDb');
+  const pool = new Pool({ connectionString: URL });
+  db._setPool(pool);
+  try {
+    await db.initDB();
+    const U = 'q' + Date.now(); const since = Date.now() - 1000;
+    const qs = [{ q: 'Сұрақ 1?', options: ['а', 'ә', 'б', 'в'], correct: 1, explain: '' }, { q: 'Сұрақ 2?', options: ['а', 'ә', 'б', 'в'], correct: 0, explain: '' }];
+    const code = 'Z' + String(Date.now()).slice(-5);
+    await db.saveQuiz({ code, hostKey: 'hk', chatId: U, jobId: null, topic: 'Т', language: 'kk', questions: qs, kind: 'free', material: 'Мәтін', expiresAt: Date.now() + 1e6 });
+    await db.saveQuiz({ code: code + 'D', hostKey: 'hk2', chatId: U, jobId: 'job1', topic: 'Дек', language: 'kk', questions: qs, expiresAt: Date.now() + 1e6 });
+    const z = await db.getQuiz(code);
+    assert.deepStrictEqual([z.chatId, z.kind, z.material, z.questions.length], [U, 'free', 'Мәтін', 2]);
+    await db.updateQuizQuestions(code, [qs[1]]);
+    const z2 = await db.getQuiz(code);
+    assert.deepStrictEqual([z2.questions.length, z2.questions[0].q, z2.material, z2.kind], [1, 'Сұрақ 2?', 'Мәтін', 'free'], 'material and kind survive an edit');
+    assert.strictEqual(await db.countFreeQuizzes({ chatId: U, since }), 1, 'deck quiz is not counted as free');
+    assert.ok((await db.countFreeQuizzes({ since })) >= 1);
+    const mine = await db.listFreeQuizzes(U, 10);
+    assert.deepStrictEqual(mine.map((x) => [x.code, x.hostKey, x.n]), [[code, 'hk', 1]]);
+    await db.addQuizResults(code, [{ name: 'А', right: 1, total: 1, score: 900, mode: 'live', answers: [0] }]);
+    const st = await db.freeQuizStats(since);
+    assert.ok(st.today >= 1 && st.total >= 1 && st.makers >= 1 && st.games >= 1 && st.players >= 1);
+  } finally {
+    await pool.end();
+  }
+});
