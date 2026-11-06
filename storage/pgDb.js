@@ -447,6 +447,15 @@ async function addCredits(chatId, amount) {
   return getUser(chatId);
 }
 
+/** Сыйлық кредит (реферал т.б.): тек credits өседі — total (сатып алынған) өзгермейді, сондықтан «бірінші сатып алу» жеңілдігі сақталады */
+async function addBonusCredits(chatId, amount) {
+  const n = Number(amount) || 0;
+  await ensureUser(chatId);
+  await q('UPDATE users SET credits = COALESCE(credits, 0) + $2 WHERE chat_id = $1', [String(chatId), n]);
+  console.log(`[DB] addBonusCredits: ${chatId} +${n}`);
+  return getUser(chatId);
+}
+
 async function applyReceipt(chatId, receiptNo, amount, credits) {
   const n = Number(credits) || 0;
   await ensureUser(chatId);
@@ -1162,6 +1171,25 @@ async function freeQuizStats(since) {
   const x = r.rows[0] || {};
   return { today: num(x.today), total: num(x.total), makers: num(x.makers), games: num(x.games), players: num(x.players) };
 }
+/** Осы адамда берілген оқиға since-тен кейін болды ма (мыс. соңғы 3 күнде реферал ұсынылды ма) */
+async function eventSince(chatId, kind, since) {
+  const r = await q('SELECT 1 FROM events WHERE chat_id = $1 AND kind = $2 AND created_at >= $3 LIMIT 1', [String(chatId), String(kind), since]);
+  return r.rows.length > 0;
+}
+/**
+ * Mini App-ты ашып, ештеңе жасамай кеткендер (бір реттік еске салу үшін): 'app' оқиғасы [from, to] аралығында,
+ * ашқаннан кейін презентация/реферат/квиз жасамаған, соңғы 7 күнде еске салынбаған, ботты бұғаттамаған.
+ * Күнге емес, уақытқа сүйенеміз: түн ортасынан (Алматы) асып кеткен «кеше кешкі ашу» да ескеріледі.
+ */
+async function listAbandoned({ from, to, nudgedSince, limit = 30 }) {
+  const r = await q(`SELECT a.chat_id, MIN(a.created_at) AS at FROM events a
+     WHERE a.kind = 'app' AND a.created_at BETWEEN $1 AND $2
+       AND NOT EXISTS (SELECT 1 FROM events g WHERE g.chat_id = a.chat_id AND g.kind IN ('gen', 'free', 'paid', 'quiz') AND g.created_at >= a.created_at)
+       AND NOT EXISTS (SELECT 1 FROM events n WHERE n.chat_id = a.chat_id AND n.kind = 'nudge' AND n.created_at >= $3)
+       AND NOT EXISTS (SELECT 1 FROM users u WHERE u.chat_id = a.chat_id AND u.blocked = TRUE)
+     GROUP BY a.chat_id ORDER BY at ASC LIMIT $4`, [from, to, nudgedSince, limit]);
+  return r.rows.map((x) => String(x.chat_id));
+}
 async function deleteExpiredQuizzes(now = Date.now()) {
   await q('DELETE FROM quiz_results WHERE code IN (SELECT code FROM quizzes WHERE expires_at < $1)', [now]);
   const r = await q('DELETE FROM quizzes WHERE expires_at < $1', [now]);
@@ -1195,6 +1223,9 @@ module.exports = {
   countFreeQuizzes,
   listFreeQuizzes,
   freeQuizStats,
+  listAbandoned,
+  eventSince,
+  addBonusCredits,
   getQuiz,
   deleteExpiredQuizzes,
   addQuizResults,

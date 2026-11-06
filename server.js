@@ -22,7 +22,7 @@ const {
   scheduleRatePrompt, takeDueRatePrompts, recentRateContact, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
   getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes, addQuizResults, listQuizResults,
-  updateQuizQuestions, countFreeQuizzes, listFreeQuizzes,
+  updateQuizQuestions, countFreeQuizzes, listFreeQuizzes, eventSince, addBonusCredits,
 } = require('./db');
 const designMemory = require('./core/designMemory');
 const libraryCore = require('./products/presentation/library');
@@ -56,7 +56,7 @@ async function nudgeTemplate(chatId) {
 }
 const MAX_CONCURRENT = Math.max(1, parseInt(process.env.MAX_CONCURRENT_GENERATIONS || '3', 10) || 3);
 const MAX_TOPIC_CHARS = Math.max(200, parseInt(process.env.MAX_TOPIC_CHARS || '8000', 10) || 8000);
-const { PRICE, FIRST_PRICE, PLUS } = require('./core/pricing');
+const { PRICE, FIRST_PRICE, PLUS, PACK } = require('./core/pricing');
 const { formatReport } = require('./requirements');
 const KASPI_PHONE = process.env.KASPI_PHONE || '+77713436592';
 const KASPI_NAME = process.env.KASPI_NAME || 'Мурзабек Н';
@@ -213,6 +213,8 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       referralLink: `https://t.me/${BOT_USERNAME}?start=ref_${chatId}`,
       price: PRICE,
       plus: { amount: PLUS.amount, credits: PLUS.credits },
+      pack: { name: PACK.name, amount: PACK.amount, credits: PACK.credits },
+      firstPrice: (user.total || 0) === 0 ? FIRST_PRICE : null,
       kaspi: { phone: KASPI_PHONE, name: KASPI_NAME },
       referralsPerBonus: REFERRALS_PER_BONUS,
       tester: testerCore.testerView(await getTester(chatId).catch(() => null)),
@@ -916,10 +918,40 @@ async function sendDueRatePrompts() {
 // ─── Реферал бонусы (2 адам = 1 кредит) ──────────────────────────────────
 // Бұрын тек чатта жасалған презентацияда саналатын; чатта генерация жойылған соң — Mini App-тағы сәтті презентациядан кейін.
 // Тек сәтті жеткізілгеннен кейін (құлаған жұмыс санауышты өсірмейді).
+// Екі жақты реферал (2026-11-06): сілтемемен келген дос бірінші сәтті презентациясынан кейін өзі де +1 кредит алады.
+// Сыйлық total-ға қосылмайды (бірінші сатып алу жеңілдігі сақталады), бір адамға бір рет ('refgift' оқиғасы). Өшіру: REF_FRIEND_BONUS=0
+const REF_FRIEND_BONUS = Math.max(0, parseInt(process.env.REF_FRIEND_BONUS ?? '1', 10) || 0);
+async function giftReferredFriend(chatId) {
+  if (!REF_FRIEND_BONUS || await eventSince(chatId, 'refgift', 0).catch(() => true)) return;
+  await logEvent(chatId, 'refgift');
+  await addBonusCredits(chatId, REF_FRIEND_BONUS);
+  if (global.__deadlineBot) {
+    global.__deadlineBot.sendMessage(chatId,
+      `🎁 Досыңыздың шақыруымен келгеніңіз үшін *+${REF_FRIEND_BONUS} кредит* сыйлық! Келесі презентацияңыз — тегін, белгісіз, толық нұсқа.`,
+      { parse_mode: 'Markdown' }).catch(() => {});
+  }
+}
+
+/** Қуаныш сәті: презентация жеткен соң курстасқа бір батырмамен ұсыну (3 күнде бір рет; WhatsApp — көпшілік сол жақтан) */
+async function offerReferralShare(chatId) {
+  if (!global.__deadlineBot || !BOT_USERNAME || process.env.REF_SHARE === '0') return;
+  if (await eventSince(chatId, 'refask', Date.now() - 3 * 24 * 3600e3).catch(() => true)) return;
+  await logEvent(chatId, 'refask');
+  const link = `https://t.me/${BOT_USERNAME}?start=ref_${chatId}`;
+  const pitch = 'DeadLine — 2 минутта презентация, айтатын мәтін және топқа квиз. Мына сілтемемен кірсең, бонус кредит аласың:';
+  await global.__deadlineBot.sendMessage(chatId,
+    '🎁 Курстасыңызға ұсыныңыз: ол сіздің сілтемеңізбен келіп презентация жасаса — *екеуіңізге де бонус кредит*.',
+    { parse_mode: 'Markdown', disable_web_page_preview: true, reply_markup: { inline_keyboard: [[
+      { text: '📲 WhatsApp-қа жіберу', url: 'https://wa.me/?text=' + encodeURIComponent(pitch + ' ' + link) },
+      { text: '✈️ Telegram', url: 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(pitch) },
+    ]] } }).catch(() => {});
+}
+
 async function countReferral(chatId) {
   try {
     const u = await getUser(chatId);
     if (!u || !u.referredBy) return;
+    await giftReferredFriend(chatId).catch((e) => console.warn('[Referral] gift failed:', e.message));
     const { newCount, bonusGiven } = await incrementRefCount(u.referredBy);
     if (!newCount || !global.__deadlineBot) return;
     const need = REFERRALS_PER_BONUS - (newCount % REFERRALS_PER_BONUS);
@@ -1311,6 +1343,8 @@ async function executeJob(jobId) {
           if (result.quiz && result.quiz.links) await sendQuizLinks(chatId, result.quiz).catch((e) => console.warn('[Job] quiz links send failed', e.message));
           // квиз жоқ болса да — канал сілтемесі әр презентацияның астында (иесінің шешімі)
           else if (CHANNEL_URL) await global.__deadlineBot.sendMessage(chatId, `📢 Жаңалықтар мен нұсқаулықтар (квизді қалай ойнау т.б.): ${CHANNEL_URL}`, { disable_web_page_preview: true }).catch(() => {});
+          // қуаныш сәті: курстасқа ұсыну (тегін колодада өз хабарында бар — қайталамаймыз)
+          if (!job.payload?.free) await offerReferralShare(chatId).catch((e) => console.warn('[Referral] share offer failed:', e.message));
         }
       }
     } catch (e) {
@@ -1322,9 +1356,9 @@ async function executeJob(jobId) {
       const ref = BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?start=ref_${chatId}` : '';
       global.__deadlineBot.sendMessage(chatId,
         '🎁 Бұл — сіздің *тегін* презентацияңыз (оң жақ бұрыштағы «Made in DeadLine» белгісін PowerPoint-та өшіре аласыз).\n\n' +
-        `Келесі презентация: *${FIRST_PRICE}₸* (бірінші сатып алу), кейін ${PRICE}₸ · Plus: ${PLUS.credits} презентация — ${PLUS.amount}₸.\n` +
+        `Келесі презентация: *${FIRST_PRICE}₸* (бірінші сатып алу), кейін ${PRICE}₸ · Сессия пакеті: ${PACK.credits} презентация — ${PACK.amount}₸ · Plus: ${PLUS.credits} презентация — ${PLUS.amount}₸.\n` +
         'Ақылы презентацияда белгі болмайды, слайд саны шектелмейді, шаблон режимі де ашылады.' +
-        (ref ? `\n\n👥 Досыңызға сілтеме жіберіңіз — ол презентация жасатса, сізге бонус кредит: ${ref}` : ''),
+        (ref ? `\n\n👥 Курстасыңызға сілтеме жіберіңіз — ол презентация жасатса, *екеуіңізге де* бонус кредит: ${ref}` : ''),
         { parse_mode: 'Markdown', disable_web_page_preview: true }).catch(() => {});
     }
 
@@ -1450,6 +1484,12 @@ async function main() {
   await runCleanup();
   setInterval(runCleanup, 60 * 60 * 1000).unref(); // сағат сайын
   setInterval(() => { sendDueRatePrompts().catch(() => {}); }, 60 * 1000).unref(); // баға сұраулары — минут сайын
+  // Mini App-ты ашып, ештеңе жасамай кеткенге бір реттік еске салу (core/nudge.js; өшіру: NUDGE_ABANDONED=0)
+  setInterval(() => {
+    if (!global.__deadlineBot) return;
+    require('./core/nudge').runNudges({ db: require('./db'), webappUrl: WEBAPP_URL, send: (id, text, opts) => global.__deadlineBot.sendMessage(id, text, opts) })
+      .catch((e) => console.warn('[Nudge] failed:', e.message));
+  }, 15 * 60 * 1000).unref();
 
   // Start bot in same process (shared DB + notify)
   try {

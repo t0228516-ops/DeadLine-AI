@@ -36,6 +36,8 @@
     <!-- CREATE -->
     <section id="tab-create" class="panel active">
       <p id="testerBanner" class="free-banner tester-banner hidden"></p>
+      <!-- Кешкі дедлайн (21:00–02:00 Алматы): студент ертеңгі баяндамаға осы сағатта отырады -->
+      <p id="nightStrip" class="night-strip hidden">🌙 <b>Ертеңге керек пе?</b> Түнде де жұмыс істейміз — презентация, айтатын мәтін және квиз ~2 минутта дайын.</p>
 
       <!-- Тегін квиз: бірден көзге түседі (иесінің талабы) -->
       <button type="button" class="quiz-promo" id="quizPromo">
@@ -358,14 +360,30 @@
           <input id="refLink" readonly />
           <button id="btnCopyRef" class="btn secondary small">Көшіру</button>
         </div>
-        <p class="hint">Әр 2 сәтті презентация = +1 кредит</p>
+        <p class="hint">Досыңыз сіздің сілтемеңізбен келіп презентация жасаса — ол +1 кредит сыйлық алады, сізге әр 2 презентациясы үшін +1 кредит.</p>
       </div>
       <div class="card">
         <label class="label">Кредит сатып алу</label>
-        <p class="pay-info">Баға: <strong id="priceVal">250</strong>₸ / 1 презентация</p>
-        <p class="pay-info">⭐ <strong>Plus</strong>: <strong id="plusCredits">50</strong> презентация — <strong id="plusPrice">1990</strong>₸ <span class="muted" id="plusEach"></span></p>
+        <div class="tiers" id="tiers">
+          <div class="tier">
+            <div class="tier-n">1</div><div class="tier-l">презентация</div>
+            <div class="tier-p"><strong id="priceVal">250</strong>₸</div>
+            <div class="tier-s" id="firstPriceNote"></div>
+          </div>
+          <div class="tier tier-main">
+            <div class="tier-badge">Сессияға</div>
+            <div class="tier-n" id="packCredits">5</div><div class="tier-l">презентация</div>
+            <div class="tier-p"><strong id="packPrice">990</strong>₸</div>
+            <div class="tier-s" id="packEach"></div>
+          </div>
+          <div class="tier">
+            <div class="tier-n" id="plusCredits">50</div><div class="tier-l">Plus</div>
+            <div class="tier-p"><strong id="plusPrice">1990</strong>₸</div>
+            <div class="tier-s" id="plusEach"></div>
+          </div>
+        </div>
         <p class="pay-info">Kaspi: <strong id="kaspiPhone"></strong> · <span id="kaspiName"></span></p>
-        <p class="hint">Plus алу үшін ботқа «plus» деп жазыңыз. Төлемнен кейін чекті PDF түрінде жіберіңіз — 5–10 мин ішінде расталады.</p>
+        <p class="hint">Ботқа санын жазыңыз: «1», «<span id="packWord">5</span>» не «plus». Төлемнен кейін чекті PDF түрінде жіберіңіз — 5–10 мин ішінде расталады.</p>
         <button id="btnOpenBot" class="btn secondary block">Ботқа өту</button>
       </div>
     </section>
