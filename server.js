@@ -22,11 +22,14 @@ const {
   scheduleRatePrompt, takeDueRatePrompts, recentRateContact, logEvent, setUserProfile, logGen, adminData, addCredits,
   getTester, findUser, setTester, addTesterCredits, useTesterCredit, refundTesterCredit, setTesterPending, testerData,
   getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes, addQuizResults, listQuizResults,
+  updateQuizQuestions, countFreeQuizzes, listFreeQuizzes,
 } = require('./db');
 const designMemory = require('./core/designMemory');
 const libraryCore = require('./products/presentation/library');
 const testerCore = require('./core/tester');
 const adminCalc = require('./core/admin');
+const quizMaker = require('./core/quizMaker');
+const QuizCore = require('./core/quiz');
 
 // ─── Config ───────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -79,14 +82,14 @@ const WEBAPP_DIR = path.join(__dirname, 'webapp');
 const assetVersion = (() => {
   try {
     const h = require('crypto').createHash('sha1');
-    for (const f of ['app.js', 'admin.js', 'styles.css', 'index.html']) h.update(fs.readFileSync(path.join(WEBAPP_DIR, f)));
+    for (const f of ['app.js', 'admin.js', 'quizmaker.js', 'styles.css', 'index.html']) h.update(fs.readFileSync(path.join(WEBAPP_DIR, f)));
     return h.digest('hex').slice(0, 10);
   } catch { return String(Date.now()); }
 })();
 const sendIndex = (req, res) => {
   try {
     const html = fs.readFileSync(path.join(WEBAPP_DIR, 'index.html'), 'utf8')
-      .replace(/(src|href)="(app\.js|admin\.js|styles\.css)"/g, `$1="$2?v=${assetVersion}"`);
+      .replace(/(src|href)="(app\.js|admin\.js|quizmaker\.js|styles\.css)"/g, `$1="$2?v=${assetVersion}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
     res.type('html').send(html);
@@ -94,7 +97,14 @@ const sendIndex = (req, res) => {
 };
 app.get(['/webapp', '/webapp/', '/webapp/index.html'], sendIndex);
 // Топқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
-app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz, addQuizResults, listQuizResults }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts'), onLobbyWaiting: (x) => notifyQuizHost(x) }));
+app.use(require('./core/quizRoutes').createQuizRouter({
+  db: { getQuiz, addQuizResults, listQuizResults, updateQuizQuestions },
+  webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null,
+  fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts'),
+  onLobbyWaiting: (x) => notifyQuizHost(x),
+  botUrl: BOT_USERNAME ? `https://t.me/${BOT_USERNAME}` : null,
+  replaceQuestion: (x) => quizMaker.replaceQuestion(x),
+}));
 app.use('/webapp', express.static(WEBAPP_DIR, {
   index: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,   // ?v=… өзгергенде жаңа файл жүктеледі
@@ -382,6 +392,110 @@ app.post('/api/material', authMiddleware, express.raw({ type: '*/*', limit: '50m
       note: analysis.note || '',
     });
   } catch (e) { console.error('[API] /material', e); res.status(500).json({ error: 'server_error' }); }
+});
+
+// ─── Тегін квиз (маркетинг, 2026-11-06): тақырыптан не өз материалынан 30 секундта тірі квиз ───────────────
+// Шек: бір адамға күніне QUIZ_FREE_PER_DAY (әдепкі 3), бәріне күніне QUIZ_FREE_DAILY_CAP (әдепкі 1000) — шығынға сақтандыру.
+// Қатар екі сұраныс (қос басу) бір адамнан қабылданбайды. Сұрақтарды тек квиз иесі (host key) өзгерте алады — core/quizRoutes.
+const QUIZ_FREE_PER_DAY = Math.max(0, parseInt(process.env.QUIZ_FREE_PER_DAY || '3', 10) || 0);
+const QUIZ_FREE_DAILY_CAP = Math.max(0, parseInt(process.env.QUIZ_FREE_DAILY_CAP || '1000', 10) || 0);
+/** Алматы тәулігінің басы (UTC+5, воронкамен бірдей) */
+const almatyDayStart = (t = Date.now()) => { const d = new Date(t + 5 * 3600e3); d.setUTCHours(0, 0, 0, 0); return d.getTime() - 5 * 3600e3; };
+const quizMaking = new Set(); // қазір квиз жасатып жатқан адамдар
+
+async function freeQuizLeft(chatId) {
+  if (isAdminId(chatId)) return QUIZ_FREE_PER_DAY || 99; // админ сынай алсын (шексіз)
+  const used = await countFreeQuizzes({ chatId, since: almatyDayStart() });
+  return Math.max(0, QUIZ_FREE_PER_DAY - used);
+}
+const quizLinks = (code, hostKey) => {
+  const base = QUIZ_BASE_URL || '';
+  return { player: `${base}/q/${code}`, host: `${base}/q/${code}/host?k=${encodeURIComponent(hostKey)}` };
+};
+
+app.get('/api/quiz-maker', authMiddleware, async (req, res) => {
+  try {
+    const chatId = String(req.tgUser.id);
+    const [left, mine] = await Promise.all([freeQuizLeft(chatId), listFreeQuizzes(chatId, 10)]);
+    res.json({
+      left, perDay: QUIZ_FREE_PER_DAY, min: quizMaker.MIN_COUNT, max: quizMaker.MAX_COUNT,
+      quizzes: mine.map((z) => ({ code: z.code, topic: z.topic, n: z.n, createdAt: z.createdAt, hostKey: z.hostKey, links: quizLinks(z.code, z.hostKey) })),
+    });
+  } catch (e) { console.error('[API] /quiz-maker', e); res.status(500).json({ error: 'server_error' }); }
+});
+
+app.post('/api/quiz-maker/create', authMiddleware, async (req, res) => {
+  const chatId = String(req.tgUser.id);
+  if (quizMaking.has(chatId)) return res.status(409).json({ error: 'busy', message: 'Квиз жасалып жатыр — бір сәт күтіңіз' });
+  quizMaking.add(chatId);
+  const t0 = Date.now();
+  try {
+    const b = req.body || {};
+    const topic = String(b.topic || '').replace(/\s+/g, ' ').trim();
+    if (topic.length < 3) return res.status(400).json({ error: 'invalid_topic', message: 'Тақырыпты жазыңыз' });
+    if (topic.length > quizMaker.MAX_TOPIC) return res.status(400).json({ error: 'topic_too_long', message: `Тақырып ${quizMaker.MAX_TOPIC} таңбадан аспасын` });
+    if (MAINTENANCE && !isAdminId(chatId) && !testerCore.isActive(await getTester(chatId).catch(() => null))) {
+      return res.status(503).json({ error: 'maintenance', message: '🛠 DeadLine жаңартылып жатыр — жақында ораламыз!' });
+    }
+    if (!(await getUser(chatId))) await registerUser(chatId, null);
+    if ((await freeQuizLeft(chatId)) <= 0) {
+      return res.status(429).json({ error: 'daily_limit', message: `Бүгінгі ${QUIZ_FREE_PER_DAY} тегін квиз бітті — ертең қайта жасай аласыз 🙂` });
+    }
+    if (QUIZ_FREE_DAILY_CAP && (await countFreeQuizzes({ since: almatyDayStart() })) >= QUIZ_FREE_DAILY_CAP) {
+      console.warn(`[QuizMaker] daily cap ${QUIZ_FREE_DAILY_CAP} reached`);
+      return res.status(503).json({ error: 'busy_today', message: 'Бүгін квиз өте көп жасалды — ертең қайта көріңіз 🙏' });
+    }
+
+    // Мұғалімнің материалы: жүктелген файл (тек өзінікі) не қойылған мәтін
+    let material = '';
+    const mid = String(b.materialId || '');
+    if (mid) {
+      if (!/^[\w-]+$/.test(mid) || !mid.startsWith(chatId + '-')) return res.status(400).json({ error: 'bad_material' });
+      const files = fs.readdirSync(MATERIAL_DIR).filter((f) => f.startsWith(mid + '.'));
+      if (!files.length) return res.status(404).json({ error: 'material_gone', message: 'Файл табылмады — қайта жүктеңіз' });
+      const an = await analyzeMaterialFile({ buffer: fs.readFileSync(path.join(MATERIAL_DIR, files[0])), name: files[0] });
+      material = String(an.text || '');
+      if (material.trim().length < 80) return res.status(422).json({ error: 'unreadable', message: 'Файлдан мәтін оқылмады — мәтінін көшіріп қойыңыз' });
+    } else if (typeof b.text === 'string' && b.text.trim()) {
+      material = b.text.slice(0, 60000);
+      if (material.trim().length < 80) return res.status(400).json({ error: 'short_text', message: 'Материал тым қысқа — кемінде бірнеше сөйлем қойыңыз' });
+    }
+
+    let made;
+    try {
+      made = await quizMaker.generateQuiz({ topic, language: b.language, count: b.count, material });
+    } catch (e) {
+      console.warn(`[QuizMaker] generate failed chat=${chatId}: ${e.message}`);
+      return res.status(502).json({ error: 'generate_failed', message: 'Квиз жасалмады — тақырыпты нақтылап, қайта көріңіз' });
+    }
+
+    // бірегей код (сирек қайталанса — жаңасы)
+    let code = '';
+    for (let i = 0; i < 6 && !code; i++) { const c = QuizCore.makeCode(); if (!(await getQuiz(c))) code = c; }
+    if (!code) throw new Error('no free quiz code');
+    const hostKey = QuizCore.makeToken(12);
+    await saveQuiz({
+      code, hostKey, chatId, jobId: null, topic: made.topic, language: made.language, questions: made.questions,
+      kind: 'free', material: material ? quizMaker.prepMaterial(material) : '', expiresAt: Date.now() + QuizCore.QUIZ_TTL_MS,
+    });
+    // мерзімі өткен, бірақ әлі тазаланбаған квизбен код сәйкес келсе, INSERT … DO NOTHING үнсіз өтеді — тексереміз
+    const stored = await getQuiz(code);
+    if (!stored || stored.hostKey !== hostKey) throw new Error(`quiz ${code} was not stored`);
+    logEvent(chatId, 'quiz').catch(() => {});
+    const links = quizLinks(code, hostKey);
+    console.log(`[QuizMaker] ${code} chat=${chatId} n=${made.questions.length} lang=${made.language} material=${material ? 'yes' : 'no'} ms=${Date.now() - t0}`);
+    sendQuizLinks(chatId, { code, topic: made.topic, questions: made.questions, links }, { free: true })
+      .catch((e) => console.warn(`[QuizMaker] links message: ${e.message}`));
+    return res.json({
+      code, hostKey, links, topic: made.topic, language: made.language, questions: made.questions,
+      left: await freeQuizLeft(chatId),
+    });
+  } catch (e) {
+    console.error('[API] /quiz-maker/create', e);
+    return res.status(500).json({ error: 'server_error', message: 'Қате шықты — қайта көріңіз' });
+  } finally {
+    quizMaking.delete(chatId);
+  }
 });
 
 app.post('/api/generate', authMiddleware, async (req, res) => {
@@ -1271,22 +1385,30 @@ function removeOldFiles(dir, cutoff, keep = new Set()) {
   return n;
 }
 
-/** Квиз сілтемелері ботпен: «📤 Топқа жіберу» (Telegram бөлісу терезесі) + «🎮 Квизді басқару» (бастау, келесі сұрақ, нәтижелер) */
-async function sendQuizLinks(chatId, quiz) {
+/**
+ * Квиз сілтемелері ботпен: «📲 WhatsApp-қа» / «📤 Telegram-ға» (топқа ойыншы сілтемесі) + «🎮 Квизді басқару» (бастау,
+ * келесі сұрақ, нәтижелер). opts.free — тегін квиз (Mini App-тан жасалған; соңғы слайд/QR жоқ).
+ */
+async function sendQuizLinks(chatId, quiz, opts = {}) {
   if (!global.__deadlineBot || !quiz || !quiz.links) return;
   const n = (quiz.questions || []).length || 10;
   const shareText = `🎯 Квиз: «${String(quiz.topic || '').slice(0, 120)}» — сілтемені ашып, атыңызды жазыңыз`;
   const share = `https://t.me/share/url?url=${encodeURIComponent(quiz.links.player)}&text=${encodeURIComponent(shareText)}`;
-  const text = `🎯 Топқа квиз дайын — ${n} сұрақ.\n\n`
-    + '1️⃣ «📤 Топқа жіберу» — сілтемені топ чатына жіберіңіз (не топ соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n'
+  const wa = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${quiz.links.player}`)}`;
+  const text = (opts.free ? `🎯 Квиз дайын: «${String(quiz.topic || '').slice(0, 120)}» — ${n} сұрақ.\n\n` : `🎯 Топқа квиз дайын — ${n} сұрақ.\n\n`)
+    + (opts.free
+      ? '1️⃣ Ойыншы сілтемесін топқа жіберіңіз (WhatsApp не Telegram) — не басқару бетіндегі QR-ды проекторға шығарыңыз. Әркім атын жазып қосылады, тіркелу керек емес.\n'
+      : '1️⃣ Сілтемені топ чатына жіберіңіз (не топ соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n')
     + '2️⃣ «🎮 Квизді басқару» — ойынды СІЗ бастайсыз, келесі сұраққа да сіз өткізесіз. Ноутбукта ашып, проекторға шығарыңыз (телефоннан да болады).\n'
     + '📋 Кім неше сұраққа дұрыс жауап бергені — сол беттегі «Нәтижелер».\n\n'
     + '⚠️ Басқару сілтемесін топқа жібермеңіз — ол тек сізге.'
     + (CHANNEL_URL ? `\n\n🎬 Квизді қалай ойнау керек — видео нұсқаулық біздің каналда: ${CHANNEL_URL}` : '');
   await global.__deadlineBot.sendMessage(chatId, text, {
     disable_web_page_preview: true,
-    reply_markup: { inline_keyboard: [[{ text: '📤 Топқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
-      .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []) },
+    reply_markup: {
+      inline_keyboard: [[{ text: '📲 WhatsApp-қа', url: wa }, { text: '📤 Telegram-ға', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
+        .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []),
+    },
   });
 }
 

@@ -37,7 +37,11 @@
     } catch { /* келесі сұрауда жаңарады */ } finally { busy = false; }
   }
 
-  function take(s) { st = s; gotAt = performance.now(); render(); }
+  function take(s) {
+    st = s; gotAt = performance.now();
+    if (s && s.bot && !$('brand').href) $('brand').href = s.bot + '?start=quiz_brand';
+    render();
+  }
 
   // бір ғана сұрау циклі (gen) + күзетші: желі ілінсе не экран сөніп-жанса, басқару беті қатып қалмайды
   let gen = 0; let lastOk = Date.now(); let dead = false;
@@ -144,7 +148,8 @@
       const s = st.stats || {};
       const hard = s.hardest
         ? '<div class="hard"><div class="lbl">' + esc(T.hardest) + ' · №' + s.hardest.n + ' · ' + esc(T.pct(s.hardest.pct)) + '</div><b>' + esc(s.hardest.q) + '</b><div class="lbl" style="margin-top:.3em">' + esc(T.hardHint) + '</div></div>'
-        : '<div class="hard"><b>' + esc(T.allRight) + '</b></div>';
+        // ешкім жауап бермесе — «бәрі жақсы жауап берді» деп мақтамаймыз
+        : '<div class="hard"><b>' + esc(s.anyAnswer === false ? T.noAnswersAll : T.allRight) + '</b></div>';
       $('screen').innerHTML = '<div class="board"><h2>' + esc(T.top) + '</h2>' + (rows || '<div class="row">—</div>')
         + '<div class="stats"><div><div class="big">' + (s.avgRight || 0) + ' / ' + (s.total || st.total) + '</div><div class="lbl">' + esc(T.avg) + '</div></div>' + hard + '</div></div>';
       ctrl([{ a: 'restart', t: T.again }, { a: 'review', t: T.reviewGo, main: true }]);
@@ -191,7 +196,7 @@
       const rows = d.results.slice().sort((a, b) => b.right - a.right || a.at - b.at);
       const sum = rows.length
         ? '<div class="stats sum"><div><div class="big">' + (sm.avgRight || 0) + ' / ' + (sm.total || st.total) + '</div><div class="lbl">' + esc(T.avg) + '</div></div>'
-          + (sm.hardest ? '<div class="hard"><div class="lbl">' + esc(T.hardest) + ' · №' + sm.hardest.n + ' · ' + esc(T.pct(sm.hardest.pct)) + '</div><b>' + esc(sm.hardest.q) + '</b><div class="lbl">' + esc(T.rightAnsShort) + ': ' + esc(sm.hardest.answer) + '</div></div>' : '<div class="hard"><b>' + esc(T.allRight) + '</b></div>')
+          + (sm.hardest ? '<div class="hard"><div class="lbl">' + esc(T.hardest) + ' · №' + sm.hardest.n + ' · ' + esc(T.pct(sm.hardest.pct)) + '</div><b>' + esc(sm.hardest.q) + '</b><div class="lbl">' + esc(T.rightAnsShort) + ': ' + esc(sm.hardest.answer) + '</div></div>' : '<div class="hard"><b>' + esc(sm.anyAnswer === false ? T.noAnswersAll : T.allRight) + '</b></div>')
           + '</div>'
         : '';
       const table = rows.length

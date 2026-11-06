@@ -34,8 +34,18 @@ const NUDGE_DEFAULTS = {
   max: 2,
 };
 
-function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nudge }) {
+const MIN_GAME_QUESTIONS = 3;   // мұғалім өшіре берсе де ойын мағынасыз болмасын
+const MAX_REPLACES = 30;         // бір квизге «ауыстыру» шегі (әрқайсысы — бір LLM шақыруы)
+
+/**
+ * @param {object} o
+ * @param {object} o.db                 getQuiz, addQuizResults, listQuizResults, updateQuizQuestions
+ * @param {string} [o.botUrl]           https://t.me/<бот> — беттердегі «Made in DeadLine» және ойын соңындағы батырмалар
+ * @param {Function} [o.replaceQuestion] ({topic, language, material, questions, qi}) → жаңа сұрақ (core/quizMaker)
+ */
+function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nudge, botUrl, replaceQuestion }) {
   const NUDGE = { ...NUDGE_DEFAULTS, ...(nudge || {}) };
+  const BOT = botUrl ? String(botUrl).replace(/\/+$/, '') : '';
   const express = require('express');
   const router = express.Router();
   const rooms = new Map();      // code → room
@@ -123,6 +133,9 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nu
 
   router.get('/api/quiz/:code/info', withRoom((req, res, room) => res.json({
     topic: room.quiz.topic, lang: room.quiz.language, total: room.quiz.questions.length, url: playerUrl(req),
+    // тегін квизде ойын соңында «презентация» ұсынысы да бар; презентация квизінде — тек «өз квизіңді жаса»
+    // (баяндамашының ботпен жасағаны сыныпқа жарнамаланбайды)
+    free: room.quiz.kind === 'free', bot: BOT || null,
   })));
 
   router.get('/api/quiz/:code/qr.svg', withRoom((req, res) => {
@@ -180,7 +193,7 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nu
   router.get('/api/quiz/:code/host/state', withRoom((req, res, room) => {
     if (!hostOk(room, req.query.k)) return res.status(403).json({ error: 'key' });
     room.hostSeenAt = Date.now();
-    return res.json({ ...Q.hostView(room), url: playerUrl(req) });
+    return res.json({ ...Q.hostView(room), url: playerUrl(req), bot: BOT || null });
   }));
 
   router.post('/api/quiz/:code/host', withRoom((req, res, room) => {
@@ -203,6 +216,48 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nu
       db.addQuizResults(code(req), Q.liveResults(room)).catch((e) => console.warn('[Quiz] save live results:', e.message));
     }
     return res.json({ ok: true, state: { ...Q.hostView(room), url: playerUrl(req) } });
+  }));
+
+  // ── Сұрақтарды ойынға дейін тексеру/түзету (тек кілт иесі: квизді жасаған адам) ──
+  const fullQuestions = (room) => room.quiz.questions.map((x) => ({ q: x.q, options: x.options, correct: x.correct, explain: x.explain || '' }));
+
+  router.get('/api/quiz/:code/questions', withRoom((req, res, room) => {
+    if (!hostOk(room, req.query.k)) return res.status(403).json({ error: 'key' });
+    return res.json({ topic: room.quiz.topic, lang: room.quiz.language, questions: fullQuestions(room), url: playerUrl(req), phase: room.phase });
+  }));
+
+  router.post('/api/quiz/:code/edit', withRoom(async (req, res, room) => {
+    const b = req.body || {};
+    if (!hostOk(room, b.k)) return res.status(403).json({ error: 'key' });
+    if (room.phase !== 'lobby') return res.status(409).json({ error: 'playing', message: 'Ойын жүріп жатыр — сұрақтарды ойын біткен соң өзгертуге болады' });
+    if (room.editing) return res.status(409).json({ error: 'busy' });
+    const qs = room.quiz.questions;
+    const qi = Number(b.qi);
+    if (!Number.isInteger(qi) || qi < 0 || qi >= qs.length) return res.status(400).json({ error: 'index' });
+    let next;
+    if (b.action === 'delete') {
+      if (qs.length <= MIN_GAME_QUESTIONS) return res.status(409).json({ error: 'min', message: `Кемінде ${MIN_GAME_QUESTIONS} сұрақ қалуы керек` });
+      next = qs.filter((_, i) => i !== qi);
+    } else if (b.action === 'replace') {
+      if (typeof replaceQuestion !== 'function') return res.status(501).json({ error: 'unavailable' });
+      if ((room.replaces || 0) >= MAX_REPLACES) return res.status(429).json({ error: 'limit', message: 'Бұл квизде ауыстыру шегі бітті' });
+      room.editing = true;
+      try {
+        room.replaces = (room.replaces || 0) + 1;
+        const fresh = await replaceQuestion({ topic: room.quiz.topic, language: room.quiz.language, material: room.quiz.material || '', questions: qs, qi });
+        if (room.phase !== 'lobby') return res.status(409).json({ error: 'playing' });
+        next = room.quiz.questions.map((x, i) => (i === qi ? fresh : x));
+      } catch (e) {
+        console.warn(`[Quiz] ${code(req)}: replace failed: ${e.message}`);
+        return res.status(502).json({ error: 'replace_failed', message: 'Жаңа сұрақ шықпады — қайталап көріңіз' });
+      } finally { room.editing = false; }
+    } else {
+      return res.status(400).json({ error: 'action' });
+    }
+    if (db.updateQuizQuestions) await db.updateQuizQuestions(code(req), next);
+    room.quiz = { ...room.quiz, questions: next };
+    room.version += 1;
+    return res.json({ ok: true, questions: fullQuestions(room) });
   }));
 
   // баяндамашыға: барлық нәтиже (тірі ойын + өз бетімен өткендер) және сынып қорытындысы

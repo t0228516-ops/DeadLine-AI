@@ -15,7 +15,7 @@ window.QUIZ_I18N = {
     start: '▶ Бастау', players: (n) => `${n} қатысушы`, noPlayers: 'Қатысушылар күтілуде…',
     answered: 'жауап берді', next: 'Келесі →', results: 'Нәтиже →', again: '↺ Қайта ойнау', getReady: 'Дайындалыңыз!',
     top: 'Үздіктер 🏆', avg: 'орташа дұрыс жауап', hardest: 'Топ ең қиналған сұрақ', hardHint: 'Осыны тағы бір рет түсіндіріп жіберіңіз.',
-    pct: (p) => `${p}% дұрыс`, allRight: 'Барлық сұраққа топ жақсы жауап берді 👏',
+    pct: (p) => `${p}% дұрыс`, allRight: 'Барлық сұраққа топ жақсы жауап берді 👏', noAnswersAll: 'Бұл ойында ешкім жауап бермеді',
     badKey: 'Проектор сілтемесі қате. Презентацияның соңғы слайдындағы «Квизді бастау» батырмасын қайта басыңыз.',
     notFound: 'Квиз табылмады немесе мерзімі өтіп кетті.', offline: 'Байланыс үзілді — қайта қосылуда…', fullscreen: '⛶ Толық экран',
     joinTitle: 'Квизге қосылу', name: 'Атыңыз', join: 'Қосылу →', noReg: 'Тіркелу қажет емес',
@@ -26,7 +26,9 @@ window.QUIZ_I18N = {
     over: 'Квиз аяқталды!', review: 'Сұрақтар мен жауаптар', yours: 'Сіздің жауабыңыз:',
    
    
-    full: 'Бұл квизде орын қалмады.', made: 'DeadLine-да жасалды',
+    full: 'Бұл квизде орын қалмады.', made: 'Made in DeadLine',
+    ctaTitle: 'Ұнады ма?', ctaText: 'Кез келген тақырыпқа осындай квизді 30 секундта өзің жаса — тегін.',
+    ctaQuiz: '🎯 Өз квизіңді жаса — тегін', ctaDeck: '📊 Баяндама бар ма? Презентация 2 минутта',
   },
   ru: {
     rightAnsShort: 'Верный ответ',
@@ -43,7 +45,7 @@ window.QUIZ_I18N = {
     start: '▶ Начать', players: (n) => `участников: ${n}`, noPlayers: 'Ждём участников…',
     answered: 'ответили', next: 'Дальше →', results: 'Итоги →', again: '↺ Сыграть снова', getReady: 'Приготовьтесь!',
     top: 'Лучшие 🏆', avg: 'верных в среднем', hardest: 'Самый трудный вопрос для группы', hardHint: 'Объясните его ещё раз.',
-    pct: (p) => `${p}% верно`, allRight: 'Группа хорошо ответила на все вопросы 👏',
+    pct: (p) => `${p}% верно`, allRight: 'Группа хорошо ответила на все вопросы 👏', noAnswersAll: 'В этой игре никто не ответил',
     badKey: 'Неверная ссылка проектора. Нажмите кнопку «Начать квиз» на последнем слайде ещё раз.',
     notFound: 'Квиз не найден или срок его действия истёк.', offline: 'Нет связи — переподключаемся…', fullscreen: '⛶ Полный экран',
     joinTitle: 'Войти в квиз', name: 'Ваше имя', join: 'Войти →', noReg: 'Регистрация не нужна',
@@ -54,7 +56,9 @@ window.QUIZ_I18N = {
     over: 'Квиз окончен!', review: 'Вопросы и ответы', yours: 'Ваш ответ:',
    
    
-    full: 'В этом квизе нет мест.', made: 'Сделано в DeadLine',
+    full: 'В этом квизе нет мест.', made: 'Made in DeadLine',
+    ctaTitle: 'Понравилось?', ctaText: 'Сделай такой же квиз на любую тему за 30 секунд — бесплатно.',
+    ctaQuiz: '🎯 Создать свой квиз — бесплатно', ctaDeck: '📊 Есть доклад? Презентация за 2 минуты',
   },
   en: {
     rightAnsShort: 'Right answer',
@@ -71,7 +75,7 @@ window.QUIZ_I18N = {
     start: '▶ Start', players: (n) => `${n} players`, noPlayers: 'Waiting for players…',
     answered: 'answered', next: 'Next →', results: 'Results →', again: '↺ Play again', getReady: 'Get ready!',
     top: 'Top players 🏆', avg: 'right answers on average', hardest: 'The question the group found hardest', hardHint: 'Explain it once more.',
-    pct: (p) => `${p}% right`, allRight: 'The group answered every question well 👏',
+    pct: (p) => `${p}% right`, allRight: 'The group answered every question well 👏', noAnswersAll: 'Nobody answered in this game',
     badKey: 'Wrong projector link. Click "Start quiz" on the last slide again.',
     notFound: 'Quiz not found or expired.', offline: 'Connection lost — reconnecting…', fullscreen: '⛶ Full screen',
     joinTitle: 'Join the quiz', name: 'Your name', join: 'Join →', noReg: 'No sign-up needed',
@@ -82,7 +86,9 @@ window.QUIZ_I18N = {
     over: 'Quiz finished!', review: 'Questions and answers', yours: 'Your answer:',
    
    
-    full: 'This quiz is full.', made: 'Made with DeadLine',
+    full: 'This quiz is full.', made: 'Made in DeadLine',
+    ctaTitle: 'Enjoyed it?', ctaText: 'Make a quiz like this on any topic in 30 seconds — free.',
+    ctaQuiz: '🎯 Make your own quiz — free', ctaDeck: '📊 Got a talk? A presentation in 2 minutes',
   },
 };
 window.QUIZ_SHAPES = ['▲', '◆', '●', '■'];

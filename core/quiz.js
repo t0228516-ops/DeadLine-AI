@@ -56,9 +56,12 @@ function shuffle(arr, rnd = Math.random) {
 /**
  * LLM жауабын тексеріп, ойынға дайын күйге келтіреді.
  * Дұрыс жауап моделі көбіне «A»-ға қояды → нұсқаларды араластырамыз (дұрыс жауап 4 орынға тең бөлінеді).
+ * opts.min / opts.max — сұрақ саны шегі (әдепкі: презентация квизі 6–10; тегін квиз 5–15).
  * @returns {{q:string, options:string[], correct:number, explain:string}[]}
  */
-function normalizeQuestions(raw, rnd = Math.random) {
+function normalizeQuestions(raw, rnd = Math.random, opts = {}) {
+  const min = Number.isInteger(opts.min) ? opts.min : MIN_QUESTIONS;
+  const max = Number.isInteger(opts.max) ? opts.max : MAX_QUESTIONS;
   const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.quiz) ? raw.quiz : []);
   const out = []; const seen = new Set();
   for (const it of list) {
@@ -76,9 +79,9 @@ function normalizeQuestions(raw, rnd = Math.random) {
     const right = opts[c];
     const mixed = shuffle(opts, rnd);
     out.push({ q, options: mixed, correct: mixed.indexOf(right), explain: clean(it.explain || it.explanation, 220) });
-    if (out.length >= MAX_QUESTIONS) break;
+    if (out.length >= max) break;
   }
-  return out.length >= MIN_QUESTIONS ? out : [];
+  return out.length >= min ? out : [];
 }
 
 /** Оқу уақыты: сұрақ + нұсқалар ұзындығына қарай 15–30 с (баяу оқитын бала да үлгерсін) */
@@ -315,7 +318,7 @@ function classStats(room) {
   const avg = players ? Math.round((ranking(room).reduce((a, r) => a + r.right, 0) / players) * 10) / 10 : 0;
   const q = hardest ? room.quiz.questions[hardest.i] : null;
   return {
-    total, players, avgRight: avg,
+    total, players, avgRight: avg, anyAnswer: played.length > 0,
     hardest: hardest && hardest.pct < 100 ? { n: hardest.i + 1, q: q.q, pct: hardest.pct, answer: q.options[q.correct] } : null,
   };
 }
@@ -404,7 +407,7 @@ function resultsSummary(quiz, rows) {
   const hard = played.length ? played.slice().sort((a, b) => a.pct - b.pct || a.n - b.n)[0] : null;
   const avg = rows.length ? Math.round((rows.reduce((a, r) => a + (r.right || 0), 0) / rows.length) * 10) / 10 : 0;
   return {
-    count: rows.length, total, avgRight: avg, per,
+    count: rows.length, total, avgRight: avg, per, anyAnswer: played.length > 0,
     hardest: hard && hard.pct < 100 ? { n: hard.n, q: quiz.questions[hard.n - 1].q, pct: hard.pct, answer: quiz.questions[hard.n - 1].options[quiz.questions[hard.n - 1].correct] } : null,
   };
 }

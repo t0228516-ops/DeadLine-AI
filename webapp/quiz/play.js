@@ -15,7 +15,17 @@
   function setLang(l) {
     T = window.QUIZ_I18N[l] || window.QUIZ_I18N.kk;
     document.documentElement.lang = l || 'kk';
-    document.getElementById('brand').textContent = T.made;
+    const b = document.getElementById('brand');
+    b.textContent = T.made;
+    if (info && info.bot) b.href = info.bot + '?start=quiz_brand'; else b.removeAttribute('href');
+  }
+  // Ойын соңы: «өз квизіңді жаса» (әрқашан) + «презентация» (тек тегін квизде — баяндамашының ботпен жасағаны жарнамаланбайды)
+  function ctaHtml() {
+    if (!info || !info.bot) return '';
+    return '<div class="cta"><h3>' + esc(T.ctaTitle) + '</h3><p>' + esc(T.ctaText) + '</p>'
+      + '<a class="btn" target="_blank" rel="noopener" href="' + esc(info.bot + '?start=quiz_make') + '">' + esc(T.ctaQuiz) + '</a>'
+      + (info.free ? '<a class="btn alt" target="_blank" rel="noopener" href="' + esc(info.bot + '?start=quiz_deck') + '">' + esc(T.ctaDeck) + '</a>' : '')
+      + '</div>';
   }
   const top = (right) => '<div class="top"><span>🎯 ' + esc((info && info.topic) || T.quiz) + '</span><span>' + esc(right || '') + '</span></div>';
 
@@ -129,7 +139,7 @@
     if (st.phase === 'end' || st.phase === 'review') {
       if (shown === 'final') return; // проектордағы талдау беттері ауысқанда телефондағы нәтиже қайта салынбайды
       shown = 'final';
-      app.innerHTML = top(T.quiz) + finalHtml(st.me.rank, st.me.of, st.me.right, st.total, st.me.score) + reviewHtml(st.review);
+      app.innerHTML = top(T.quiz) + finalHtml(st.me.rank, st.me.of, st.me.right, st.total, st.me.score) + ctaHtml() + reviewHtml(st.review);
       if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
     }
   }

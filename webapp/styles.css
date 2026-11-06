@@ -304,3 +304,55 @@ label.btn { display: flex; align-items: center; justify-content: center; cursor:
 .sp-strip { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .sp-strip img { width: 100%; border-radius: 10px; display: block; aspect-ratio: 16 / 9; }
 .wiz-step > .field, .wiz-topic { background: var(--bg2); }
+
+/* ── Тегін квиз (webapp/quizmaker.js, 2026-11) ── */
+.quiz-promo { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; border: 0; cursor: pointer;
+  margin-bottom: 12px; padding: 12px 14px; border-radius: 16px; color: #fff;
+  background: linear-gradient(120deg, #3b2bd1 0%, #6a3df0 55%, #f5a524 140%); box-shadow: 0 6px 18px rgba(59,43,209,.35); }
+.quiz-promo:active { transform: scale(.99); }
+.qp-ic { flex: none; width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.18); display: grid; place-items: center; font-size: 22px; }
+.qp-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qp-txt b { font-size: 15px; }
+.qp-txt small { font-size: 12px; opacity: .85; }
+.qp-go { flex: none; background: #f5a524; color: #1a1300; font-weight: 800; font-size: 13px; border-radius: 10px; padding: 8px 10px; }
+.seg-btn { line-height: 1.15; font-size: 12px; position: relative; padding: 7px 2px; }
+.seg-btn i { display: block; font-style: normal; font-size: 17px; line-height: 1; margin-bottom: 3px; }
+.seg-free { position: absolute; top: -6px; right: 2px; font-size: 8px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: #04210f; background: #34c759; border-radius: 6px; padding: 1px 5px; }
+.qm-left { margin-bottom: 12px; }
+.qm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.qm-grid .card { margin-bottom: 0; }
+.qm-mat { margin-top: 12px; }
+.qm-mat-hint { text-align: left; margin: 0 0 8px; }
+.qm-mat textarea { min-height: 96px; margin-bottom: 8px; }
+.qm-file { font-size: 14px; padding: 11px; }
+.qm-go { margin-top: 14px; font-size: 16px; padding: 15px 18px; }
+.qm-mine { margin-top: 22px; }
+.qm-mine-h { font-size: 12px; font-weight: 700; color: var(--hint); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.qm-item { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; background: var(--bg2);
+  border: 0; color: var(--text); border-radius: 12px; padding: 11px 13px; margin-bottom: 8px; cursor: pointer; font-size: 14px; }
+.qm-item b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qm-item small { color: var(--hint); font-size: 12px; }
+.qm-item .qm-open { flex: none; color: var(--link); font-weight: 600; font-size: 13px; }
+.qm-item > span:first-child { min-width: 0; }
+.qm-loading { text-align: center; padding: 48px 8px 24px; }
+.qm-loading .spinner { margin: 0 auto 18px; }
+.qm-load-t { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.qm-load-s { color: var(--hint); font-size: 14px; margin-bottom: 16px; min-height: 20px; }
+.qm-ok { background: rgba(52,199,89,.14); color: var(--text); border: 1px solid rgba(52,199,89,.45); border-radius: 12px; padding: 11px 14px; font-size: 14px; font-weight: 600; margin-bottom: 10px; text-align: center; }
+.qm-rev-sub { margin-bottom: 12px; }
+.qm-q { background: var(--bg2); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; transition: opacity .2s; }
+.qm-q.busy { opacity: .45; pointer-events: none; }
+.qm-q .qq { display: flex; gap: 8px; font-weight: 700; font-size: 14px; line-height: 1.3; margin-bottom: 8px; }
+.qm-q .qq span { color: var(--hint); flex: none; }
+.qm-q .op { position: relative; font-size: 13px; color: var(--hint); padding: 3px 0 3px 22px; line-height: 1.3; }
+.qm-q .op::before { content: '○'; position: absolute; left: 4px; }
+.qm-q .op.ok { color: #34c759; font-weight: 700; }
+.qm-q .op.ok::before { content: '✓'; }
+.qm-q .ex { font-size: 12px; color: var(--hint); margin-top: 6px; font-style: italic; }
+.qm-q .tools { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.qm-q .tools button { border: 0; background: var(--bg); color: var(--hint); border-radius: 9px; padding: 7px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.qm-actions { position: sticky; bottom: 0; background: linear-gradient(180deg, rgba(0,0,0,0), var(--bg) 22%); padding: 16px 0 8px; margin-top: 4px; }
+.qm-share { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.qm-share .btn { padding: 12px 6px; font-size: 13px; }
+.qm-how { text-align: left; margin-top: 4px; }
