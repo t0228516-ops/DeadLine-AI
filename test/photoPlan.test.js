@@ -60,3 +60,24 @@ test('imageQuery "NONE" (no photographable subject): no photo search for that sl
   assert.strictEqual(mayCarryPhoto({ title: 'Мотивация', bullets: ['a', 'b', 'c'], imageQuery: 'career counselor talking with student' }), true);
   assert.strictEqual(isLatinQuery('NONE'), false, 'NONE іздеу сұранысы емес');
 });
+
+// 2026-11-06: «Лони мен Қарағанды» — студент «добавь их фото» деп жазған, ал LLM 7 слайдтың бәріне imageQuery "NONE" қойған →
+// бірде-бір фото ізделмеді (0/7). Студент фото сұраса NONE еленбейді; бәрі NONE болса — кемінде мұқабаға іздеу.
+test('photo plan: «NONE» on every slide — the cover is still searched; if the student asked for photos, NONE is ignored', () => {
+  const { planPhotoSlides, wantsPhotos } = require('../products/presentation/photoPlan');
+  const types = ['full_background', 'right_half', 'left_half', 'full_background', 'none', 'right_half', 'full_background'];
+  const slides = types.map((t, i) => ({ title: `Слайд ${i}`, subtitle: 'Қысқа', bullets: i === 4 ? [] : ['Бір — дерек', 'Екі — дерек', 'Үш — дерек'],
+    body: i === 4 ? 'Ұзын абзац мәтіні осында тұр, қырық таңбадан асады, иә.' : '', imageQuery: 'NONE', composition: { image: t } }));
+  assert.deepStrictEqual([...planPhotoSlides(slides, { budget: 4 }).indexes], [0]);
+  assert.ok(planPhotoSlides(slides, { budget: 4, wantsPhotos: true }).indexes.size >= 3);
+  // кейбір слайд қана NONE (абстракт ұғым) → олар фотосыз қалады
+  const mixed = slides.map((s, i) => ({ ...s, imageQuery: i % 2 ? 'NONE' : 'Loni Ghaziabad smog street' }));
+  assert.ok([...planPhotoSlides(mixed, { budget: 4 }).indexes].every((i) => i % 2 === 0));
+
+  assert.strictEqual(wantsPhotos('самый грязный город в мире напиши про Лони и Караганда и добавь их фото'), true);
+  assert.strictEqual(wantsPhotos('Абай туралы, суреттерімен'), true);
+  assert.strictEqual(wantsPhotos('History of Rome with photos'), true);
+  assert.strictEqual(wantsPhotos('Фотосинтез процесі'), false);
+  assert.strictEqual(wantsPhotos('Фотон және фотоэффект'), false);
+  assert.strictEqual(wantsPhotos('Photosynthesis in plants'), false);
+});

@@ -150,21 +150,64 @@ test('no Google key but DeepSeek key → vision runs on deepseek-flash (image_ur
   } finally { delete process.env.DEEPSEEK_API_KEY; }
 });
 
-test('general photos: fit 6 + appeal 6 passes after the exact ones; bg 4 is enough; a foreign place fails only on a place-specific slide', async () => {
+// 2026-11-06 (иесінің келісімі, лог талдауы): fit=6 «жалпы сай» мен appeal=5 фотолар көбіне жалпы алмастырғыш не күңгірт болды →
+// сай (fit ≥ 7) әрі көрікті (appeal ≥ 6); дәл нысанның архив фотосы (fit ≥ 9) appeal 5 болса да өтеді
+test('thresholds: fit 7 + appeal 6, or an exact archive photo (fit 9, appeal 5); fit 6 and appeal 5 fail; bg 4 is enough; a foreign place fails only on a place-specific slide', async () => {
   process.env.GOOGLE_API_KEY = 'k';
   stubFetch();
   replies.push(jsonReply({ photos: [
-    { i: 0, fit: 6, appeal: 7, bg: 5, flaw: '' },          // жалпы сай → өтеді, бірақ дәлдерден кейін
-    { i: 1, fit: 7, appeal: 5, bg: 4, flaw: '' },          // дәл сай → бірінші
-    { i: 2, fit: 6, appeal: 5, bg: 8, flaw: '' },          // жалпы, бірақ әдемі емес → түседі
+    { i: 0, fit: 6, appeal: 7, bg: 5, flaw: '' },          // жалпы сай → енді түседі
+    { i: 1, fit: 7, appeal: 5, bg: 4, flaw: '' },          // сай, бірақ күңгірт → түседі
+    { i: 2, fit: 6, appeal: 5, bg: 8, flaw: '' },          // түседі
     { i: 3, fit: 8, appeal: 8, bg: 3, flaw: '' },          // фонға мүлдем жарамсыз → түседі
+    { i: 4, fit: 9, appeal: 5, bg: 5, flaw: '' },          // дәл нысанның архив фотосы → өтеді, бірінші
+    { i: 5, fit: 7, appeal: 6, bg: 4, flaw: '' },          // сай әрі көрікті → өтеді
   ] }));
   const choose = V.makeVisionChooser({ topic: 'Девиантты мінез-құлық', title: 'Қорытынды', background: true });
-  const cands = [0, 1, 2, 3].map((k) => ({ url: `https://big/g${k}.jpg`, thumb: `https://t/g${k}.jpg` }));
-  assert.deepStrictEqual((await choose(cands)).map((r) => r.i), [1, 0]);
+  const cands = [0, 1, 2, 3, 4, 5].map((k) => ({ url: `https://big/g${k}.jpg`, thumb: `https://t/g${k}.jpg` }));
+  assert.deepStrictEqual((await choose(cands)).map((r) => r.i), [4, 5]);
+  assert.match(V.SYSTEM, /plaque/, 'адам слайдына үйі/тақтайшасы портрет емес');
 
   assert.strictEqual(V.placeFlaw('Canada', true), true);
   assert.strictEqual(V.placeFlaw('not Kazakh', true), true);
   assert.strictEqual(V.placeFlaw('Blurry', true), false);
   assert.strictEqual(V.placeFlaw('Canada', false), false, 'жалпы тақырыпта ел маңызды емес');
+});
+
+// 2026-11-05: «Элис Болл» презентациясының мұқабасына (сұраныс «female scientist laboratory microscope») МакКлинтоктың
+// фотосы fit=9 болып түскен. Архив жазуы басқа нақты адамды атаса, ол фото өтпейді — модель жоғары баға берсе де.
+test('wrong person: a photo whose caption names someone the slide is not about is dropped even with fit 9', async () => {
+  process.env.GOOGLE_API_KEY = 'k';
+  stubFetch();
+  replies.push(jsonReply({ photos: [
+    { i: 0, fit: 9, appeal: 7, bg: 6, focus: '', flaw: '' },
+    { i: 1, fit: 7, appeal: 8, bg: 7, focus: '', flaw: '' },
+  ] }));
+  const choose = V.makeVisionChooser({ topic: 'Элис Болл және Сара Гилберт: ғылымдағы әйелдер', title: 'Ғылымдағы әйелдер', cover: true, background: true, query: 'female scientist laboratory microscope' });
+  const got = await choose([
+    { url: 'https://big/mc.jpg', thumb: 'https://t/mc.jpg', source: 'wikimedia', desc: 'Barbara McClintock (1902-1992) shown in her laboratory in 1947.' },
+    { url: 'https://big/lab.jpg', thumb: 'https://t/lab.jpg', source: 'pexels', desc: 'Scientist looking into a microscope' },
+  ]);
+  assert.deepStrictEqual(got.map((x) => x.i), [1]);
+  assert.match(sent[0].body.contents[0].parts[0].text, /WRONG PERSON/);
+});
+
+test('wrong person: the named person IS the slide subject (Kazakh/Russian spelling, case endings) → photo stays', () => {
+  const ok = (topic, title, query, desc) => V.foreignPerson(desc, V.contextKeys(topic, title, '', query));
+  assert.strictEqual(ok('Генетика тарихы', 'Барбара Мак-Клинток және секіргіш гендер', 'female scientist laboratory', 'Barbara McClintock (1902-1992) in her laboratory'), '');
+  assert.strictEqual(ok('Бетховен шығармашылығы', 'Бетховеннің 9-симфониясы', '', 'Ludwig van Beethoven (1770-1827)'), '');
+  assert.strictEqual(ok('Мұхтар Әуезов', 'Әуезовтің өмірі', '', 'Mukhtar Auezov (1897–1961)'), '');
+  assert.strictEqual(ok('Ньютон заңдары', 'Бірінші заң', '', 'Isaac Newton (1643–1727)'), '');
+  assert.strictEqual(ok('Элис Болл', 'Алапес емі', 'Alice Ball chemist', 'Portrait of Dr. Alice Ball, chemist'), '');
+  // басқа адам
+  assert.strictEqual(ok('Элис Болл және Сара Гилберт', 'Кіріспе', 'female scientist', 'Barbara McClintock (1902-1992)'), 'Barbara McClintock');
+  assert.strictEqual(ok('ДНҚ құрылымы', 'Қос спираль', 'DNA double helix', 'Rosalind Franklin (1920-1958) with microscope'), 'Rosalind Franklin');
+});
+
+test('wrong person: captions about events, buildings and states are not people', () => {
+  for (const d of ['Great Depression (1929-1939) breadline', 'Eiffel Tower (1887–1889) at night', 'World War II (1939–1945) soldiers',
+    'Kazakh Khanate (1465–1847) map', 'A river running through a valley', 'Statue of Liberty']) {
+    assert.strictEqual(V.captionPerson(d), '', d);
+  }
+  assert.strictEqual(V.captionPerson('Sarah Gilbert (born 1962), vaccinologist'), 'Sarah Gilbert');
 });
