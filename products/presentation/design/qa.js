@@ -143,6 +143,8 @@ function fitBlocks(slide,shrinkOnly){
     if(shrinkOnly)return;
     // топ (cx-fill) бос жерде тұрады — ауа керек: биіктіктің ~80%-ы, ең көбі ×1.35; қорап (карточка) — ~86%, ×1.6
     var low=group?.62:.72,target=group?.8:.86,cap=group?1.35:1.6;
+    // композиция өсу шегін өзі бере алады (--fit-max): абзац/тізім тым ірі болмасын
+    var cm=parseFloat(getComputedStyle(e).getPropertyValue('--fit-max'));if(cm>0)cap=Math.min(cap,cm);
     if(h>=box*low){e.style.setProperty('--bfit','1');return;}
     var lo2=1,hi2=cap;
     if(ok(hi2,box*target)){lo2=hi2;}else{for(var j=0;j<7;j++){var m2=(lo2+hi2)/2;if(ok(m2,box*target))lo2=m2;else hi2=m2;}}

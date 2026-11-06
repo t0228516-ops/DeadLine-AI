@@ -70,8 +70,10 @@ module.exports = function register(def, K) {
       const a = ctx.a; const p = ctx.palette; const ph = hasP(a, 600);
       let bg = plate + texture(a, 760, 520, 1160, 560) + corners(p);
       bg += ph ? photoBox(a, p, 1170, 160, 600, 420) : hero(ctx, env, 1180, 120, 600, 520, 7);
+      // абзац тақырыптың астынан басталады (бұрын әрқашан y=700 — арасы бос) және өз қорабын толтырады (≤ ×1.3)
+      const tl = String(a.title || '').length; const top = tl <= 12 ? 500 : tl <= 30 ? 570 : 630;
       const fg = wrap(142, 186, 960, pill(ctx) + '<div style="height:60px"></div>' + title(ctx, a.title, 960, 3, [140, 120, 104, 90, 78])) +
-        t('text', 142, 700, 1000, body(sh.text, sh.text.length <= 200 ? 34 : 28), 'max-height:' + (HH - 700 - MB) + 'px');
+        t('text', 142, top, 1000, body(sh.text, sh.text.length <= 200 ? 34 : 28), 'height:' + (HH - top - MB) + 'px;--fit-max:1.3');
       return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide bx-slide' };
     },
   });
@@ -83,13 +85,15 @@ module.exports = function register(def, K) {
       '<div style="font-family:var(--f-display);' + fs(n > 4 ? 34 : 40) + ';line-height:1.1;color:var(--accent);margin-bottom:6px">' + esc(m.label) + '</div>' +
       (m.detail ? body(m.detail, n > 4 ? 24 : 27) : '') + '</div>').join('');
     let bg = plate + texture(a, ph ? 1000 : 0, 560, ph ? 920 : 1100, 520) + corners(p);
+    // тізім қорабы — тақырыптың астынан шетке дейін: пункттер аз болса QA оларды өсіреді (≤ ×1.4)
+    const listBox = 'height:' + (HH - 470 - MB) + 'px;--fit-max:1.4';
     let fg;
     if (ph) {
       bg += photoBox(a, p, 58, 380, 400, 380);
-      fg = wrap(201, 123, 700, pill(ctx)) + wrap(520, 230, 1260, title(ctx, a.title, 1260, 2, [128, 112, 98, 86])) + t('list', 520, 470, 1240, items);
+      fg = wrap(201, 123, 700, pill(ctx)) + wrap(520, 230, 1260, title(ctx, a.title, 1260, 2, [128, 112, 98, 86])) + t('list', 520, 470, 1240, items, listBox);
     } else {
       bg += hero(ctx, env, 1220, 300, 620, 780, 11);
-      fg = wrap(201, 123, 700, pill(ctx)) + wrap(MX, 250, 1100, title(ctx, a.title, 1100, 2, [112, 98, 86, 76])) + t('list', MX, 470, 1040, items);
+      fg = wrap(201, 123, 700, pill(ctx)) + wrap(MX, 250, 1100, title(ctx, a.title, 1100, 2, [112, 98, 86, 76])) + t('list', MX, 470, 1040, items, listBox);
     }
     return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide bx-slide' };
   };
@@ -213,7 +217,7 @@ module.exports = function register(def, K) {
       const bg = plate + texture(a, 760, 560, 1160, 520) + corners(p) + hero(ctx, env, 1180, 300, 640, 780, 23);
       const rows = sh.items.map((m) => '<div data-role="row" style="display:flex;gap:22px;align-items:baseline;padding:10px 0"><span style="flex:none;width:16px;height:16px;border-radius:50%;background:' + c.GOLD + '"></span><div style="' + fs(32) + ';line-height:1.42;color:var(--text)">' +
         (m.detail ? '<b style="font-weight:700;color:var(--accent)">' + esc(m.label) + '</b> — ' + esc(m.detail) : esc(m.label)) + '</div></div>').join('');
-      const fg = wrap(258, 123, 700, pill(ctx)) + wrap(155, 280, 1000, title(ctx, a.title, 1000, 2, [160, 136, 118, 100])) + t('list', 155, 560, 976, rows);
+      const fg = wrap(258, 123, 700, pill(ctx)) + wrap(155, 280, 1000, title(ctx, a.title, 1000, 2, [160, 136, 118, 100])) + t('list', 155, 560, 976, rows, 'height:' + (HH - 560 - MB) + 'px;--fit-max:1.4');
       return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide bx-slide' };
     },
   });
