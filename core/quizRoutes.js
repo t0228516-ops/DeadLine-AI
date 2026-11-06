@@ -15,6 +15,10 @@
  * Ойынды бастау мен келесі сұраққа өту — тек баяндамашы (проектор кілті бар адам).
  *
  * Бөлмелер процесс жадында (Railway — бір дана). Сервер қайта қосылса, ойын лоббиден басталады — квиздің өзі базада.
+ *
+ * Баяндамашыға ескерту (onLobbyWaiting): лоббиде ≥3 адам күтіп, басқару беті ашылмаса — бот баяндамашыға
+ * «адамдар қосылды, ойынды сіз бастауыңыз керек» деп жазады (ең көбі 2 рет). 2026-11-03-те бүкіл топ (17 телефон)
+ * 7 минут күтіп, ойын басталмай қалды: баяндамашы басқару бетін ашпаған.
  */
 const fs = require('fs');
 const path = require('path');
@@ -22,8 +26,16 @@ const Q = require('./quiz');
 
 const ROOM_IDLE_MS = 3 * 3600 * 1000;
 const MISS_TTL_MS = 60 * 1000;
+const NUDGE_DEFAULTS = {
+  minPlayers: 3,        // баяндамашының өзі тексеріп кірсе — ескертпейміз
+  delayMs: 20_000,      // қосылғаннан кейін аз күтеміз: баяндамашы басқару бетін ашып жатуы мүмкін
+  hostFreshMs: 30_000,  // басқару беті соңғы 30 с ішінде сұраныс жіберсе — ол ашық, ескерту керек емес
+  gapMs: 3 * 60_000,    // екінші ескерту — әлі басталмаса, 3 минуттан кейін
+  max: 2,
+};
 
-function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
+function createQuizRouter({ db, webappDir, baseUrl, fontsDir, onLobbyWaiting, nudge }) {
+  const NUDGE = { ...NUDGE_DEFAULTS, ...(nudge || {}) };
   const express = require('express');
   const router = express.Router();
   const rooms = new Map();      // code → room
@@ -127,10 +139,32 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
     return j.n > 40;
   };
 
+  const hostFresh = (room) => room.hostSeenAt && Date.now() - room.hostSeenAt < NUDGE.hostFreshMs;
+  // лоббиде адамдар күтіп отыр, басқару беті жабық → баяндамашыға бот арқылы ескерту (таймер — бөлмеге біреу)
+  function scheduleNudge(room, req, delayMs) {
+    if (typeof onLobbyWaiting !== 'function' || !room.quiz.chatId) return;
+    if (room.nudgeTimer || (room.nudges || 0) >= NUDGE.max) return;
+    const hostUrl = `${playerUrl(req)}/host?k=${encodeURIComponent(room.quiz.hostKey)}`;
+    const c = code(req);
+    room.nudgeTimer = setTimeout(() => {
+      room.nudgeTimer = null;
+      if (rooms.get(c) !== room || room.phase !== 'lobby' || room.players.size < NUDGE.minPlayers || hostFresh(room)) return;
+      room.nudges = (room.nudges || 0) + 1;
+      const n = room.nudges;
+      console.log(`[Quiz] ${c}: ${room.players.size} waiting, host page closed → presenter notified (#${n})`);
+      Promise.resolve()
+        .then(() => onLobbyWaiting({ chatId: room.quiz.chatId, code: c, topic: room.quiz.topic, players: room.players.size, hostUrl, nudge: n }))
+        .catch((e) => console.warn(`[Quiz] ${c}: notify presenter failed: ${e.message}`));
+      if (n < NUDGE.max) scheduleNudge(room, req, NUDGE.gapMs);
+    }, delayMs);
+    if (room.nudgeTimer.unref) room.nudgeTimer.unref();
+  }
+
   router.post('/api/quiz/:code/join', withRoom((req, res, room) => {
     if (tooMany(req)) return res.status(429).json({ error: 'slow_down' });
     const r = Q.join(room, req.body && req.body.name);
     if (r.error) return res.status(r.error === 'full' ? 409 : 400).json(r);
+    if (room.phase === 'lobby' && room.players.size >= NUDGE.minPlayers && !hostFresh(room)) scheduleNudge(room, req, NUDGE.delayMs);
     return res.json(r);
   }));
 
@@ -145,17 +179,24 @@ function createQuizRouter({ db, webappDir, baseUrl, fontsDir }) {
 
   router.get('/api/quiz/:code/host/state', withRoom((req, res, room) => {
     if (!hostOk(room, req.query.k)) return res.status(403).json({ error: 'key' });
+    room.hostSeenAt = Date.now();
     return res.json({ ...Q.hostView(room), url: playerUrl(req) });
   }));
 
   router.post('/api/quiz/:code/host', withRoom((req, res, room) => {
     const b = req.body || {};
     if (!hostOk(room, b.k)) return res.status(403).json({ error: 'key' });
+    room.hostSeenAt = Date.now();
     // қос басудан / желі қайталауынан сақтандыру: батырма басылған кездегі күй (at) қазіргіден өзгеше болса — әрекет қайталанбайды
     Q.tick(room);
     if (b.at && String(b.at) !== `${room.phase}:${room.qi}:${room.ri}`) return res.json({ ok: true, stale: true, state: { ...Q.hostView(room), url: playerUrl(req) } });
+    const before = room.phase;
     const r = Q.hostAction(room, String(b.action || ''));
     if (r.error) return res.status(409).json(r);
+    // квиз статистикасы логта (тек сандар, аттар жоқ): қанша адаммен басталды, қанша адаммен бітті
+    if (before === 'lobby' && room.phase !== 'lobby') console.log(`[Quiz] ${code(req)}: game started, ${room.players.size} players`);
+    if (room.phase === 'lobby') room.loggedEnd = false; // «қайта бастау» → келесі ойын да логқа түседі
+    if (room.phase === 'end' && !room.loggedEnd) { room.loggedEnd = true; console.log(`[Quiz] ${code(req)}: game finished, ${room.players.size} players`); }
     // тірі ойын бітті → әр ойыншының нәтижесі базаға (бір рет; «кім неше сұраққа дұрыс жауап берді»)
     if (room.phase === 'end' && !room.savedGame && room.players.size && db.addQuizResults) {
       room.savedGame = true;

@@ -94,7 +94,7 @@ const sendIndex = (req, res) => {
 };
 app.get(['/webapp', '/webapp/', '/webapp/index.html'], sendIndex);
 // Топқа квиз: /q/КОД (телефон), /q/КОД/host (проектор) + /api/quiz/*
-app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz, addQuizResults, listQuizResults }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts') }));
+app.use(require('./core/quizRoutes').createQuizRouter({ db: { getQuiz, addQuizResults, listQuizResults }, webappDir: WEBAPP_DIR, baseUrl: QUIZ_BASE_URL || null, fontsDir: path.join(__dirname, 'products', 'presentation', 'assets', 'brand-fonts'), onLobbyWaiting: (x) => notifyQuizHost(x) }));
 app.use('/webapp', express.static(WEBAPP_DIR, {
   index: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,   // ?v=… өзгергенде жаңа файл жүктеледі
@@ -1287,6 +1287,20 @@ async function sendQuizLinks(chatId, quiz) {
     disable_web_page_preview: true,
     reply_markup: { inline_keyboard: [[{ text: '📤 Топқа жіберу', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
       .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []) },
+  });
+}
+
+/** Квиз лоббиінде адамдар күтіп отыр, ал басқару беті ашылмаған → баяндамашыға «ойынды сіз бастауыңыз керек» (core/quizRoutes) */
+async function notifyQuizHost({ chatId, players, hostUrl, nudge }) {
+  if (!global.__deadlineBot || !chatId || !hostUrl) return;
+  const text = nudge > 1
+    ? `⏳ Квизде ${players} адам әлі сізді күтіп отыр.\n\nОйынды тек сіз бастай аласыз: батырманы басып, ашылған бетте «▶ Бастау»-ды басыңыз.`
+    : `🎮 Квизге ${players} адам қосылды және сізді күтіп отыр!\n\n`
+      + 'Ойынды сіз бастауыңыз керек: төмендегі батырманы басып, ашылған бетте «▶ Бастау»-ды басыңыз. '
+      + 'Ноутбукта ашып, проекторға шығарсаңыз жақсы, бірақ телефоннан да болады.';
+  await global.__deadlineBot.sendMessage(chatId, text, {
+    disable_web_page_preview: true,
+    reply_markup: { inline_keyboard: [[{ text: '▶ Квизді бастау', url: hostUrl }]] },
   });
 }
 

@@ -852,7 +852,7 @@ async function saveQuiz(z) {
 async function getQuiz(code) {
   const row = (db.quizzes || {})[String(code)];
   if (!row || row.expires_at < Date.now()) return null;
-  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: (row.data && row.data.questions) || [] };
+  return { code: row.code, hostKey: row.host_key, chatId: row.chat_id || null, topic: row.topic, language: row.language, questions: (row.data && row.data.questions) || [] };
 }
 async function deleteExpiredQuizzes(now = Date.now()) {
   const box = db.quizzes || {};

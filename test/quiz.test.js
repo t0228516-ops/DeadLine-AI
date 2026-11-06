@@ -219,3 +219,62 @@ test('a double tap on «next» (or a network retry) never skips a question', asy
     assert.ok(b2.stale && b2.state.qi === 1, 'second tap ignored');
   } finally { srv.close(); }
 });
+
+test('presenter is told in Telegram when the class waits in the lobby and the control page is closed', async () => {
+  const express = require('express');
+  const mk = (code) => ({ code, hostKey: 'hk', chatId: '777', topic: 'Т', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) });
+  const quizzes = { AAAAA: mk('AAAAA'), BBBBB: mk('BBBBB'), CCCCC: mk('CCCCC') };
+  const sent = [];
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({
+    db: { getQuiz: async (c) => quizzes[c] || null },
+    webappDir: path.join(__dirname, '..', 'webapp'), baseUrl: 'https://x.app',
+    onLobbyWaiting: async (x) => { sent.push(x); },
+    nudge: { delayMs: 40, gapMs: 120, hostFreshMs: 1000 },
+  }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  const post = (u, b) => fetch(base + u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  const joinN = async (c, n) => { for (let i = 0; i < n; i++) await post(`/api/quiz/${c}/join`, { name: `Оқушы ${i}` }); };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    // 1) 3 адам күтіп отыр, басқару беті ешқашан ашылмаған → ескерту, сосын әлі басталмаса — екінші (ең көбі 2)
+    await joinN('AAAAA', 3);
+    await wait(80);
+    const a = sent.filter((x) => x.code === 'AAAAA');
+    assert.strictEqual(a.length, 1);
+    assert.deepStrictEqual([a[0].chatId, a[0].players, a[0].nudge], ['777', 3, 1]);
+    assert.strictEqual(a[0].hostUrl, 'https://x.app/q/AAAAA/host?k=hk');
+    await joinN('AAAAA', 2); // қосымша адамдар таймерді көбейтпейді
+    await wait(200);
+    await wait(200);
+    assert.deepStrictEqual(sent.filter((x) => x.code === 'AAAAA').map((x) => x.nudge), [1, 2], 'second reminder, then stop');
+
+    // 2) басқару беті ашық (проекторда) → ескерту жоқ; ойын басталса да жоқ
+    await fetch(`${base}/api/quiz/BBBBB/host/state?k=hk`);
+    await joinN('BBBBB', 4);
+    await wait(80);
+    await post('/api/quiz/BBBBB/host', { k: 'hk', action: 'start' });
+    await wait(200);
+    assert.strictEqual(sent.filter((x) => x.code === 'BBBBB').length, 0);
+
+    // 3) тек 2 адам (баяндамашының өзі + досы тексерді) → ескерту жоқ
+    await joinN('CCCCC', 2);
+    await wait(80);
+    assert.strictEqual(sent.filter((x) => x.code === 'CCCCC').length, 0);
+  } finally { srv.close(); }
+});
+
+test('the presenter key is never sent to players; the lobby reminder goes only to the deck owner', async () => {
+  const express = require('express');
+  const quiz = { code: 'DDDDD', hostKey: 'only-me', chatId: '555', topic: 'Т', language: 'kk', questions: Q.normalizeQuestions({ quiz: ten() }, () => 0) };
+  const app = express(); app.use(express.json());
+  app.use(createQuizRouter({ db: { getQuiz: async () => quiz }, webappDir: path.join(__dirname, '..', 'webapp'), onLobbyWaiting: async () => {}, nudge: { delayMs: 10 } }));
+  const srv = app.listen(0); const base = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const r = await fetch(`${base}/api/quiz/DDDDD/join`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'А' }) });
+    const me = await r.json();
+    const info = await (await fetch(`${base}/api/quiz/DDDDD/info`)).text();
+    const st = await (await fetch(`${base}/api/quiz/DDDDD/state?pid=${me.pid}&s=${me.secret}`)).text();
+    for (const body of [JSON.stringify(me), info, st]) { assert.ok(!body.includes('only-me')); assert.ok(!body.includes('555')); }
+  } finally { srv.close(); }
+});

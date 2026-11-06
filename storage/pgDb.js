@@ -1114,11 +1114,11 @@ async function saveQuiz(z) {
     jsonParam({ questions: z.questions }), now, z.expiresAt || now + 30 * 24 * 3600 * 1000]);
 }
 async function getQuiz(code) {
-  const r = await q('SELECT code, host_key, topic, language, data, expires_at FROM quizzes WHERE code = $1', [String(code)]);
+  const r = await q('SELECT code, host_key, chat_id, topic, language, data, expires_at FROM quizzes WHERE code = $1', [String(code)]);
   const row = r.rows[0];
   if (!row || num(row.expires_at) < Date.now()) return null;
   const data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-  return { code: row.code, hostKey: row.host_key, topic: row.topic, language: row.language, questions: data.questions || [] };
+  return { code: row.code, hostKey: row.host_key, chatId: row.chat_id || null, topic: row.topic, language: row.language, questions: data.questions || [] };
 }
 async function deleteExpiredQuizzes(now = Date.now()) {
   await q('DELETE FROM quiz_results WHERE code IN (SELECT code FROM quizzes WHERE expires_at < $1)', [now]);
