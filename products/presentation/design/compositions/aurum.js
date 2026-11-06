@@ -41,7 +41,11 @@ module.exports = function register(def, K) {
       const { metaHtml } = H.coverParts(ctx);
       const bg = plate + P.panel(0, BAND, W, HH - BAND, '#0b0b0b') + P.panel(110, 90, 860, 900, band(p)) + photo(ctx, 970, 90, 840, 900);
       const ws = String(a.title).split(/\s+/); const first = ws.shift(); const rest = ws.join(' ');
-      const size = Math.max(60, Math.min(180, Math.floor(680 / (Math.max(first.length, ...rest.split(/\s+/).map((w) => w.length), 4) * 0.56))));
+      let size = Math.max(60, Math.min(180, Math.floor(680 / (Math.max(first.length, ...rest.split(/\s+/).map((w) => w.length), 4) * 0.56))));
+      // биіктік те ескеріледі: ұзын тақырып (4+ жол) автор жолына мінбесін (бұрын QA бүкіл слайдты 0.62-ге дейін кішірейтетін)
+      const subH = a.subtitle ? 26 + Math.ceil(String(a.subtitle).length * 34 * 0.5 / 700) * 34 * 1.3 : 0;
+      const estH = (sz) => (1 + Math.ceil((rest.length * sz * 0.5) / 700)) * sz * 1.02 + subH;
+      while (size > 60 && estH(size) > 520) size -= 6;
       const lab = H.sectionLabel(ctx);
       const fg = (lab ? t('kicker', 200, 150, 700, '<div style="display:flex;align-items:center;gap:14px;' + fs(28) + ';font-weight:600;color:#fff"><span style="width:28px;height:28px;border-radius:5px;background:' + p.accent + '"></span>' + esc(String(lab).slice(0, 40)) + '</div>') : '') +
         t('title', 200, 260, 700, '<h1 class="title t-display" style="--ts:' + size + 'px;font-size:' + size + 'px;line-height:1.02;margin:0"><span class="au-it au-acc">' + esc(first) + '</span>' + (rest ? '<br><span class="au-it" style="color:#fff">' + esc(rest) + '</span>' : '') + '</h1>' +

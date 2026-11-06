@@ -129,7 +129,8 @@ module.exports = function register(def, K) {
       sh.items.forEach((m, i) => {
         const y = top + i * step;
         bg += P.div(P.pos(991 - 22, y + 4, 44, 44) + ';border-radius:50%;background:' + c.GOLD);
-        fg += t('event', 1057, y, 760, '<div style="font-family:var(--f-display);' + fs(46) + ';line-height:1;color:var(--accent);margin-bottom:8px">' + esc(m.date) + '</div>' +
+        // ені қауіпсіз шекараға дейін (бұрын 760 px — оң шекарадан 57 px шығып, QA бүкіл слайдты кішірейтетін)
+        fg += t('event', 1057, y, W - MX - 1057, '<div style="font-family:var(--f-display);' + fs(46) + ';line-height:1;color:var(--accent);margin-bottom:8px">' + esc(m.date) + '</div>' +
           '<div style="font-weight:700;' + fs(28) + ';line-height:1.3;color:var(--text)">' + esc(m.label || '') + '</div>' +
           (m.detail ? '<div style="' + fs(24) + ';line-height:1.45;color:var(--text2)">' + esc(m.detail) + '</div>' : ''), 'max-height:' + Math.round(step - 16) + 'px');
       });
@@ -146,6 +147,8 @@ module.exports = function register(def, K) {
       const gap = 40; const bw = (W - 2 * 160 - gap * (n - 1)) / n;
       let bg = plate + texture(a, 0, 600, W, 480) + corners(p);
       let fg = wrap(258, 123, 700, pill(ctx)) + wrapB(MX, MB, 1500, title(ctx, a.title, 1500, 2, [178, 150, 128, 110, 96]));
+      // сипаттама (дереккөз, жыл) жоғалмасын: қораптардың үстінде, kicker-дің астында
+      if (a.subtitle) fg += t('lead', 160, 226, 1600, '<div style="' + fs(30) + ';line-height:1.3;color:var(--text2)">' + esc(a.subtitle) + '</div>', 'max-height:80px');
       sh.stats.forEach((s, i) => {
         const x = 160 + i * (bw + gap);
         bg += P.div(P.pos(x, 316, bw, 300) + ';border:2px solid ' + c.PEACH + ';border-radius:6px');

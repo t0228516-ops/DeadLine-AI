@@ -29,8 +29,9 @@ function t(role, x, y, w, inner, style = '') {
 function tb(role, x, bottom, w, inner, style = '') {
   return '<div class="cx-t" data-role="' + role + '" style="position:absolute;left:' + Math.round(x) + 'px;bottom:' + Math.round(bottom) + 'px;width:' + Math.round(w) + 'px;' + style + '">' + inner + '</div>';
 }
-// --wfit: QA бір ұзын сөз блоктан асып кетсе, тек сол блокты кішірейтеді (бүкіл слайдты емес)
-const fs = (n) => 'font-size:calc(' + n + 'px*var(--fs,1)*var(--wfit,1))';
+// --wfit: QA бір ұзын сөз блоктан асып кетсе, тек сол блокты кішірейтеді (бүкіл слайдты емес);
+// --bfit: блок өз қорабына бейімделеді (qa.js fitBlocks); ұсақ өлшемдер оқылу шегіне дейін көтеріледі (parts.lift)
+const fs = (n) => P.fsOf(n);
 const disp = 'font-family:var(--f-display);font-weight:var(--dw,400);letter-spacing:-.01em';
 const wrap = (x, y, w, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px;width:' + Math.round(w) + 'px">' + inner + '</div>';
 const wrapB = (x, bottom, w, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;bottom:' + Math.round(bottom) + 'px;width:' + Math.round(w) + 'px">' + inner + '</div>';
@@ -52,6 +53,20 @@ function compareOf(tb) {
 }
 const nodeItem = (x) => (typeof x === 'string' ? splitLabelDetail(x) : x && typeof x === 'object'
   ? { label: String(x.label || x.title || x.name || x.step || '').trim(), detail: String(x.detail || x.text || x.description || '').trim() } : null);
+
+/**
+ * Тұжырым слайдының мәтіні: сипаттама (subtitle) мен абзац (body) екеуі де болса — екеуі де көрінеді.
+ * 2026-11-06 аудит: кіріспе слайдында бірінші сөйлем (subtitle) барлық 22 стильде түсіп қалатын — тек body көрсетілетін.
+ * Абзац сипаттаманы қайталаса (модель кейде солай жазады) — тек абзац.
+ */
+function statementText(a) {
+  const body = String(a.body || '').trim();
+  const sub = String(a.subtitle || '').trim();
+  if (!body || !sub) return body || sub;
+  const norm = (x) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (norm(body).includes(norm(sub))) return body;
+  return (/[.!?…:]$/.test(sub) ? sub : sub + '.') + ' ' + body;
+}
 
 /** Мазмұн пішіні (type — analyze.classify нәтижесі) */
 function shapeOf(a, type) {
@@ -80,13 +95,15 @@ function shapeOf(a, type) {
     }).map((m, i) => ({ m, i, y: parseInt(m.date, 10) })).sort((p, q) => (p.y - q.y) || (p.i - q.i)).map((x) => x.m) };
   }
   if (!items.length) {
-    const text = String(a.body || a.subtitle || '').trim();
+    const text = statementText(a);
     return text.length <= 260 && a.title ? { kind: 'statement', text } : null;
   }
   if (a.body) return null;
   const short = items.every((m) => m.label.length <= 34 && (m.detail || '').length <= 90);
   if (a.hasPhoto && items.length >= 3 && items.length <= 5 && items.every((m) => (m.label + ' ' + (m.detail || '')).length <= 170)) return { kind: 'photoList', items }; // толық фактілі пункттер (8-14 сөз) фото макетінен шығып қалмасын
-  if (items.length >= 2 && items.length <= 5 && short && items.filter((m) => m.detail).length >= items.length - 1) return { kind: 'concepts', items };
+  // 5 ұғым + ұзын түсіндірме карточкаларға сыймайды (ұсақ мәтін) → тізім композициясы (ұзын мәтінге арналған)
+  const crowded = items.length >= 5 && items.some((m) => (m.detail || '').length > 60);
+  if (items.length >= 2 && items.length <= 5 && short && !crowded && items.filter((m) => m.detail).length >= items.length - 1) return { kind: 'concepts', items };
   // ұзынырақ пункттер (бұрын ескі «мәтін торы» макетіне түсетін)
   if (items.length >= 3 && items.length <= 5 && items.every((m) => m.label.length <= 70 && (m.detail || '').length <= 180)) return { kind: 'list', items };
   return null;
@@ -198,7 +215,8 @@ def({
 /** Бенто: бірінші ұғым — ірі түсті карточка, қалғаны — белгішелі шағын карточкалар */
 def({
   id: 'concepts-bento', kind: 'concepts',
-  fits: (a, sh) => sh.items.length >= 3 && sh.items.length <= 5 && sh.items.every((m) => m.label.length <= 30 && (m.detail || '').length <= 90),
+  // 5 пункт → 4 шағын карточка (2×2): ұзын сипаттама онда сыймай кішірейетін — мазмұнға сай басқа макет таңдалады
+  fits: (a, sh) => sh.items.length >= 3 && sh.items.length <= 5 && sh.items.every((m) => m.label.length <= 30 && (m.detail || '').length <= (sh.items.length >= 5 ? 60 : 90)),
   render(ctx, sh, env) {
     const a = ctx.a; const p = ctx.palette; const items = sh.items; const n = items.length;
     const titleW = 560; const gx = MX + titleW + 56; const gw = W - MX - gx; const gy = MT; const gh = HH - MT - MB; const gap = 24;
@@ -211,10 +229,13 @@ def({
     // визуал жоқ → ірі панель бос қалмасын: жоғарғы бөлігінде үлкен «елес» нөмір (кіші нөмір жолы сонда керек емес)
     else bg += P.ghost(gx + 40, gy + 40, H.num(ctx, 1), 260, P.mix(p.accent, p.accentInk, 0.28), { weight: 700 });
     let fg = wrap(MX, MT + 10, titleW, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: titleW, maxLines: 5, scale: [72, 64, 56, 50, 44], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: titleW }));
+    // мәтін қорабы: карточканың белгіше/елес нөмірден төменгі бөлігі — мәтін аз болса QA оны толтырғанша өсіреді (төменге тураланған)
+    const bottomBox = (h) => ';height:' + Math.max(120, Math.round(h)) + 'px;display:flex;flex-direction:column;justify-content:flex-end';
     fg += tb('concept', gx + 40, MB + 40, bigW - 80,
       // кіші «1»/«I» нөмір жоқ: 20px-те жалғыз таяқша боп, қате белгідей көрінетін
       '<div style="' + disp + ';' + fs(50) + ';line-height:1.05">' + esc(items[0].label) + '</div>' +
-      (items[0].detail ? '<div style="margin-top:14px;' + fs(26) + ';line-height:1.4;opacity:.9">' + esc(items[0].detail) + '</div>' : ''), 'color:' + p.accentInk);
+      (items[0].detail ? '<div style="margin-top:14px;' + fs(26) + ';line-height:1.4;opacity:.9">' + esc(items[0].detail) + '</div>' : ''),
+      'color:' + p.accentInk + bottomBox(gh - 80 - (v0 ? 330 : 300)));
     rest.forEach((m, k) => {
       const c = k % cols; const r = Math.floor(k / cols);
       const wide = cols === 2 && rest.length === 3 && k === 2;
@@ -227,7 +248,8 @@ def({
       else bg += P.ghost(x + 56, y + 40, String(k + 2), 54, p.accent, { weight: 700 });
       fg += tb('concept', x + 32, HH - (y + ch) + 28, w - 64,
         '<div style="' + disp + ';' + fs(rows > 1 ? 38 : 46) + ';line-height:1.08;color:var(--text)">' + esc(m.label) + '</div>' +
-        (m.detail ? '<div style="margin-top:10px;' + fs(rows > 1 ? 25 : 28) + ';line-height:1.4;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));
+        (m.detail ? '<div style="margin-top:10px;' + fs(rows > 1 ? 25 : 28) + ';line-height:1.4;color:var(--text2)">' + esc(m.detail) + '</div>' : ''),
+        bottomBox(ch - 28 - 30 - cs - 22).slice(1));
     });
     return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide' };
   },
@@ -439,4 +461,4 @@ function compose(ctx, env) {
 }
 function safeFits(c, a, sh, sys) { try { return !!c.fits(a, sh, sys); } catch { return false; } }
 
-module.exports = { compose, shapeOf, COMPS, CSS: P.CSS, mirrorHtml, variantFor };
+module.exports = { compose, shapeOf, statementText, COMPS, CSS: P.CSS, mirrorHtml, variantFor };

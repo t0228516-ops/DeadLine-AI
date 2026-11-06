@@ -318,7 +318,7 @@ function buildNew(slides, presentationTitle, opts) {
     '<div id="topbar" hidden><span id="cur">01</span><span id="total">' + total + '</span></div>' +
     '<div id="dots"></div><div id="controls"><button class="ctrl" id="prev" type="button">‹</button><button class="ctrl" id="next" type="button">›</button><button class="ctrl" id="full" type="button">⛶</button></div>' +
     '<div id="hint">← → · swipe · wheel</div><div id="progress"></div></div></div>' +
-    '<script>' + RUNTIME + '</script><script>' + QA_SCRIPT + '</script></body></html>';
+    '<script>' + RUNTIME + '</script><script>window.__dlFit=' + (process.env.DESIGN_FIT !== '0') + ';' + QA_SCRIPT + '</script></body></html>';
 }
 
 module.exports = { build3DPresentationHTML, slideSvgPalette, isVisualSvg, pickPalette, safeColor, chooseLayout, parseStatNumber };

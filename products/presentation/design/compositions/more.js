@@ -120,10 +120,12 @@ module.exports = function register(def, K) {
         const x = MX + i * (w + gap);
         bg += P.ghost(x - 10, 430, H.num(ctx, i + 1), 320, P.mix(p.bg, p.accent, 0.16), { weight: 700 });
         if (i) bg += P.panel(x - gap / 2, 470, 2, 520, P.mix(p.bg, p.text, 0.16));
+        // мәтін қорабы бағанның төменгі бөлігі (елес нөмірдің астынан шегіне дейін): мәтін аз болса QA оны өсіреді
         fg += t('concept', x, 690, w,
           '<div style="width:56px;height:5px;background:' + p.accent + ';margin-bottom:26px"></div>' +
           '<div style="' + disp + ';' + P.fsMax(Math.min(n <= 3 ? 50 : 42, cap), cap) + ';line-height:1.06;color:var(--text)">' + esc(m.label) + '</div>' +
-          (m.detail ? '<div style="margin-top:16px;' + fs(n <= 3 ? 29 : 26) + ';line-height:1.45;color:var(--text2)">' + esc(m.detail) + '</div>' : ''));
+          (m.detail ? '<div style="margin-top:16px;' + fs(n <= 3 ? 29 : 26) + ';line-height:1.45;color:var(--text2)">' + esc(m.detail) + '</div>' : ''),
+          'height:' + (HH - MB - 690) + 'px');
       });
       return { bg, fg: fg + H.folio(ctx), cls: 'cx-slide' };
     },
