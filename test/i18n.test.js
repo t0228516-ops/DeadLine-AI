@@ -297,3 +297,19 @@ test('i18n page: with storage blocked (private mode) the switch still happens on
   assert.ok(navs <= 2, `navigated ${navs} times`);
   await page.close();
 });
+
+test('i18n: every gallery style has three Kazakh and three Russian preview images; the Russian UI uses the Russian ones', async (t) => {
+  const src = fs.readFileSync(path.join(WEB, 'app.js'), 'utf8');
+  const ids = [...src.matchAll(/\{ id: '([a-z]+)', name: '/g)].map((m) => m[1]);
+  assert.ok(ids.length >= 13, 'styles found');
+  for (const id of ids) for (const n of [1, 2, 3]) for (const sfx of ['', '.ru']) {
+    assert.ok(fs.existsSync(path.join(WEB, 'styles', `${id}-${n}${sfx}.jpg`)), `${id}-${n}${sfx}.jpg`);
+  }
+  const b = await browser(t); if (!b) return;
+  for (const [lang, want] of [['ru', /-1\.ru\.jpg\?v=/], ['kk', /-1\.jpg\?v=/]]) {
+    const { page } = await openApp(b, lang);
+    const srcs = await page.evaluate(() => [...document.querySelectorAll('#styleGallery img')].map((i) => i.getAttribute('src')));
+    await page.close();
+    assert.ok(srcs.length >= 13 && srcs.every((s) => want.test(s)), `${lang}: ${srcs[0]}`);
+  }
+});

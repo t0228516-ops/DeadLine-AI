@@ -181,7 +181,9 @@
     haptic('light');
   });
 
-  // ── Стиль галереясы (суреттер — webapp/styles/<id>-1..3.jpg, алдын ала салынған) ──
+  // ── Стиль галереясы (суреттер — webapp/styles/<id>-1..3.jpg, орысшасы <id>-1..3.ru.jpg; алдын ала салынған) ──
+  // ?v= — суреттер жаңартылғанда Telegram кэштегі ескісін көрсетпесін (app.js өзі нұсқамен жүктеледі)
+  const shot = (id, n) => `styles/${id}-${n}${UI_RU ? '.ru' : ''}.jpg?v=20261107`;
   const STYLES = [
     { id: 'bordeaux', name: 'Бордо', tag: 'тарих' },
     { id: 'northline', name: 'Корпоратив', tag: 'жалпы' },
@@ -201,7 +203,7 @@
   (function buildGallery() {
     const g = $('#styleGallery');
     g.insertAdjacentHTML('beforeend', STYLES.map((st) =>
-      `<button type="button" class="g-card" data-v="${st.id}"><img src="styles/${st.id}-1.jpg" alt="" loading="lazy"><span class="g-name">${t(st.name)}<small>${t(st.tag)}</small></span></button>`).join(''));
+      `<button type="button" class="g-card" data-v="${st.id}"><img src="${shot(st.id, 1)}" alt="" loading="lazy"><span class="g-name">${t(st.name)}<small>${t(st.tag)}</small></span></button>`).join(''));
     g.addEventListener('click', (e) => {
       const b = e.target.closest('.g-card, .g-auto');
       if (!b) return;
@@ -218,7 +220,7 @@
   function openStylePreview(id) {
     previewId = id;
     $('#spName').textContent = styleName(id);
-    $('#spStrip').innerHTML = [1, 2, 3].map((n) => `<img src="styles/${id}-${n}.jpg" alt="">`).join('');
+    $('#spStrip').innerHTML = [1, 2, 3].map((n) => `<img src="${shot(id, n)}" alt="">`).join('');
     $('#stylePreview').classList.remove('hidden');
   }
   $('#spPick').addEventListener('click', () => { pickDesign(previewId); $('#stylePreview').classList.add('hidden'); });
@@ -253,7 +255,7 @@
     $('#wizSum').textContent = `${state.slideCount} ${unit} · ${lang} · ${what}`;
     const pv = $('#wizPreview');
     pv.classList.toggle('hidden', !(state.mode === 'presentation' && state.design));
-    if (state.design) $('#wizPreviewImg').src = `styles/${state.design}-1.jpg`;
+    if (state.design) $('#wizPreviewImg').src = shot(state.design, 1);
     renderPrice();
   }
   function renderPrice() {
