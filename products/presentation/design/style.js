@@ -192,6 +192,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .rv{opacity:0;transform:translateY(14px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
 .slide.is-active .rv{opacity:1;transform:none;transition-delay:calc(.12s + var(--i,0)*.07s)}
 .measuring .rv,.measuring .figure,.measuring .bleed .ph,.measuring .full .ph,.measuring .photo .ph{transition:none!important;opacity:1!important;transform:none!important}
+/* QA өлшеп жатқанда ешбір қасиет «ауыспайды»: әйтпесе (мысалы prefers-reduced-motion-да әр элементке .01ms transition) қаріп өзгерісі
+   бірден көрінбей, QA ескі өлшемді оқиды да слайдты артық үлкейтеді — мәтін қорабынан асып кетеді */
+.measuring *,.measuring *::before,.measuring *::after{transition:none!important}
 
 /* ── cover ── */
 .cover{display:flex;flex-direction:column;justify-content:space-between}
