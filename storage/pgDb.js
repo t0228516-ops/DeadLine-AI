@@ -76,7 +76,7 @@ const SCHEMA = {
       partner_paid INTEGER NOT NULL DEFAULT 0
     )`,
     cols: {
-      name: 'TEXT', username: 'TEXT', design_memory: 'TEXT',
+      name: 'TEXT', username: 'TEXT', design_memory: 'TEXT', lang: 'TEXT',
       tester_until: 'BIGINT', tester_credits: 'INTEGER DEFAULT 0', tester_day: 'TEXT', tester_pending: 'TEXT',
       partner_status: 'TEXT', partner_balance: 'INTEGER DEFAULT 0', partner_earned: 'INTEGER DEFAULT 0', partner_paid: 'INTEGER DEFAULT 0',
       credits: 'INTEGER DEFAULT 0', total: 'INTEGER DEFAULT 0', free_used: 'BOOLEAN DEFAULT FALSE', free_used_at: 'BIGINT DEFAULT 0', source: 'TEXT', blocked: 'BOOLEAN DEFAULT FALSE',
@@ -979,6 +979,17 @@ async function setUserProfile(chatId, { name = null, username = null } = {}) {
     [String(chatId), name ? String(name).slice(0, 80) : null, username ? String(username).slice(0, 40) : null]);
 }
 
+/** Интерфейс тілі ('kk' | 'ru'): Mini App-та не ботта өзі таңдаған; таңдамаса — null (әдепкі қазақша) */
+async function getUserLang(chatId) {
+  const r = await q('SELECT lang FROM users WHERE chat_id = $1', [String(chatId)]);
+  const l = r.rows[0] && r.rows[0].lang;
+  return l === 'ru' || l === 'kk' ? l : null;
+}
+async function setUserLang(chatId, lang) {
+  if (lang !== 'ru' && lang !== 'kk') return;
+  await q('UPDATE users SET lang = $2 WHERE chat_id = $1', [String(chatId), lang]);
+}
+
 /** Студенттің дизайн жады (core/designMemory) — JSON мәтін; жоқ болса бос жад */
 async function getDesignMemory(chatId) {
   const r = await q('SELECT design_memory FROM users WHERE chat_id = $1', [String(chatId)]);
@@ -1261,6 +1272,8 @@ module.exports = {
   countFreeDecksSince,
   freeFunnel,
   setUserProfile,
+  getUserLang,
+  setUserLang,
   getDesignMemory,
   pushDesignMemory,
   logGen,

@@ -477,18 +477,32 @@
   function tgLang() {
     try { return String(window.Telegram.WebApp.initDataUnsafe.user.language_code || '').toLowerCase(); } catch { return ''; }
   }
+  /** Тілді ауыстыру: сақтаймыз және бетті ?lang=… сілтемесімен қайта ашамыз. Тіл сілтемеде тұрады, сондықтан
+   *  localStorage жабық болса да (жеке режим) бет бір рет қана ауысады — қайта-қайта жүктелмейді. */
   function setLang(l) {
-    ls.set(KEY, l === 'ru' ? 'ru' : 'kk');
+    const v = l === 'ru' ? 'ru' : 'kk';
+    ls.set(KEY, v);
     try { if (window.Telegram && Telegram.WebApp && Telegram.WebApp.HapticFeedback) Telegram.WebApp.HapticFeedback.impactOccurred('light'); } catch { /* — */ }
-    location.reload();
+    try {
+      const u = new URL(location.href);
+      u.searchParams.set('lang', v);   // #tgWebAppData (Telegram деректері) хэште қалады
+      location.replace(u.href);
+    } catch { location.reload(); }
   }
 
   const shared = { make, collect, has, ruPlural, RU, PLURAL_RU, ERR_RU, RU_PATTERNS, KK_ONLY };
   if (typeof module !== 'undefined' && module.exports) { module.exports = shared; return; }   // Node (тест)
 
-  const lang = ls.get(KEY) === 'ru' ? 'ru' : 'kk';
+  // Боттың сілтемесі ?lang=ru|kk әкелсе — бұл адамның таңдауы (ботта /lang не бұрын Mini App-та); сақтаймыз
+  let urlLang = null;
+  try { urlLang = new URLSearchParams(location.search).get('lang'); } catch { /* — */ }
+  if (urlLang !== 'ru' && urlLang !== 'kk') urlLang = null;
+  if (urlLang) ls.set(KEY, urlLang);
+  const saved = urlLang || ls.get(KEY);
+  const lang = saved === 'ru' ? 'ru' : 'kk';
   const tr = make(lang);
-  window.DL_I18N = Object.assign({}, shared, tr, { setLang });
+  // chosen — адам өзі таңдаған тіл (таңдамаса null): тек сонда серверге X-UI-Lang жіберіледі (бот та сол тілге ауысады)
+  window.DL_I18N = Object.assign({}, shared, tr, { setLang, chosen: saved === 'ru' || saved === 'kk' ? saved : null });
 
   document.documentElement.lang = lang;
   document.title = tr.t(document.title);
@@ -504,7 +518,7 @@
   // Бір реттік ұсыныс: Telegram тілі қазақша емес, тіл әлі таңдалмаған адамға (орысша жазылған — соларға арналған)
   const offer = document.getElementById('uiLangOffer');
   const tl = tgLang();
-  if (offer && lang === 'kk' && !ls.get(KEY) && !ls.get(OFFER_KEY) && tl && !/^kk/.test(tl)) {
+  if (offer && lang === 'kk' && !saved && !ls.get(OFFER_KEY) && tl && !/^kk/.test(tl)) {
     ls.set(OFFER_KEY, '1');
     offer.classList.remove('hidden');
     const yes = document.getElementById('uiLangYes');

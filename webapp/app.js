@@ -36,7 +36,7 @@
   function initDataHeader() {
     const h = {};
     if (tg?.initData) h['X-Telegram-Init-Data'] = tg.initData;
-    h['X-UI-Lang'] = UI_RU ? 'ru' : 'kk';
+    if (I18N && I18N.chosen) h['X-UI-Lang'] = I18N.chosen;   // тек өзі таңдаса — бот та сол тілде сөйлейді
     return h;
   }
 
@@ -286,6 +286,8 @@
   async function loadMe() {
     try {
       const me = await api('/api/me');
+      // Ботта орысша таңдаған (/lang, ?start=ru), ал Mini App-та әлі тіл таңдамаған адам — бет бір рет сол тілге ауысады
+      if (I18N && !I18N.chosen && (me.lang === 'ru' || me.lang === 'kk') && me.lang !== I18N.lang) { I18N.setLang(me.lang); return; }
       state.me = me;
       $('#creditsVal').textContent = me.credits;
       $('#credWord').textContent = tn(me.credits, 'кредит');

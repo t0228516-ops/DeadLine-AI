@@ -117,3 +117,18 @@ test('downloadAsDataUri: small photos are untouched; if shrinking fails the phot
     assert.strictEqual(await dl.downloadAsDataUri(s2.url), null);
   } finally { s2.srv.close(); dl.shrinkImage = orig; }
 });
+
+test('shrinkImage: a transient browser failure (page closed mid-way) is retried once with a fresh page', async (t) => {
+  if (!(await chromeOk(t))) return;
+  const seen = [];
+  const out = await shrinkImage(photoLikePng(2400, 1500), 'image/png', 600_000, {
+    _beforeShrink: async (page, attempt) => { seen.push(attempt); if (attempt === 1) await page.close(); },
+  });
+  assert.deepStrictEqual(seen, [1, 2]);
+  assert.ok(out && out.w === 1920, 'shrunk on the second attempt');
+  // бұзық сурет — қайталанбайды (уақытша ақау емес)
+  const tries = [];
+  const bad = await shrinkImage(Buffer.from('not an image at all'), 'image/png', 600_000, { _beforeShrink: async (p, a) => { tries.push(a); } });
+  assert.strictEqual(bad, null);
+  assert.deepStrictEqual(tries, [1]);
+});

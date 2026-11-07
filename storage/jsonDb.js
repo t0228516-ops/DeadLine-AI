@@ -736,6 +736,18 @@ async function setUserProfile(chatId, { name = null, username = null } = {}) {
   saveDB(db);
 }
 
+/** Интерфейс тілі ('kk' | 'ru'): Mini App-та не ботта өзі таңдаған; таңдамаса — null (әдепкі қазақша) */
+async function getUserLang(chatId) {
+  const u = db.users[String(chatId)];
+  return u && (u.lang === 'ru' || u.lang === 'kk') ? u.lang : null;
+}
+async function setUserLang(chatId, lang) {
+  const u = db.users[String(chatId)];
+  if (!u || (lang !== 'ru' && lang !== 'kk')) return;
+  u.lang = lang;
+  saveDB(db);
+}
+
 // жадтың таза функциялары — тек шақырылғанда жүктеледі (кейбір тесттер бұл файлды басқа папкаға көшіріп жүктейді)
 const designMemory = () => require('../core/designMemory');
 async function getDesignMemory(chatId) {
@@ -971,6 +983,8 @@ module.exports = {
   countFreeDecksSince,
   freeFunnel,
   setUserProfile,
+  getUserLang,
+  setUserLang,
   getDesignMemory,
   pushDesignMemory,
   logGen,
