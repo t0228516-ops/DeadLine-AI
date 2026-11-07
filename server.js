@@ -82,14 +82,14 @@ const WEBAPP_DIR = path.join(__dirname, 'webapp');
 const assetVersion = (() => {
   try {
     const h = require('crypto').createHash('sha1');
-    for (const f of ['app.js', 'admin.js', 'quizmaker.js', 'styles.css', 'index.html']) h.update(fs.readFileSync(path.join(WEBAPP_DIR, f)));
+    for (const f of ['app.js', 'admin.js', 'quizmaker.js', 'i18n.js', 'styles.css', 'index.html']) h.update(fs.readFileSync(path.join(WEBAPP_DIR, f)));
     return h.digest('hex').slice(0, 10);
   } catch { return String(Date.now()); }
 })();
 const sendIndex = (req, res) => {
   try {
     const html = fs.readFileSync(path.join(WEBAPP_DIR, 'index.html'), 'utf8')
-      .replace(/(src|href)="(app\.js|admin\.js|quizmaker\.js|styles\.css)"/g, `$1="$2?v=${assetVersion}"`);
+      .replace(/(src|href)="(app\.js|admin\.js|quizmaker\.js|i18n\.js|styles\.css)"/g, `$1="$2?v=${assetVersion}"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
     res.type('html').send(html);
@@ -696,7 +696,8 @@ app.get('/api/job/:id/download/:type', authMiddleware, async (req, res) => {
     } else if (type === 'speech' && job.payload?.mode !== 'referat' && fs.existsSync(speechFile(job.id))) {
       filePath = speechFile(job.id);
       mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      name = `${(job.title || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — баяндама.docx`;
+      const speechWord = { ru: 'доклад', en: 'speech' }[job.payload?.language] || 'баяндама';   // файл аты — презентация тілінде
+      name = `${(job.title || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — ${speechWord}.docx`;
     } else if (type === 'docx' && job.payload?.mode === 'referat' && job.pptxPath) {
       filePath = job.pptxPath;
       mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
