@@ -22,6 +22,7 @@
 > 👉 https://t.me/DeadLine_prezbot?start=teacher_ru
 
 (`teacher_ru` — бот бірден орысша сөйлейді және квиз ұсынады; `/stats`-та бөлек арна болып көрінеді.)
+Орысша постер: `teacher-poster-ru.png` (1080×1350, QR → `t.me/DeadLine_prezbot?start=teacher_ru`).
 
 ## 2. Қайтару хабары (бір рет қолданып кеткен ~600 адамға) — ЖІБЕРМЕЙІНШЕ ИЕСІ ОҚИДЫ
 
