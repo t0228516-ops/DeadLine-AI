@@ -10,10 +10,18 @@
     try { tg.setBackgroundColor('bg_color'); } catch {}
   }
 
+  // Интерфейс тілі (webapp/i18n.js): t — мәтін, tn — санға байланған сөз, srv — серверден келген жол, errText — қате
+  const I18N = window.DL_I18N || null;
+  const UI_RU = !!(I18N && I18N.lang === 'ru');
+  const t = (s, v) => (I18N ? I18N.t(s, v) : (v ? String(s).replace(/\{(\w+)\}/g, (m, k) => (v[k] != null ? String(v[k]) : m)) : String(s)));
+  const tn = (c, kk) => (I18N ? I18N.n(c, kk) : kk);
+  const srv = (s) => (I18N ? I18N.srv(s) : (s == null ? '' : String(s)));
+  const errText = (d, fb) => (I18N ? I18N.errText(d, fb) : ((d && d.message) || fb || ''));
+
   const state = {
     me: null,
     slideCount: 10,
-    language: 'kk',
+    language: UI_RU ? 'ru' : 'kk',   // орысша интерфейсте презентация да әдепкіде орысша (адам өзгерте алады)
     mode: 'presentation',
     style: '',
     design: '',      // галереядан таңдалған дизайн жүйесі ('' — бот өзі таңдайды)
@@ -28,6 +36,7 @@
   function initDataHeader() {
     const h = {};
     if (tg?.initData) h['X-Telegram-Init-Data'] = tg.initData;
+    h['X-UI-Lang'] = UI_RU ? 'ru' : 'kk';
     return h;
   }
 
@@ -43,7 +52,9 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.message || data.error || res.statusText);
+      const msg = errText(data) || data.error || res.statusText;
+      if (UI_RU) data.message = msg;   // орысша интерфейсте серверден келген қазақша хабар — қате коды бойынша
+      const err = new Error(msg);
       err.status = res.status;
       err.data = data;
       throw err;
@@ -89,6 +100,7 @@
     state.slideCount = clamped;
   });
   bindChips('#langChips', 'language');
+  if (UI_RU) $$('#langChips .chip').forEach((c) => c.classList.toggle('active', c.dataset.v === 'ru'));
   $('#modeChips').addEventListener('click', (e) => {
     const b = e.target.closest('.seg-btn');
     if (!b) return;
@@ -116,24 +128,24 @@
     $$('.not-template').forEach((el) => el.classList.toggle('hidden', isTemplate));
     $$('.lang-card').forEach((el) => el.classList.toggle('hidden', isTemplate)); // шаблонда аударудың керегі жоқ
 
-    $('#countLabel').textContent = isReferat ? 'Бет саны' : 'Слайд саны';
-    $('#countHint').textContent = isReferat ? '5–30 аралығында' : '5–15 аралығында';
+    $('#countLabel').textContent = t(isReferat ? 'Бет саны' : 'Слайд саны');
+    $('#countHint').textContent = t(isReferat ? '5–30 аралығында' : '5–15 аралығында');
     // Реферат: «қосымша талаптар» сол өрісте (бұрын «Аудитория» өрісінде болатын)
-    $('#reqLabel').firstChild.textContent = isReferat ? 'Қосымша талаптар ' : 'Мұғалімнің талабы ';
-    $('#requirements').placeholder = isReferat
+    $('#reqLabel').firstChild.textContent = t(isReferat ? 'Қосымша талаптар' : 'Мұғалімнің талабы') + ' ';
+    $('#requirements').placeholder = t(isReferat
       ? 'Мысалы: 3 тарау, тек қазақстандық мысалдар, 15 дереккөз'
-      : 'Мысалы: кемінде 10 слайд, әр слайдта 40 сөзден аспасын, соңында әдебиеттер тізімі';
-    $('#btnGenText').textContent = isReferat ? 'Реферат жасау' : 'Презентация жасау';
+      : 'Мысалы: кемінде 10 слайд, әр слайдта 40 сөзден аспасын, соңында әдебиеттер тізімі');
+    $('#btnGenText').textContent = t(isReferat ? 'Реферат жасау' : 'Презентация жасау');
 
-    $('#topicLabel').textContent = isTemplate ? 'Шаблонға қандай тақырып жазамыз?' : isReferat ? 'Реферат не туралы?' : 'Презентация не туралы?';
-    $('#topic').placeholder = isTemplate
+    $('#topicLabel').textContent = t(isTemplate ? 'Шаблонға қандай тақырып жазамыз?' : isReferat ? 'Реферат не туралы?' : 'Презентация не туралы?');
+    $('#topic').placeholder = t(isTemplate
       ? 'Мысалы: Қазақстан экономикасының даму кезеңдері'
-      : 'Мысалы: Жасанды интеллекттің білім берудегі рөлі';
-    $('#modeHint').textContent = isTemplate
+      : 'Мысалы: Жасанды интеллекттің білім берудегі рөлі');
+    $('#modeHint').textContent = t(isTemplate
       ? 'Өзіңіз таңдаған .pptx шаблонның түсі, шрифті, суреттері сол күйі қалады — бот тек мәтінді жазады.'
       : isReferat
         ? 'Word (.docx) реферат, ГОСТ форматында. Мұғалім қабылдаған үлгіні келесі қадамда жүктей аласыз.'
-        : 'Тақырыпты жазыңыз — құрылым, мәтін, сурет, дизайнды бот өзі жасайды.';
+        : 'Тақырыпты жазыңыз — құрылым, мәтін, сурет, дизайнды бот өзі жасайды.');
 
     const input = $('#slideCountInput');
     input.max = isReferat ? 30 : 15;
@@ -185,11 +197,11 @@
     { id: 'terra', name: 'Табиғат', tag: 'экология' },
     { id: 'aurum', name: 'Алтын', tag: 'құқық' },
   ];
-  const styleName = (id) => (STYLES.find((x) => x.id === id) || {}).name || 'Авто';
+  const styleName = (id) => t((STYLES.find((x) => x.id === id) || {}).name || 'Авто');
   (function buildGallery() {
     const g = $('#styleGallery');
     g.insertAdjacentHTML('beforeend', STYLES.map((st) =>
-      `<button type="button" class="g-card" data-v="${st.id}"><img src="styles/${st.id}-1.jpg" alt="" loading="lazy"><span class="g-name">${st.name}<small>${st.tag}</small></span></button>`).join(''));
+      `<button type="button" class="g-card" data-v="${st.id}"><img src="styles/${st.id}-1.jpg" alt="" loading="lazy"><span class="g-name">${t(st.name)}<small>${t(st.tag)}</small></span></button>`).join(''));
     g.addEventListener('click', (e) => {
       const b = e.target.closest('.g-card, .g-auto');
       if (!b) return;
@@ -219,12 +231,12 @@
     $$('.wiz-step').forEach((el) => el.classList.toggle('hidden', +el.dataset.step !== n));
     $$('.wiz-steps i').forEach((el, i) => el.classList.toggle('on', i < n));
     const lab = n === 2 ? STEP_LABEL[2][state.mode] : STEP_LABEL[n];
-    $('#wizLabel').textContent = `${n} / 3 · ${lab}`;
+    $('#wizLabel').textContent = `${n} / 3 · ${t(lab)}`;
     $('#wizBack').classList.toggle('hidden', n === 1);
     $('#wizNext').classList.toggle('hidden', n === 3);
     $('#btnGenerate').classList.toggle('hidden', n !== 3);
-    $('#wizNext').textContent = n === 1 ? (state.mode === 'presentation' ? 'Әрі қарай → Стиль таңдау' : state.mode === 'template' ? 'Әрі қарай → Шаблон жүктеу' : 'Әрі қарай → Үлгі реферат')
-      : 'Әрі қарай → Титул парағы';
+    $('#wizNext').textContent = t(n === 1 ? (state.mode === 'presentation' ? 'Әрі қарай → Стиль таңдау' : state.mode === 'template' ? 'Әрі қарай → Шаблон жүктеу' : 'Әрі қарай → Үлгі реферат')
+      : 'Әрі қарай → Титул парағы');
     if (n === 3) renderSummary();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -235,9 +247,9 @@
   });
   $('#wizBack').addEventListener('click', () => goStep(state.step - 1));
   function renderSummary() {
-    const lang = { kk: 'қазақша', ru: 'орысша', en: 'ағылшынша' }[state.language] || '';
-    const unit = state.mode === 'referat' ? 'бет' : 'слайд';
-    const what = state.mode === 'referat' ? 'Word (.docx) реферат' : state.mode === 'template' ? 'сіздің шаблоныңыз' : `«${styleName(state.design)}» стилі`;
+    const lang = t({ kk: 'қазақша', ru: 'орысша', en: 'ағылшынша' }[state.language] || '');
+    const unit = tn(state.slideCount, state.mode === 'referat' ? 'бет' : 'слайд');
+    const what = state.mode === 'referat' ? t('Word (.docx) реферат') : state.mode === 'template' ? t('сіздің шаблоныңыз') : t('«{name}» стилі', { name: styleName(state.design) });
     $('#wizSum').textContent = `${state.slideCount} ${unit} · ${lang} · ${what}`;
     const pv = $('#wizPreview');
     pv.classList.toggle('hidden', !(state.mode === 'presentation' && state.design));
@@ -247,8 +259,9 @@
   function renderPrice() {
     const me = state.me || {};
     const tester = !!(me.tester && me.tester.active && me.tester.creditsToday > 0);
-    $('#genHint').textContent = tester ? 'Тест режимі · тегін'
-      : `1 кредит${me.price ? ` · ${me.price} ₸` : ''}${me.credits != null ? ` · қалды: ${me.credits} кредит` : ''}`;
+    $('#genHint').textContent = tester ? t('Тест режимі · тегін')
+      : (me.price ? t('1 кредит · {price} ₸', { price: me.price }) : t('1 кредит'))
+        + (me.credits != null ? ' · ' + t('қалды: {n} {word}', { n: me.credits, word: tn(me.credits, 'кредит') }) : '');
   }
   applyMode();
   goStep(1);
@@ -259,13 +272,13 @@
   });
 
   // ── Тестер режимі: бүгінгі тегін тест презентациясы ──────────────────────
-  function renderTester(t) {
+  function renderTester(ts) {
     const el = $('#testerBanner');
     if (!el) return;
-    if (!t || !t.active) { el.classList.add('hidden'); return; }
-    const until = new Date(t.until).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit' });
-    el.innerHTML = `🧪 Тест режимі: бүгін <b>${t.creditsToday}/${t.daily}</b> тегін презентация · ${until} дейін`
-      + (t.pending && t.pending !== 'busy' ? '<br>⏳ Алдымен алдыңғы презентацияға ботқа пікір жазыңыз' : '');
+    if (!ts || !ts.active) { el.classList.add('hidden'); return; }
+    const until = new Date(ts.until).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit' });
+    el.innerHTML = t('🧪 Тест режимі: бүгін <b>{a}/{b}</b> тегін презентация · {until} дейін', { a: ts.creditsToday, b: ts.daily, until })
+      + (ts.pending && ts.pending !== 'busy' ? '<br>' + t('⏳ Алдымен алдыңғы презентацияға ботқа пікір жазыңыз') : '');
     el.classList.remove('hidden');
   }
 
@@ -275,10 +288,11 @@
       const me = await api('/api/me');
       state.me = me;
       $('#creditsVal').textContent = me.credits;
+      $('#credWord').textContent = tn(me.credits, 'кредит');
       $('#statCredits').textContent = me.credits;
       $('#statTotal').textContent = me.total;
       $('#statRefs').textContent = me.refEarnings;
-      $('#userName').textContent = [me.firstName, me.lastName].filter(Boolean).join(' ') || 'Пайдаланушы';
+      $('#userName').textContent = [me.firstName, me.lastName].filter(Boolean).join(' ') || t('Пайдаланушы');
       $('#userId').textContent = me.username ? `@${me.username}` : `ID ${me.id}`;
       $('#avatar').textContent = (me.firstName || 'D')[0].toUpperCase();
       $('#refLink').value = me.referralLink;
@@ -286,16 +300,17 @@
       if (me.plus) {
         $('#plusCredits').textContent = me.plus.credits;
         $('#plusPrice').textContent = me.plus.amount;
-        $('#plusEach').textContent = `≈ ${Math.round(me.plus.amount / me.plus.credits)}₸ / дана`;
+        $('#plusEach').textContent = t('≈ {p}₸ / дана', { p: Math.round(me.plus.amount / me.plus.credits) });
       }
       if (me.pack) {
         $('#packCredits').textContent = me.pack.credits;
+        $('#tierPackL').textContent = tn(me.pack.credits, 'презентация');
         $('#packPrice').textContent = me.pack.amount;
         $('#packWord').textContent = me.pack.credits;
         const save = me.price ? Math.round((1 - me.pack.amount / (me.pack.credits * me.price)) * 100) : 0;
-        $('#packEach').textContent = `≈ ${Math.round(me.pack.amount / me.pack.credits)}₸ / дана${save > 0 ? ` · −${save}%` : ''}`;
+        $('#packEach').textContent = t('≈ {p}₸ / дана', { p: Math.round(me.pack.amount / me.pack.credits) }) + (save > 0 ? ` · −${save}%` : '');
       }
-      $('#firstPriceNote').textContent = me.firstPrice ? `бірінші сатып алу — ${me.firstPrice}₸` : '';
+      $('#firstPriceNote').textContent = me.firstPrice ? t('бірінші сатып алу — {p}₸', { p: me.firstPrice }) : '';
       renderTester(me.tester);
       renderPrice();
       $('#kaspiPhone').textContent = me.kaspi?.phone || '';
@@ -334,9 +349,9 @@
     state.refId = null;
     if (!f) { $('#refInfo').textContent = ''; return; }
     if (!/\.pptx$/i.test(f.name)) { ev.target.value = ''; return showToast('Тек .pptx қабылданады'); }
-    $('.tpl-upload').textContent = `📎 ${f.name} — басқасын таңдау`;
+    $('.tpl-upload').textContent = t('📎 {name} — басқасын таңдау', { name: f.name });
     if (f.size > 50 * 1024 * 1024) { ev.target.value = ''; return showToast('Файл 50 МБ-тан үлкен'); }
-    $('#refInfo').textContent = 'Талдануда...';
+    $('#refInfo').textContent = t('Талдануда...');
     try {
       const r = await fetch('/api/reference', {
         method: 'POST',
@@ -344,9 +359,9 @@
         body: f,
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.message || 'Қате');
+      if (!r.ok) throw new Error(errText(d, 'Қате'));
       state.refId = d.refId;
-      $('#refInfo').textContent = '✓ Референс талданды\n' + (d.lines || []).join('\n');
+      $('#refInfo').textContent = [t('✓ Референс талданды'), ...(d.lines || []).map(srv).filter(Boolean)].join('\n');
     } catch (e) {
       ev.target.value = '';
       $('#refInfo').textContent = '';
@@ -362,8 +377,8 @@
     if (!/\.(docx?|pdf|txt|rtf)$/i.test(f.name)) { ev.target.value = ''; return showToast('Word, PDF немесе TXT жүктеңіз'); }
     if (f.size > 50 * 1024 * 1024) { ev.target.value = ''; return showToast('Файл 50 МБ-тан үлкен'); }
     state.sampleId = null;
-    $('#sampleBtn').textContent = `📎 ${f.name} — басқасын таңдау`;
-    $('#sampleInfo').textContent = 'Оқылуда...';
+    $('#sampleBtn').textContent = t('📎 {name} — басқасын таңдау', { name: f.name });
+    $('#sampleInfo').textContent = t('Оқылуда...');
     try {
       const r = await fetch('/api/material?name=' + encodeURIComponent(f.name), {
         method: 'POST',
@@ -371,12 +386,12 @@
         body: f,
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.message || 'Файл оқылмады');
+      if (!r.ok) throw new Error(errText(d, 'Файл оқылмады'));
       state.sampleId = d.materialId;
-      $('#sampleInfo').textContent = '✓ Үлгі қабылданды — реферат соның құрылымы мен стилімен жазылады';
+      $('#sampleInfo').textContent = t('✓ Үлгі қабылданды — реферат соның құрылымы мен стилімен жазылады');
     } catch (e) {
-      $('#sampleBtn').textContent = '📎 Үлгі рефератты таңдау';
-      $('#sampleInfo').textContent = 'Жүктемесеңіз де болады — реферат стандарт талаптармен жасалады.';
+      $('#sampleBtn').textContent = t('📎 Үлгі рефератты таңдау');
+      $('#sampleInfo').textContent = t('Жүктемесеңіз де болады — реферат стандарт талаптармен жасалады.');
       showToast(e.message || 'Файл оқылмады');
     }
     ev.target.value = '';
@@ -439,7 +454,7 @@
         $('#creditsVal').textContent = res.creditsLeft;
         $('#statCredits').textContent = res.creditsLeft;
       }
-      showProgress(0, 'Кезекте', 'Басталуда...');
+      showProgress(0, t('Кезекте'), t('Басталуда...'));
       haptic('medium');
       pollJob(res.jobId);
     } catch (e) {
@@ -496,13 +511,16 @@
           write: 'Мәтін жазылуда',
           fit: 'Көлем реттелуде',
           docx: 'Word құрастыру',
+          review: 'Визуалды тексеру',
+          media: 'Суреттер мен диаграммалар',
+          vision: 'Дизайн тексерісі',
           done: 'Дайын',
           failed: 'Сәтсіз',
         };
         showProgress(
           job.progress || 0,
-          phaseTitles[job.phase] || job.phase || 'Жұмыс істеуде',
-          job.detail || ''
+          t(phaseTitles[job.phase] || 'Жұмыс істеуде'),
+          srv(job.detail)
         );
 
         if (job.status === 'done') {
@@ -517,7 +535,7 @@
           state.pollTimer = null;
           hideProgress();
           haptic('error');
-          showToast(job.detail || 'Сәтсіз болды, кредит қайтарылды');
+          showToast(srv(job.detail) || t('Сәтсіз болды, кредит қайтарылды'));
           loadMe();
         }
       } catch (e) {
@@ -535,23 +553,26 @@
     const sm = rep.summary || {};
     const h = document.createElement('div');
     h.className = 'req-head';
-    h.textContent = sm.hardTotal ? `Талаптар: ${sm.hardPassed}/${sm.hardTotal} орындалды` : 'Талаптар';
+    h.textContent = sm.hardTotal ? t('Талаптар: {a}/{b} орындалды', { a: sm.hardPassed, b: sm.hardTotal }) : t('Талаптар');
     box.appendChild(h);
     const mark = { pass: '✅', fail: '❌', soft: '🔸', unverifiable: '➖' };
     for (const r of rep.results) {
       const row = document.createElement('div');
       row.className = 'req-row ' + r.status;
-      let t = `${mark[r.status] || '•'} «${r.quote}»`;
-      if (r.status === 'fail' && r.message) t += ' — ' + r.message;
-      else if (r.status === 'soft') t += r.score == null ? ' — бағаланбады' : ` — ${Math.round(r.score * 100)}%${r.note ? ' (' + r.note + ')' : ''}`;
-      else if (r.status === 'unverifiable') t += ' — тексерілмейді' + (r.message ? ': ' + r.message : '');
-      row.textContent = t;
+      let line = `${mark[r.status] || '•'} «${r.quote}»`;
+      const msg = srv(r.message); const note = srv(r.note);
+      if (r.status === 'fail' && msg) line += ' — ' + msg;
+      else if (r.status === 'soft') line += r.score == null ? t(' — бағаланбады') : ` — ${Math.round(r.score * 100)}%${note ? ' (' + note + ')' : ''}`;
+      else if (r.status === 'unverifiable') line += t(' — тексерілмейді') + (msg ? ': ' + msg : '');
+      row.textContent = line;
       box.appendChild(row);
     }
     for (const o of rep.overrides || []) {
+      const note = srv(o);
+      if (!note) continue;
       const row = document.createElement('div');
       row.className = 'req-row note';
-      row.textContent = 'ℹ️ ' + o;
+      row.textContent = 'ℹ️ ' + note;
       box.appendChild(row);
     }
     box.classList.remove('hidden');
@@ -562,12 +583,14 @@
     if (!rep || !rep.checks || !rep.checks.length) return;
     const h = document.createElement('div');
     h.className = 'req-head';
-    h.textContent = `🎨 ${rep.summary || 'Template compliance'}`;
+    h.textContent = `🎨 ${srv(rep.summary) || 'Template compliance'}`;
     box.appendChild(h);
     for (const c of rep.checks) {
+      const name = srv(c.name); const detail = srv(c.detail);
+      if (!name) continue;
       const row = document.createElement('div');
       row.className = 'req-row ' + c.status;
-      row.textContent = `${c.status === 'pass' ? '✅' : '❌'} ${c.name}${c.detail ? ' — ' + c.detail : ''}`;
+      row.textContent = `${c.status === 'pass' ? '✅' : '❌'} ${name}${detail ? ' — ' + detail : ''}`;
       box.appendChild(row);
     }
     box.classList.remove('hidden');
@@ -577,14 +600,14 @@
     $('#resultCard').classList.remove('hidden');
     const ref = job.mode === 'referat';
     const tpl = job.mode === 'template';
-    $('#resultTitle').textContent = job.title || (ref ? 'Реферат дайын!' : 'Презентация дайын!');
+    $('#resultTitle').textContent = job.title || t(ref ? 'Реферат дайын!' : 'Презентация дайын!');
     $('#btnDlPptx').classList.toggle('hidden', ref);
     $('#btnDlSpeech').classList.toggle('hidden', ref || !job.hasSpeech);
     $('#btnDlDocx').classList.toggle('hidden', !ref);
-    $('#btnNew').textContent = ref ? 'Жаңа жұмыс' : 'Жаңа презентация';
+    $('#btnNew').textContent = t(ref ? 'Жаңа жұмыс' : 'Жаңа презентация');
     $('#resultScore').textContent = job.qualityScore != null
-      ? `Сапа: ${Math.round(job.qualityScore)}/100${tpl ? ' · шаблоннан' : ''}`
-      : (tpl ? 'Шаблон негізінде жасалды' : '');
+      ? t('Сапа: {n}/100', { n: Math.round(job.qualityScore) }) + (tpl ? t(' · шаблоннан') : '')
+      : (tpl ? t('Шаблон негізінде жасалды') : '');
     $('#reqReport').classList.add('hidden');
     renderReqReport(job.requirementsReport);
     renderTemplateReport(job.templateReport);
@@ -604,7 +627,7 @@
     paintStars(state.rating);
     $('#rateComment').value = fb && fb.comment ? fb.comment : '';
     $('#rateMore').classList.toggle('hidden', !state.rating);
-    $('#rateTitle').textContent = state.rating ? 'Бағаңыз сақталды. Өзгертуге болады' : 'Ұнады ма? Жұлдызша қойыңыз';
+    $('#rateTitle').textContent = t(state.rating ? 'Бағаңыз сақталды. Өзгертуге болады' : 'Ұнады ма? Жұлдызша қойыңыз');
   }
   async function sendFeedback(body) {
     if (!state.rateJobId) return null;
@@ -616,7 +639,7 @@
       const job = await api(`/api/job/${jobId}`);
       if (job.status !== 'done') return showToast('Бұл жұмыс аяқталмаған');
       state.rateJobId = jobId;
-      $('#rateJobTitle').textContent = title || job.title || 'Бағалау';
+      $('#rateJobTitle').textContent = title || job.title || t('Бағалау');
       setupRating(job);
       $('#rateCard').classList.remove('hidden');
       haptic('light');
@@ -636,7 +659,7 @@
     try {
       await sendFeedback({ rating: v });
       $('#rateMore').classList.remove('hidden');
-      $('#rateTitle').textContent = 'Рахмет! Пікір қалдырсаңыз, бот осыдан үйренеді';
+      $('#rateTitle').textContent = t('Рахмет! Пікір қалдырсаңыз, бот осыдан үйренеді');
     } catch (e) {
       state.rating = prev; paintStars(prev);
       showToast(e.status === 404 ? 'Жұмыстың мерзімі өтті' : 'Баға сақталмады');
@@ -690,19 +713,19 @@
       }
       empty.classList.add('hidden');
       list.innerHTML = items.map((h) => {
-        const date = new Date(h.createdAt).toLocaleString('kk-KZ', {
+        const date = new Date(h.createdAt).toLocaleString(UI_RU ? 'ru-RU' : 'kk-KZ', {
           day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
         });
-        const score = h.qualityScore != null ? `Сапа ${Math.round(h.qualityScore)}/100` : '';
+        const score = h.qualityScore != null ? t('Сапа {n}/100', { n: Math.round(h.qualityScore) }) : '';
         return `<div class="hist-item">
-          <div class="hist-title">${esc(h.title || h.topic || (h.mode === 'referat' ? 'Реферат' : 'Презентация'))}</div>
+          <div class="hist-title">${esc(h.title || h.topic || t(h.mode === 'referat' ? 'Реферат' : 'Презентация'))}</div>
           <div class="hist-meta"><span>${date}</span><span>${score}</span></div>
           <div class="hist-actions">
-            ${h.canRate ? `<button class="btn ghost small rate-btn" data-rate="${h.id}" data-title="${esc(h.title || h.topic || '')}">${h.rating ? '⭐ ' + h.rating : '☆ Бағалау'}</button>` : ''}
+            ${h.canRate ? `<button class="btn ghost small rate-btn" data-rate="${h.id}" data-title="${esc(h.title || h.topic || '')}">${h.rating ? '⭐ ' + h.rating : t('☆ Бағалау')}</button>` : ''}
             ${h.mode === 'referat'
               ? `<button class="btn secondary small" data-dl="${h.id}" data-type="docx">Word</button>`
               : `<button class="btn secondary small" data-dl="${h.id}" data-type="pptx">PPTX</button>
-${h.hasSpeech ? `<button class="btn secondary small" data-dl="${h.id}" data-type="speech">🎤 Баяндама</button>` : ''}`}
+${h.hasSpeech ? `<button class="btn secondary small" data-dl="${h.id}" data-type="speech">${t('🎤 Баяндама')}</button>` : ''}`}
           </div>
         </div>`;
       }).join('');
@@ -739,6 +762,12 @@ ${h.hasSpeech ? `<button class="btn secondary small" data-dl="${h.id}" data-type
     }
   });
 
+  // ── Интерфейс тілі (Аккаунт) ──────────────────────────────────────────
+  $$('#uiLangChips .chip').forEach((c) => {
+    c.classList.toggle('active', c.dataset.v === (UI_RU ? 'ru' : 'kk'));
+    c.addEventListener('click', () => { if (I18N && c.dataset.v !== I18N.lang) I18N.setLang(c.dataset.v); });
+  });
+
   // ── Utils ─────────────────────────────────────────────────────────────
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -747,6 +776,7 @@ ${h.hasSpeech ? `<button class="btn secondary small" data-dl="${h.id}" data-type
   }
 
   function showToast(msg) {
+    msg = t(msg == null ? '' : String(msg));   // қазақша кілт болса — орысша интерфейсте аударылады
     if (tg?.showAlert) {
       tg.showAlert(msg);
     } else {

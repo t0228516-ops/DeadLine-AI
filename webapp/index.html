@@ -19,9 +19,12 @@
           <div class="subtitle">AI Presentation Studio</div>
         </div>
       </div>
-      <div class="credits-pill" id="creditsPill" title="Кредиттер">
-        <span class="coin">◆</span>
-        <span id="creditsVal">—</span><span class="cred-word">кредит</span>
+      <div class="head-right">
+        <button type="button" class="lang-btn" id="uiLangBtn" data-i18n-skip>RU</button>
+        <div class="credits-pill" id="creditsPill" title="Кредиттер">
+          <span class="coin">◆</span>
+          <span id="creditsVal">—</span><span class="cred-word" id="credWord">кредит</span>
+        </div>
       </div>
     </header>
 
@@ -30,11 +33,17 @@
       <button class="tab active" data-tab="create">Жасау</button>
       <button class="tab" data-tab="history">Тарих</button>
       <button class="tab" data-tab="account">Аккаунт</button>
-      <button class="tab hidden" data-tab="admin" id="adminTabBtn">🛠 Админ</button>
+      <button class="tab hidden" data-tab="admin" id="adminTabBtn" data-i18n-skip>🛠 Админ</button>
     </nav>
 
     <!-- CREATE -->
     <section id="tab-create" class="panel active">
+      <!-- Тіл ұсынысы: Telegram тілі қазақша емес, тіл әлі таңдалмаған адамға бір рет (webapp/i18n.js) -->
+      <div id="uiLangOffer" class="lang-offer hidden" data-i18n-skip>
+        <span>🌐 Есть интерфейс на русском языке</span>
+        <button type="button" class="lang-offer-yes" id="uiLangYes">Переключить</button>
+        <button type="button" class="lang-offer-no" id="uiLangNo" aria-label="Закрыть">✕</button>
+      </div>
       <p id="testerBanner" class="free-banner tester-banner hidden"></p>
       <!-- Кешкі дедлайн (21:00–02:00 Алматы): студент ертеңгі баяндамаға осы сағатта отырады -->
       <p id="nightStrip" class="night-strip hidden">🌙 <b>Ертеңге керек пе?</b> Түнде де жұмыс істейміз — презентация, айтатын мәтін және квиз ~2 минутта дайын.</p>
@@ -104,7 +113,7 @@
         <div class="tpl-only">
           <h2 class="wiz-h">Шаблонды жүктеңіз</h2>
           <ol class="tpl-steps">
-            <li>Canva, PowerPoint немесе Google Slides-тан ұнаған шаблонды <b>.pptx</b> форматында жүктеп алыңыз.</li>
+            <li data-i18n-html>Canva, PowerPoint немесе Google Slides-тан ұнаған шаблонды <b>.pptx</b> форматында жүктеп алыңыз.</li>
             <li>Төмендегі батырманы басып, сол файлды таңдаңыз.</li>
             <li>Бот дизайнды (түс, шрифт, суреттер) сақтап, ішіндегі мәтінді сіздің тақырыбыңызға ауыстырады.</li>
           </ol>
@@ -263,8 +272,8 @@
       <div class="result-card notice-card">
         <div class="result-icon">🧠</div>
         <h2 id="learnTitle">Шаблон жүктеу туралы</h2>
-        <p class="notice-text">Біз жүктелген шаблонның <b>дизайн деректерін</b> жинаймыз: элементтердің орны мен өлшемі, түстер, шрифттер, слайд құрылымы және қай тақырыпқа қолданылғаны. Бот осыдан жақсы презентация жасауды үйренеді.</p>
-        <p class="notice-text">Шаблонның <b>мәтіні, суреттері және файлдың өзі сақталмайды.</b></p>
+        <p class="notice-text" data-i18n-html>Біз жүктелген шаблонның <b>дизайн деректерін</b> жинаймыз: элементтердің орны мен өлшемі, түстер, шрифттер, слайд құрылымы және қай тақырыпқа қолданылғаны. Бот осыдан жақсы презентация жасауды үйренеді.</p>
+        <p class="notice-text" data-i18n-html>Шаблонның <b>мәтіні, суреттері және файлдың өзі сақталмайды.</b></p>
         <p class="notice-text muted">Қаламасаңыз, бұл функцияны қолданбаңыз.</p>
         <div class="result-actions">
           <label for="refFile" class="btn primary" id="learnAccept">Түсіндім, жүктеймін</label>
@@ -315,7 +324,7 @@
     </div>
 
     <!-- HISTORY -->
-    <section id="tab-admin" class="panel">
+    <section id="tab-admin" class="panel" data-i18n-skip>
       <div class="chips adm-nav" id="admNav">
         <button type="button" class="chip active" data-view="overview">Шолу</button>
         <button type="button" class="chip" data-view="users">Клиенттер</button>
@@ -326,7 +335,7 @@
       <div id="admView" class="adm-view"><p class="hint">Жүктелуде…</p></div>
     </section>
 
-    <div id="admUser" class="overlay hidden" role="dialog" aria-modal="true">
+    <div id="admUser" class="overlay hidden" role="dialog" aria-modal="true" data-i18n-skip>
       <div class="adm-sheet">
         <div class="adm-sheet-head"><b id="admUserTitle">Клиент</b><button type="button" class="btn ghost small" id="admUserClose">✕</button></div>
         <div id="admUserBody"></div>
@@ -366,13 +375,13 @@
         <label class="label">Кредит сатып алу</label>
         <div class="tiers" id="tiers">
           <div class="tier">
-            <div class="tier-n">1</div><div class="tier-l">презентация</div>
+            <div class="tier-n">1</div><div class="tier-l" id="tierOneL">презентация</div>
             <div class="tier-p"><strong id="priceVal">250</strong>₸</div>
             <div class="tier-s" id="firstPriceNote"></div>
           </div>
           <div class="tier tier-main">
             <div class="tier-badge">Сессияға</div>
-            <div class="tier-n" id="packCredits">5</div><div class="tier-l">презентация</div>
+            <div class="tier-n" id="packCredits">5</div><div class="tier-l" id="tierPackL">презентация</div>
             <div class="tier-p"><strong id="packPrice">990</strong>₸</div>
             <div class="tier-s" id="packEach"></div>
           </div>
@@ -383,11 +392,19 @@
           </div>
         </div>
         <p class="pay-info">Kaspi: <strong id="kaspiPhone"></strong> · <span id="kaspiName"></span></p>
-        <p class="hint">Ботқа санын жазыңыз: «1», «<span id="packWord">5</span>» не «plus». Төлемнен кейін чекті PDF түрінде жіберіңіз — 5–10 мин ішінде расталады.</p>
+        <p class="hint" data-i18n-html>Ботқа санын жазыңыз: «1», «<span id="packWord">5</span>» не «plus». Төлемнен кейін чекті PDF түрінде жіберіңіз — 5–10 мин ішінде расталады.</p>
         <button id="btnOpenBot" class="btn secondary block">Ботқа өту</button>
+      </div>
+      <div class="card">
+        <label class="label">Интерфейс тілі</label>
+        <div class="chips" id="uiLangChips" data-i18n-skip>
+          <button type="button" class="chip" data-v="kk">Қазақша</button>
+          <button type="button" class="chip" data-v="ru">Русский</button>
+        </div>
       </div>
     </section>
   </div>
+  <script src="i18n.js"></script>
   <script src="quizmaker.js"></script>
   <script src="app.js"></script>
   <script src="admin.js"></script>
