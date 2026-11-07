@@ -6,6 +6,7 @@
  * қосылса да пікір дұрыс жұмысқа байланады.
  */
 const JOB_TAG_RE = /#(j[0-9a-z]{6,20})\b/;
+const { bt } = require('./botText');   // мәтін — қазақша (әдепкі) не орысша
 
 function ratingKeyboard(jobId, selected = 0) {
   return {
@@ -16,17 +17,15 @@ function ratingKeyboard(jobId, selected = 0) {
   };
 }
 
-const ratePromptText = (jobId, kind = 'presentation') =>
-  `${kind === 'referat' ? '📄 Реферат' : '📊 Презентация'} ұнады ма? Жұлдызша қойыңыз:\n#${jobId}`;
+const ratePromptText = (jobId, kind = 'presentation', lang = 'kk') => bt(lang, 'ratePrompt', { kind, jobId });
 
-const commentPromptText = (jobId, rating) =>
-  `${'⭐'.repeat(rating)} Рахмет! Пікір қалдырғыңыз келе ме? Міндетті емес — «Өткізу» басыңыз немесе жай мәзірді қолдана беріңіз.\n#${jobId}`;
+const commentPromptText = (jobId, rating, lang = 'kk') => bt(lang, 'commentPrompt', { rating, jobId });
 
 /** Пікір сұрауының батырмалары: жазу / өткізу. force_reply ҚОЛДАНЫЛМАЙДЫ — ол төменгі мәзірді жасырып тастайтын. */
-function commentKeyboard(jobId) {
+function commentKeyboard(jobId, lang = 'kk') {
   return { inline_keyboard: [[
-    { text: '✍️ Пікір жазу', callback_data: `fbc:${jobId}` },
-    { text: '✖ Өткізу', callback_data: `fbs:${jobId}` },
+    { text: bt(lang, 'commentWriteBtn'), callback_data: `fbc:${jobId}` },
+    { text: bt(lang, 'commentSkipBtn'), callback_data: `fbs:${jobId}` },
   ]] };
 }
 /** fbc:<jobId> → жазу, fbs:<jobId> → өткізу */

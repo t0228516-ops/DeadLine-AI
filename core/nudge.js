@@ -15,23 +15,23 @@ function almatyHour(t) {
   return d.getUTCHours() + d.getUTCMinutes() / 60;
 }
 const quiet = (t) => { const h = almatyHour(t); return h >= 0.5 && h < 8; };
+const { bt } = require('./botText');
+const { appUrl } = require('./userLang');
 const evening = (t) => almatyHour(t) >= 21 || almatyHour(t) < 0.5;
 
-function nudgeText(t) {
-  return evening(t)
-    ? '🌙 Ертеңге баяндама керек пе?\n\nТақырыпты жазыңыз — *2 минутта* дайын: слайдтар, айтатын мәтін және топқа квиз. Түнде де жұмыс істейміз 🙂'
-    : '👋 Сіз DeadLine-ды ашып көрдіңіз, бірақ презентация жасамадыңыз.\n\nТақырыпты жазыңыз — *2 минутта* дайын: слайдтар, айтатын мәтін және топқа квиз.\n🎯 Тегін квиз те бар — 30 секундта.';
+function nudgeText(t, lang = 'kk') {
+  return bt(lang, evening(t) ? 'nudgeEvening' : 'nudgeDay');
 }
 
-function nudgeKeyboard(webappUrl) {
+function nudgeKeyboard(webappUrl, lang = 'kk') {
   if (!webappUrl) return undefined;
-  const base = String(webappUrl).replace(/\/$/, '') + '/webapp/';
-  return { inline_keyboard: [[{ text: '📱 Презентация жасау', web_app: { url: base } }], [{ text: '🎯 Тегін квиз', web_app: { url: base + '#quiz' } }]] };
+  return { inline_keyboard: [[{ text: bt(lang, 'nudgeBtnDeck'), web_app: { url: appUrl(webappUrl, '', lang) } }], [{ text: bt(lang, 'nudgeBtnQuiz'), web_app: { url: appUrl(webappUrl, '#quiz', lang) } }]] };
 }
 
 /**
  * @param {{ db: { listAbandoned: Function, logEvent: Function, setBlocked?: Function },
- *           send: (chatId: string, text: string, opts: object) => Promise<any>, webappUrl?: string, now?: number, max?: number }} o
+ *           send: (chatId: string, text: string, opts: object) => Promise<any>, webappUrl?: string, now?: number, max?: number,
+ *           langOf?: (chatId: string) => Promise<string> }} o
  * @returns {Promise<number>} жіберілген хабар саны
  */
 async function runNudges(o) {
@@ -43,7 +43,8 @@ async function runNudges(o) {
     // алдымен белгі: екі сервер/айналым қатар жүрсе де екі рет жазылмайды
     await o.db.logEvent(id, 'nudge', null, now).catch(() => {});
     try {
-      await o.send(id, nudgeText(now), { parse_mode: 'Markdown', reply_markup: nudgeKeyboard(o.webappUrl) });
+      const lang = o.langOf ? await o.langOf(id).catch(() => 'kk') : 'kk';
+      await o.send(id, nudgeText(now, lang), { parse_mode: 'Markdown', reply_markup: nudgeKeyboard(o.webappUrl, lang) });
       sent += 1;
     } catch (e) {
       const code = e && e.response && e.response.statusCode;

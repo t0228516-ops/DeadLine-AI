@@ -200,3 +200,25 @@ test('pgDb: еске салу кандидаттары, бір реттік бе
     await pool.end();
   }
 });
+
+test('pgDb: интерфейс тілі — таңдамаса null, ru/kk сақталады, бөтен мән еленбейді', { skip }, async () => {
+  delete require.cache[require.resolve('../storage/pgDb')];
+  const db = require('../storage/pgDb');
+  const pool = new Pool({ connectionString: URL });
+  db._setPool(pool);
+  try {
+    await db.initDB();
+    const id = 'l' + Date.now();
+    await db.registerUser(id, null);
+    assert.strictEqual(await db.getUserLang(id), null);
+    await db.setUserLang(id, 'ru');
+    assert.strictEqual(await db.getUserLang(id), 'ru');
+    await db.setUserLang(id, 'de');
+    assert.strictEqual(await db.getUserLang(id), 'ru', 'unknown language ignored');
+    await db.setUserLang(id, 'kk');
+    assert.strictEqual(await db.getUserLang(id), 'kk');
+    assert.strictEqual(await db.getUserLang('nobody' + id), null);
+  } finally {
+    await pool.end();
+  }
+});

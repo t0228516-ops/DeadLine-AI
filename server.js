@@ -24,6 +24,9 @@ const {
   getDesignMemory, pushDesignMemory, saveQuiz, getQuiz, deleteExpiredQuizzes, addQuizResults, listQuizResults,
   updateQuizQuestions, countFreeQuizzes, listFreeQuizzes, eventSince, addBonusCredits,
 } = require('./db');
+// Клиентке жазылатын хабарлар адамның тілінде (қазақша әдепкі / орысша): core/botText, core/userLang
+const { bt } = require('./core/botText');
+const UL = require('./core/userLang');
 const designMemory = require('./core/designMemory');
 const libraryCore = require('./products/presentation/library');
 const testerCore = require('./core/tester');
@@ -49,10 +52,10 @@ const templateNudged = new Set();
 async function nudgeTemplate(chatId) {
   if (!global.__deadlineBot || templateNudged.has(String(chatId))) return;
   templateNudged.add(String(chatId));
-  const url = WEBAPP_URL.replace(/\/$/, '') + '/webapp/#template';
-  await global.__deadlineBot.sendMessage(chatId,
-    '💡 Ұнаған дизайн бар ма? Енді өз шаблоныңызды (.pptx) жүктесеңіз болады — түсі, шрифті, суреттері сол күйі қалады, бот тек мәтінді сіздің тақырыбыңызға жазады.',
-    { reply_markup: { inline_keyboard: [[{ text: '🎨 Өз шаблоныммен жасау', web_app: { url } }]] } });
+  const lang = await UL.langOf(chatId);
+  const url = UL.appUrl(WEBAPP_URL, '#template', lang);
+  await global.__deadlineBot.sendMessage(chatId, bt(lang, 'templateNudge'),
+    { reply_markup: { inline_keyboard: [[{ text: bt(lang, 'wa_template'), web_app: { url } }]] } });
 }
 const MAX_CONCURRENT = Math.max(1, parseInt(process.env.MAX_CONCURRENT_GENERATIONS || '3', 10) || 3);
 const MAX_TOPIC_CHARS = Math.max(200, parseInt(process.env.MAX_TOPIC_CHARS || '8000', 10) || 8000);
@@ -201,6 +204,9 @@ app.get('/api/me', authMiddleware, async (req, res) => {
     }
     logEvent(chatId, 'app').catch(() => {});
     setUserProfile(chatId, { name: [req.tgUser.first_name, req.tgUser.last_name].filter(Boolean).join(' '), username: req.tgUser.username }).catch(() => {});
+    // Mini App-та «RU / ҚАЗ» таңдалған болса — бот та сол тілде сөйлейді (тек өзгерсе жазамыз)
+    const uiLang = req.get('X-UI-Lang');
+    if ((uiLang === 'ru' || uiLang === 'kk') && uiLang !== (await UL.langOf(chatId))) UL.setLang(chatId, uiLang).catch(() => {});
     res.json({
       isAdmin: isAdminId(chatId),
       id: chatId,
@@ -218,6 +224,8 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       kaspi: { phone: KASPI_PHONE, name: KASPI_NAME },
       referralsPerBonus: REFERRALS_PER_BONUS,
       tester: testerCore.testerView(await getTester(chatId).catch(() => null)),
+      // интерфейс тілі: Mini App-та таңдалмаса, ботта таңдағаны (/lang, ?start=ru) — Mini App сол тілге ауысады
+      lang: uiLang === 'ru' || uiLang === 'kk' ? uiLang : await UL.langOf(chatId),
     });
   } catch (err) {
     console.error('[API] /me', err);
@@ -769,7 +777,7 @@ app.post('/api/admin/user/:id/credits', authMiddleware, adminOnly, adminRoute(as
   if (!n) throw new Error('n керек (-50..50, 0 емес)');
   const user = await addCredits(req.params.id, n);
   if (n > 0 && req.body.notify !== false && global.__deadlineBot) {
-    global.__deadlineBot.sendMessage(req.params.id, `🎁 Сізге *${n}* презентация кредиті қосылды. Жалпы: *${user.credits}*`, { parse_mode: 'Markdown' }).catch(() => {});
+    UL.langOf(req.params.id).then((lang) => global.__deadlineBot.sendMessage(req.params.id, bt(lang, 'adminGrant', { n, total: user.credits }), { parse_mode: 'Markdown' })).catch(() => {});
   }
   console.log(`[Admin] credits ${req.params.id} ${n > 0 ? '+' : ''}${n}`);
   return { ok: true, credits: user.credits };
@@ -909,7 +917,7 @@ async function sendDueRatePrompts() {
       if (!job || job.status !== 'done') continue;               // жұмыс өшкен/құлаған — сұрамаймыз
       const fb = await getFeedbackForJob(p.jobId).catch(() => null);
       if (fb && fb.rating) continue;                              // Mini App-та бұрын бағалаған
-      await global.__deadlineBot.sendMessage(p.chatId, ratePromptText(p.jobId, p.kind), { reply_markup: ratingKeyboard(p.jobId) });
+      await global.__deadlineBot.sendMessage(p.chatId, ratePromptText(p.jobId, p.kind, await UL.langOf(p.chatId)), { reply_markup: ratingKeyboard(p.jobId) });
     } catch (e) {
       console.warn('[Rate] send failed:', e.message);             // бот блокталған т.б. — қайта жібермейміз
     }
@@ -927,8 +935,7 @@ async function giftReferredFriend(chatId) {
   await logEvent(chatId, 'refgift');
   await addBonusCredits(chatId, REF_FRIEND_BONUS);
   if (global.__deadlineBot) {
-    global.__deadlineBot.sendMessage(chatId,
-      `🎁 Досыңыздың шақыруымен келгеніңіз үшін *+${REF_FRIEND_BONUS} кредит* сыйлық! Келесі презентацияңыз — тегін, белгісіз, толық нұсқа.`,
+    global.__deadlineBot.sendMessage(chatId, bt(await UL.langOf(chatId), 'refGift', { n: REF_FRIEND_BONUS }),
       { parse_mode: 'Markdown' }).catch(() => {});
   }
 }
@@ -939,11 +946,11 @@ async function offerReferralShare(chatId) {
   if (await eventSince(chatId, 'refask', Date.now() - 3 * 24 * 3600e3).catch(() => true)) return;
   await logEvent(chatId, 'refask');
   const link = `https://t.me/${BOT_USERNAME}?start=ref_${chatId}`;
-  const pitch = 'DeadLine — 2 минутта презентация, айтатын мәтін және топқа квиз. Мына сілтемемен кірсең, бонус кредит аласың:';
-  await global.__deadlineBot.sendMessage(chatId,
-    '🎁 Курстасыңызға ұсыныңыз: ол сіздің сілтемеңізбен келіп презентация жасаса — *екеуіңізге де бонус кредит*.',
+  const lang = await UL.langOf(chatId);
+  const pitch = bt(lang, 'sharePitch');
+  await global.__deadlineBot.sendMessage(chatId, bt(lang, 'shareOffer'),
     { parse_mode: 'Markdown', disable_web_page_preview: true, reply_markup: { inline_keyboard: [[
-      { text: '📲 WhatsApp-қа жіберу', url: 'https://wa.me/?text=' + encodeURIComponent(pitch + ' ' + link) },
+      { text: bt(lang, 'shareWa'), url: 'https://wa.me/?text=' + encodeURIComponent(pitch + ' ' + link) },
       { text: '✈️ Telegram', url: 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(pitch) },
     ]] } }).catch(() => {});
 }
@@ -956,9 +963,10 @@ async function countReferral(chatId) {
     const { newCount, bonusGiven } = await incrementRefCount(u.referredBy);
     if (!newCount || !global.__deadlineBot) return;
     const need = REFERRALS_PER_BONUS - (newCount % REFERRALS_PER_BONUS);
+    const rlang = await UL.langOf(u.referredBy);
     const text = bonusGiven
-      ? `🎉 *+1 кредит!* Сенің реферал сілтемең арқылы ${newCount} адам презентация жасатты!\n\nКелесі кредит үшін тағы *${REFERRALS_PER_BONUS} адам* қажет.`
-      : `👥 Сенің реферал сілтемең арқылы жаңа адам презентация жасатты!\n\nКредит алу үшін тағы *${need} адам* керек.`;
+      ? bt(rlang, 'refBonus', { count: newCount, per: REFERRALS_PER_BONUS })
+      : bt(rlang, 'refProgress', { need });
     global.__deadlineBot.sendMessage(u.referredBy, text, { parse_mode: 'Markdown' }).catch(() => {});
   } catch (e) {
     console.warn('[Referral] count failed:', e.message);
@@ -1041,7 +1049,7 @@ async function resumeInterruptedJobs() {
       await refundFor(job).catch((e) => console.warn('[Resume] refund', e.message));
       logGen(job.id, { status: 'failed', error: 'interrupted', finished_at: Date.now() }).catch(() => {});
       if (global.__deadlineBot) {
-        global.__deadlineBot.sendMessage(job.chatId, '❌ Сервер жаңартылып жатқанда тапсырысыңыз үзілді, кредитіңіз қайтарылды. Қайта жасатып көріңіз.').catch(() => {});
+        UL.langOf(job.chatId).then((lang) => global.__deadlineBot.sendMessage(job.chatId, bt(lang, 'interrupted'))).catch(() => {});
       }
       continue;
     }
@@ -1092,11 +1100,9 @@ async function executeReferatJob(job) {
     });
     try {
       if (global.__deadlineBot) {
-        await global.__deadlineBot.sendMessage(
-          chatId,
-          `✅ *Реферат дайын!*\n\n📌 ${escapeMd(result.title || job.payload.topic)}\n📄 ${result.pages} бет\n\n⚠️ Әдебиеттер тізімін өзіңіз тексеріп алыңыз.`,
-          { parse_mode: 'Markdown' }
-        );
+        await global.__deadlineBot.sendMessage(chatId,
+          bt(await UL.langOf(chatId), 'referatDone', { title: escapeMd(result.title || job.payload.topic), pages: result.pages }),
+          { parse_mode: 'Markdown' });
         const name = `${(result.title || 'referat').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 60) || 'referat'}.docx`;
         await global.__deadlineBot.sendDocument(chatId, docxPath, {}, {
           filename: name,
@@ -1118,7 +1124,7 @@ async function executeReferatJob(job) {
     await refundFor(job);
     try {
       if (global.__deadlineBot) {
-        await global.__deadlineBot.sendMessage(chatId, '❌ Реферат жасалмады, кредитіңіз қайтарылды.\nҚайта көріңіз.');
+        await global.__deadlineBot.sendMessage(chatId, bt(await UL.langOf(chatId), 'referatFailed'));
       }
     } catch {}
   }
@@ -1301,14 +1307,11 @@ async function executeJob(jobId) {
     // Notify via bot and send files directly to chat
     try {
       if (global.__deadlineBot) {
-        const scoreNote = result.qualityScore != null
-          ? `\n⭐ Сапа: ${Math.round(result.qualityScore)}/100`
-          : '';
-        await global.__deadlineBot.sendMessage(
-          chatId,
-          `✅ *Презентация дайын!*\n\n📌 ${escapeMd(result.title || job.payload.topic)}${scoreNote}\n\nФайлдар төменде жіберілді 👇`,
-          { parse_mode: 'Markdown' }
-        );
+        const lang = await UL.langOf(chatId);
+        const scoreNote = result.qualityScore != null ? bt(lang, 'scoreNote', { score: Math.round(result.qualityScore) }) : '';
+        await global.__deadlineBot.sendMessage(chatId,
+          bt(lang, 'deckDone', { title: escapeMd(result.title || job.payload.topic), scoreNote }),
+          { parse_mode: 'Markdown' });
         if (result.requirementsReport) {
           const rt = formatReport(result.requirementsReport, job.payload?.language);
           if (rt) await global.__deadlineBot.sendMessage(chatId, rt).catch(() => {});
@@ -1324,7 +1327,7 @@ async function executeJob(jobId) {
           const mb = Math.round(fs.statSync(pptxPath).size / 1024 / 1024);
           console.warn(`[Job] ${jobId} pptx ${mb}MB > Telegram 50MB limit`);
           await refundFor(job);
-          await global.__deadlineBot.sendMessage(chatId, `⚠️ Дайын файл ${mb} МБ — Telegram 50 МБ-тан үлкен файлды жібере алмайды. Кредитіңіз қайтарылды.\nШаблондағы суреттерді кішірейтіп (сығып) қайта жүктеңіз.`).catch(() => {});
+          await global.__deadlineBot.sendMessage(chatId, bt(lang, 'tooBig', { mb })).catch(() => {});
         } else if (pptxPath && fs.existsSync(pptxPath)) {
           const pptxName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 60)}.pptx`;
           await global.__deadlineBot.sendDocument(chatId, pptxPath, {}, {
@@ -1332,9 +1335,10 @@ async function executeJob(jobId) {
             contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           });
           if (speechPath && fs.existsSync(speechPath)) {
-            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — дайындық.docx`;
+            const prepWord = { ru: 'подготовка', en: 'prep' }[job.payload?.language] || 'дайындық';   // файл аты — презентация тілінде
+            const speechName = `${(result.title || job.payload.topic || 'presentation').replace(/[^\w\u0400-\u04FF\- ]+/g, '').slice(0, 50)} — ${prepWord}.docx`;
             await global.__deadlineBot.sendDocument(chatId, speechPath, {
-              caption: '🎓 Баяндамаға дайындық: тақырып қарапайым тілмен, бір беттік жоспар, әр слайдта не айту керек, мұғалімнің сұрақтары және өзіңді тексеретін квиз. Сөйлейтін мәтін PPTX-тің «Заметки» бөлімінде де бар.',
+              caption: bt(lang, 'prepCaption'),
             }, {
               filename: speechName,
               contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -1343,7 +1347,7 @@ async function executeJob(jobId) {
           // Топқа квиз: сілтемелер Telegram арқылы — топ сілтемесі (топ чатына) + басқару беті (тек баяндамашыға)
           if (result.quiz && result.quiz.links) await sendQuizLinks(chatId, result.quiz).catch((e) => console.warn('[Job] quiz links send failed', e.message));
           // квиз жоқ болса да — канал сілтемесі әр презентацияның астында (иесінің шешімі)
-          else if (CHANNEL_URL) await global.__deadlineBot.sendMessage(chatId, `📢 Жаңалықтар мен нұсқаулықтар (квизді қалай ойнау т.б.): ${CHANNEL_URL}`, { disable_web_page_preview: true }).catch(() => {});
+          else if (CHANNEL_URL) await global.__deadlineBot.sendMessage(chatId, bt(lang, 'channel', { url: CHANNEL_URL }), { disable_web_page_preview: true }).catch(() => {});
           // қуаныш сәті: курстасқа ұсыну (тегін колодада өз хабарында бар — қайталамаймыз)
           if (!job.payload?.free) await offerReferralShare(chatId).catch((e) => console.warn('[Referral] share offer failed:', e.message));
         }
@@ -1355,12 +1359,9 @@ async function executeJob(jobId) {
     // Тегін колодадан кейін: келесі қадамды бір хабармен ұсынамыз (баға, Plus, реферал)
     if (job.payload?.free && global.__deadlineBot) {
       const ref = BOT_USERNAME ? `https://t.me/${BOT_USERNAME}?start=ref_${chatId}` : '';
-      global.__deadlineBot.sendMessage(chatId,
-        '🎁 Бұл — сіздің *тегін* презентацияңыз (оң жақ бұрыштағы «Made in DeadLine» белгісін PowerPoint-та өшіре аласыз).\n\n' +
-        `Келесі презентация: *${FIRST_PRICE}₸* (бірінші сатып алу), кейін ${PRICE}₸ · Сессия пакеті: ${PACK.credits} презентация — ${PACK.amount}₸ · Plus: ${PLUS.credits} презентация — ${PLUS.amount}₸.\n` +
-        'Ақылы презентацияда белгі болмайды, слайд саны шектелмейді, шаблон режимі де ашылады.' +
-        (ref ? `\n\n👥 Курстасыңызға сілтеме жіберіңіз — ол презентация жасатса, *екеуіңізге де* бонус кредит: ${ref}` : ''),
-        { parse_mode: 'Markdown', disable_web_page_preview: true }).catch(() => {});
+      UL.langOf(chatId).then((lang) => global.__deadlineBot.sendMessage(chatId, bt(lang, 'freeDeckNext', {
+        first: FIRST_PRICE, price: PRICE, packCredits: PACK.credits, packAmount: PACK.amount, plusCredits: PLUS.credits, plusAmount: PLUS.amount, ref,
+      }), { parse_mode: 'Markdown', disable_web_page_preview: true })).catch(() => {});
     }
 
     if (job.payload?.tester) await askTester(job, result.title);
@@ -1385,12 +1386,7 @@ async function executeJob(jobId) {
     await refundFor(job);
     try {
       if (global.__deadlineBot) {
-        await global.__deadlineBot.sendMessage(
-          chatId,
-          err.isQualityGate
-            ? '❌ Сапа шегінен өтпеді, кредитіңіз қайтарылды.\nТақырыпты сәл өзгертіп қайта көріңіз.'
-            : '❌ Қате орын алды, кредитіңіз қайтарылды.\nҚайта көріңіз немесе қолдауға жазыңыз.'
-        );
+        await global.__deadlineBot.sendMessage(chatId, bt(await UL.langOf(chatId), err.isQualityGate ? 'failQuality' : 'failError'));
       }
     } catch {}
   }
@@ -1426,23 +1422,23 @@ function removeOldFiles(dir, cutoff, keep = new Set()) {
  */
 async function sendQuizLinks(chatId, quiz, opts = {}) {
   if (!global.__deadlineBot || !quiz || !quiz.links) return;
+  const lang = await UL.langOf(chatId);
   const n = (quiz.questions || []).length || 10;
-  const shareText = `🎯 Квиз: «${String(quiz.topic || '').slice(0, 120)}» — сілтемені ашып, атыңызды жазыңыз`;
+  const topic = String(quiz.topic || '').slice(0, 120);
+  const shareText = bt(lang, 'qShare', { topic });
   const share = `https://t.me/share/url?url=${encodeURIComponent(quiz.links.player)}&text=${encodeURIComponent(shareText)}`;
   const wa = `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${quiz.links.player}`)}`;
-  const text = (opts.free ? `🎯 Квиз дайын: «${String(quiz.topic || '').slice(0, 120)}» — ${n} сұрақ.\n\n` : `🎯 Топқа квиз дайын — ${n} сұрақ.\n\n`)
-    + (opts.free
-      ? '1️⃣ Ойыншы сілтемесін топқа жіберіңіз (WhatsApp не Telegram) — не басқару бетіндегі QR-ды проекторға шығарыңыз. Әркім атын жазып қосылады, тіркелу керек емес.\n'
-      : '1️⃣ Сілтемені топ чатына жіберіңіз (не топ соңғы слайдтағы QR кодты сканерлейді). Әркім атын жазып қосылады.\n')
-    + '2️⃣ «🎮 Квизді басқару» — ойынды СІЗ бастайсыз, келесі сұраққа да сіз өткізесіз. Ноутбукта ашып, проекторға шығарыңыз (телефоннан да болады).\n'
-    + '📋 Кім неше сұраққа дұрыс жауап бергені — сол беттегі «Нәтижелер».\n\n'
-    + '⚠️ Басқару сілтемесін топқа жібермеңіз — ол тек сізге.'
-    + (CHANNEL_URL ? `\n\n🎬 Квизді қалай ойнау керек — видео нұсқаулық біздің каналда: ${CHANNEL_URL}` : '');
+  const text = (opts.free ? bt(lang, 'qHeadFree', { topic, n }) : bt(lang, 'qHeadDeck', { n }))
+    + bt(lang, opts.free ? 'qStep1Free' : 'qStep1Deck')
+    + bt(lang, 'qStep2')
+    + bt(lang, 'qResults')
+    + bt(lang, 'qWarn')
+    + (CHANNEL_URL ? bt(lang, 'qVideo', { url: CHANNEL_URL }) : '');
   await global.__deadlineBot.sendMessage(chatId, text, {
     disable_web_page_preview: true,
     reply_markup: {
-      inline_keyboard: [[{ text: '📲 WhatsApp-қа', url: wa }, { text: '📤 Telegram-ға', url: share }], [{ text: '🎮 Квизді басқару', url: quiz.links.host }]]
-        .concat(CHANNEL_URL ? [[{ text: '🎬 Қалай ойнау — видео', url: CHANNEL_URL }]] : []),
+      inline_keyboard: [[{ text: bt(lang, 'qBtnWa'), url: wa }, { text: bt(lang, 'qBtnTg'), url: share }], [{ text: bt(lang, 'qBtnHost'), url: quiz.links.host }]]
+        .concat(CHANNEL_URL ? [[{ text: bt(lang, 'qBtnVideo'), url: CHANNEL_URL }]] : []),
     },
   });
 }
@@ -1450,14 +1446,11 @@ async function sendQuizLinks(chatId, quiz, opts = {}) {
 /** Квиз лоббиінде адамдар күтіп отыр, ал басқару беті ашылмаған → баяндамашыға «ойынды сіз бастауыңыз керек» (core/quizRoutes) */
 async function notifyQuizHost({ chatId, players, hostUrl, nudge }) {
   if (!global.__deadlineBot || !chatId || !hostUrl) return;
-  const text = nudge > 1
-    ? `⏳ Квизде ${players} адам әлі сізді күтіп отыр.\n\nОйынды тек сіз бастай аласыз: батырманы басып, ашылған бетте «▶ Бастау»-ды басыңыз.`
-    : `🎮 Квизге ${players} адам қосылды және сізді күтіп отыр!\n\n`
-      + 'Ойынды сіз бастауыңыз керек: төмендегі батырманы басып, ашылған бетте «▶ Бастау»-ды басыңыз. '
-      + 'Ноутбукта ашып, проекторға шығарсаңыз жақсы, бірақ телефоннан да болады.';
+  const lang = await UL.langOf(chatId);
+  const text = bt(lang, nudge > 1 ? 'qHostAgain' : 'qHostFirst', { players });
   await global.__deadlineBot.sendMessage(chatId, text, {
     disable_web_page_preview: true,
-    reply_markup: { inline_keyboard: [[{ text: '▶ Квизді бастау', url: hostUrl }]] },
+    reply_markup: { inline_keyboard: [[{ text: bt(lang, 'qHostBtn'), url: hostUrl }]] },
   });
 }
 
@@ -1488,7 +1481,7 @@ async function main() {
   // Mini App-ты ашып, ештеңе жасамай кеткенге бір реттік еске салу (core/nudge.js; өшіру: NUDGE_ABANDONED=0)
   setInterval(() => {
     if (!global.__deadlineBot) return;
-    require('./core/nudge').runNudges({ db: require('./db'), webappUrl: WEBAPP_URL, send: (id, text, opts) => global.__deadlineBot.sendMessage(id, text, opts) })
+    require('./core/nudge').runNudges({ db: require('./db'), webappUrl: WEBAPP_URL, langOf: UL.langOf, send: (id, text, opts) => global.__deadlineBot.sendMessage(id, text, opts) })
       .catch((e) => console.warn('[Nudge] failed:', e.message));
   }, 15 * 60 * 1000).unref();
 

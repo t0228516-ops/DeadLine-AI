@@ -164,8 +164,9 @@ async function browser(t) {
 }
 test.after(async () => { if (chrome && typeof chrome !== 'string') await chrome.close(); });
 
-async function openApp(b, lang, tgLang) {
+async function openApp(b, lang, tgLang, query = '', meLang = '') {
   const page = await b.newPage();
+  const apiHeaders = [];
   await page.setViewport({ width: 360, height: 740 });
   await page.setRequestInterception(true);
   page.on('request', (r) => {
@@ -174,14 +175,18 @@ async function openApp(b, lang, tgLang) {
       return r.respond({ status: 200, contentType: 'application/javascript', body:
         `window.Telegram={WebApp:{initData:'',initDataUnsafe:{user:{id:1,language_code:${JSON.stringify(tgLang || '')}}},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},showAlert(m){window.__alerts=(window.__alerts||[]).concat(m)},HapticFeedback:{impactOccurred(){},notificationOccurred(){}}}};` });
     }
-    if (u.includes('/api/')) return r.respond({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' });
+    if (u.includes('/api/')) {
+      apiHeaders.push(r.headers());
+      if (meLang && u.includes('/api/me')) return r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '1', credits: 0, total: 0, refEarnings: 0, price: 250, lang: meLang }) });
+      return r.respond({ status: 401, contentType: 'application/json', body: '{"error":"unauthorized"}' });
+    }
     return r.continue();
   });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.evaluateOnNewDocument((l) => { try { localStorage.clear(); if (l) localStorage.setItem('dl_ui_lang', l); } catch { /* — */ } }, lang || '');
-  await page.goto('file://' + path.join(WEB, 'index.html'), { waitUntil: 'load' });
-  return { page, errors };
+  await page.goto('file://' + path.join(WEB, 'index.html') + query, { waitUntil: 'load' });
+  return { page, errors, apiHeaders };
 }
 /** Көрінетін мәтін (data-i18n-skip ішінен басқа) */
 const visibleText = (page) => page.evaluate(() => {
@@ -248,5 +253,47 @@ test('i18n page: Russian UI defaults the deck and quiz language to Russian; Kaza
   await page.close();
   ({ page } = await openApp(b, '', 'kk'));
   assert.strictEqual(await page.evaluate(() => document.querySelector('#uiLangOffer').classList.contains('hidden')), true, 'no offer for a Kazakh Telegram');
+  await page.close();
+});
+
+test('i18n page: a bot link with ?lang=ru opens the Mini App in Russian and remembers it; the server hears the language only when chosen', async (t) => {
+  const b = await browser(t); if (!b) return;
+  let { page, apiHeaders } = await openApp(b, '', 'kk', '?lang=ru');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepStrictEqual(await page.evaluate(() => [document.documentElement.lang, localStorage.getItem('dl_ui_lang'), document.querySelector('.tab').textContent]), ['ru', 'ru', 'Создать']);
+  assert.ok(apiHeaders.length && apiHeaders.every((h) => h['x-ui-lang'] === 'ru'), 'X-UI-Lang: ru sent with API calls');
+  await page.close();
+  ({ page, apiHeaders } = await openApp(b, '', 'ru'));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(apiHeaders.length && apiHeaders.every((h) => !('x-ui-lang' in h)), 'no choice → no header (the bot keeps its language)');
+  await page.close();
+});
+
+test('i18n page: a person who chose Russian in the bot gets the Russian Mini App even when opened without ?lang (one reload)', async (t) => {
+  const b = await browser(t); if (!b) return;
+  const { page } = await openApp(b, '', 'kk', '', 'ru');
+  await page.waitForFunction(() => document.documentElement.lang === 'ru', { timeout: 5000 }).catch(() => {});
+  assert.deepStrictEqual(await page.evaluate(() => [document.documentElement.lang, localStorage.getItem('dl_ui_lang')]), ['ru', 'ru']);
+  await page.close();
+});
+
+test('i18n page: with storage blocked (private mode) the switch still happens once — no reload loop', async (t) => {
+  const b = await browser(t); if (!b) return;
+  const page = await b.newPage();
+  await page.setRequestInterception(true);
+  page.on('request', (r) => {
+    const u = r.url();
+    if (u.includes('telegram.org')) return r.respond({ status: 200, contentType: 'application/javascript', body: "window.Telegram={WebApp:{initData:'',initDataUnsafe:{user:{id:1,language_code:'ru'}},ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},showAlert(){},HapticFeedback:{impactOccurred(){},notificationOccurred(){}}}};" });
+    if (u.includes('/api/me')) return r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '1', credits: 0, total: 0, price: 250, lang: 'ru' }) });
+    if (u.includes('/api/')) return r.respond({ status: 401, contentType: 'application/json', body: '{}' });
+    return r.continue();
+  });
+  await page.evaluateOnNewDocument(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } }); });
+  let navs = 0;
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) navs++; });
+  await page.goto('file://' + path.join(WEB, 'index.html'), { waitUntil: 'load' });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.strictEqual(await page.evaluate(() => document.documentElement.lang), 'ru');
+  assert.ok(navs <= 2, `navigated ${navs} times`);
   await page.close();
 });
