@@ -212,6 +212,14 @@ async function addCredits(chatId, amount) {
   return getUser(chatId);
 }
 
+/** Сыйлық кредит: тек credits (total — сатып алынғандар — өзгермейді) */
+async function addBonusCredits(chatId, amount) {
+  const u = ensureUser(chatId);
+  u.credits += Number(amount) || 0;
+  saveDB(db);
+  return getUser(chatId);
+}
+
 async function applyReceipt(chatId, receiptNo, amount, credits) {
   const key = String(receiptNo);
   if (db.receipts[key]) return { applied: false, duplicate: true };
@@ -884,6 +892,21 @@ async function freeQuizStats(since) {
     makers: new Set(free.map((z) => z.chat_id)).size, games: new Set(rows.map((r) => r.code)).size, players: rows.length,
   };
 }
+async function eventSince(chatId, kind, since) {
+  return Object.values(db.events || {}).some((e) => e.chat_id === String(chatId) && e.kind === String(kind) && e.created_at >= since);
+}
+/** Mini App-ты ашып, ештеңе жасамай кеткендер (pgDb.listAbandoned сияқты) */
+async function listAbandoned({ from, to, nudgedSince, limit = 30 }) {
+  const ev = Object.values(db.events || {});
+  const did = (a) => ev.some((g) => g.chat_id === a.chat_id && ['gen', 'free', 'paid', 'quiz'].includes(g.kind) && g.created_at >= a.created_at);
+  const nudged = new Set(ev.filter((e) => e.kind === 'nudge' && e.created_at >= nudgedSince).map((e) => e.chat_id));
+  const seen = new Set();
+  return ev.filter((e) => e.kind === 'app' && e.created_at >= from && e.created_at <= to
+      && !did(e) && !nudged.has(e.chat_id) && !(db.users[e.chat_id] && db.users[e.chat_id].blocked))
+    .sort((a, b) => a.created_at - b.created_at)
+    .filter((e) => (seen.has(e.chat_id) ? false : seen.add(e.chat_id)))
+    .slice(0, limit).map((e) => e.chat_id);
+}
 async function deleteExpiredQuizzes(now = Date.now()) {
   const box = db.quizzes || {};
   let n = 0;
@@ -911,6 +934,9 @@ module.exports = {
   countFreeQuizzes,
   listFreeQuizzes,
   freeQuizStats,
+  listAbandoned,
+  eventSince,
+  addBonusCredits,
   getQuiz,
   deleteExpiredQuizzes,
   addQuizResults,

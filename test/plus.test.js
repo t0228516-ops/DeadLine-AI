@@ -19,3 +19,19 @@ test('ordinary prices still work, odd amounts rejected', () => {
   assert.strictEqual(validateReceipt(base(1991), opts).ok, false);
   assert.strictEqual(validateReceipt(base(1990), { ...opts, bundles: [] }).ok, false);
 });
+
+// Сессия пакеті (2026-11-06): 990₸ = 5 кредит; 250-ге бөлінбейді — жай сатып алумен шатаспайды
+test('Session pack: 990₸ = 5 credits, both bundles recognised, manual confirm amount', () => {
+  const { PACK, BUNDLES, paidFor } = require('../core/pricing');
+  assert.strictEqual(PACK.amount, 990);
+  assert.strictEqual(PACK.credits, 5);
+  assert.notStrictEqual(PACK.amount % PRICE, 0, '990 is not a multiple of the single price');
+  const o = { ...opts, bundles: BUNDLES };
+  assert.deepStrictEqual([validateReceipt(base(990), o).credits, validateReceipt(base(1990), o).credits, validateReceipt(base(500), o).credits], [5, 50, 2]);
+  assert.strictEqual(validateReceipt(base(989), o).ok, false);
+  // қолмен растау: сома кредит санынан
+  assert.strictEqual(paidFor(5, false), 990);
+  assert.strictEqual(paidFor(50, false), 1990);
+  assert.strictEqual(paidFor(1, true), FIRST_PRICE);
+  assert.strictEqual(paidFor(3, false), 3 * PRICE);
+});

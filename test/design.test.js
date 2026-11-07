@@ -108,7 +108,31 @@ test('vivid: saturated palette follows the topic; long words never spill into th
   // «Демократиялық» (Arial Bold) ≈ 7.96 em → 367 px бағанға ≤ 43 px
   assert.ok(P.wordFit('Демократиялық', 999, 367, 'arial') <= 43);
   assert.strictEqual(P.wordFit('Гибридті', 42, 367, 'arial'), 42);
-  assert.match(P.fsMax(42, 40), /min\(calc\(42px\*var\(--fs,1\)\*var\(--wfit,1\)\),40px\)/);
+  // сөз сыятын шек (40px) әрқашан қалады; блок өз қорабына бейімделеді (--bfit, DESIGN_FIT)
+  assert.match(P.fsMax(42, 40), /min\(calc\(42px\*var\(--fs,1\)\*var\(--wfit,1\)\*var\(--bfit,1\)\),40px\)/);
+  process.env.DESIGN_FIT = '0';
+  try { assert.match(P.fsMax(42, 40), /min\(calc\(42px\*var\(--fs,1\)\*var\(--wfit,1\)\),40px\)/, 'өшіргіш: бұрынғы өлшем'); } finally { delete process.env.DESIGN_FIT; }
+});
+
+// Оқылу шегі (2026-11-06): ұсақ өлшемдер көтеріледі, 34 px-тен үлкені өзгермейді; өшіргіш — бұрынғы өлшем
+test('readability lift: small sizes rise toward 34px, large sizes untouched, DESIGN_FIT=0 restores', () => {
+  const P = require('../products/presentation/design/compositions/parts');
+  assert.strictEqual(P.lift(24), 28.5);
+  assert.strictEqual(P.lift(30), 31.8);
+  assert.strictEqual(P.lift(34), 34);
+  assert.strictEqual(P.lift(96), 96);
+  assert.match(P.fsOf(24), /calc\(28\.5px\*var\(--fs,1\)\*var\(--wfit,1\)\*var\(--bfit,1\)\)/);
+  process.env.DESIGN_FIT = '0';
+  try { assert.strictEqual(P.lift(24), 24); assert.doesNotMatch(P.fsOf(24), /bfit/); } finally { delete process.env.DESIGN_FIT; }
+});
+
+// Кіріспе слайдында бірінші сөйлем (subtitle) абзацпен (body) бірге көрінеді (бұрын 22 стильде жоғалатын)
+test('statement slides keep the subtitle when a paragraph is present (dedup when repeated)', () => {
+  const C = require('../products/presentation/design/compositions');
+  assert.strictEqual(C.statementText({ subtitle: 'Бір сөйлем', body: 'Екінші сөйлем.' }), 'Бір сөйлем. Екінші сөйлем.');
+  assert.strictEqual(C.statementText({ subtitle: 'Қысқа сөйлем', body: 'Қысқа сөйлем және оның түсіндірмесі.' }), 'Қысқа сөйлем және оның түсіндірмесі.');
+  assert.strictEqual(C.statementText({ subtitle: 'Тек сипаттама.' }), 'Тек сипаттама.');
+  assert.strictEqual(C.statementText({ body: 'Тек абзац.' }), 'Тек абзац.');
 });
 
 test('poster: its own bold compositions come first; other systems never get them', () => {

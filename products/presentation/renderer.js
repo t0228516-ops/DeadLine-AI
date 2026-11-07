@@ -102,6 +102,14 @@ async function renderHtmlToPngs(htmlPath) {
     } catch (e) {
       console.warn('[Render] design QA unavailable:', e.message);
     }
+    // Бейімделу жиынтығы (DESIGN_FIT): өндірісте «бос / ұсақ мәтін» өзгерісін логтан бақылау үшін бір жол
+    if (designReport.length) {
+      const grown = designReport.reduce((n, r) => n + ((r.blocks && r.blocks.grown) || 0), 0);
+      const shrunk = designReport.reduce((n, r) => n + ((r.blocks && r.blocks.shrunk) || 0), 0);
+      const mins = designReport.map((r) => r.minFont).filter((x) => x != null);
+      const empty = designReport.filter((r) => r.empty != null && r.empty > 0.4).length;
+      console.log(`[Design] fit: slides=${designReport.length} grown=${grown} shrunk=${shrunk} minFont=${mins.length ? Math.min(...mins) : '-'} emptyV>0.4=${empty}`);
+    }
     for (const rep of designReport) {
       const hard = (rep.issues || []).filter((x) => x.hard);
       if (hard.length) {

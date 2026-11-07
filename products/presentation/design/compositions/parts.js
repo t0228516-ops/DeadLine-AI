@@ -189,8 +189,19 @@ function wordFit(text, size, width, kind) {
   if (!widest) return size;
   return Math.max(18, Math.min(size, Math.floor((width * 0.95) / widest)));   // 18px — оқылатын ең кіші өлшем
 }
+/**
+ * Оқылу шегі (DESIGN_FIT; иесінің келісімі, 2026-11-06): 1920 ені слайдта 2 px = 1 pt, проекторда қосалқы мәтін ≥ 14 pt (28 px).
+ * Ұсақ өлшемдер біркелкі көтеріледі (24 → 28.5, 26 → 29.6, 30 → 32), 34 px және одан үлкені (тақырып, сан) өзгермейді.
+ * Блок өз қорабына браузерде бейімделеді (qa.js fitBlocks → --bfit): сыймаса кішірейеді, бос қалса өседі.
+ * DESIGN_FIT=0 — бұрынғы өлшемдер (апаттық өшіргіш).
+ */
+const fitOn = () => process.env.DESIGN_FIT !== '0';
+const lift = (n) => (fitOn() && n < 34 ? Math.round((n + (34 - n) * 0.45) * 10) / 10 : n);
+const scaleVars = () => (fitOn() ? '*var(--fs,1)*var(--wfit,1)*var(--bfit,1)' : '*var(--fs,1)*var(--wfit,1)');
 /** Өсетін (--fs) қаріп, бірақ max px-тен аспайды — ұзын сөз бағанадан шықпасын */
-const fsMax = (n, max) => 'font-size:min(calc(' + n + 'px*var(--fs,1)*var(--wfit,1)),' + max + 'px)';
+const fsMax = (n, max) => 'font-size:min(calc(' + lift(n) + 'px' + scaleVars() + '),' + max + 'px)';
+/** Композиция мәтінінің өлшемі (--fs слайд, --wfit ұзын сөз, --bfit блок өз қорабына) */
+const fsOf = (n) => 'font-size:calc(' + lift(n) + 'px' + scaleVars() + ')';
 
 const CSS = '.cx-part img.ph{width:100%;height:100%;object-fit:cover;display:block}' +
   // cx-grow: бос орынды мәтін толтырады, тақырып емес (тақырып өлшемі жол санына қарай таңдалған — тек кішірейе алады)
@@ -198,4 +209,4 @@ const CSS = '.cx-part img.ph{width:100%;height:100%;object-fit:cover;display:blo
   // қараңғы/түсті жолақ үстіндегі мәтін: жүйенің кілт-сөз бояуы (градиент, түс) жолақпен араласып кетпесін
   '#stage .cx-on-dark .title,#stage .cx-on-dark .title .w,#stage .cx-on-dark .title .hl,#stage .cx-on-dark .lead,#stage .cx-on-dark .kicker,#stage .cx-on-dark .meta-k,#stage .cx-on-dark .meta-v,#stage .cx-on-dark .cover-org' +
   '{color:var(--cx-ink)!important;-webkit-text-fill-color:var(--cx-ink)!important;background:none!important}#stage .cx-on-dark .meta-k{opacity:.7}';
-module.exports = { wordFit, fsMax, inkOn, setVariant, CSS, visualsForAll, rng, torn, ticket, sunburst, arch, polaroid, tape, seal, ghost, horn, diamond, wave, grain, panel, visualFor, visualImg, div, pos, px, mix };
+module.exports = { wordFit, fsMax, fsOf, lift, fitOn, inkOn, setVariant, CSS, visualsForAll, rng, torn, ticket, sunburst, arch, polaroid, tape, seal, ghost, horn, diamond, wave, grain, panel, visualFor, visualImg, div, pos, px, mix };

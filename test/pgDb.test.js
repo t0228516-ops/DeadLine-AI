@@ -169,3 +169,34 @@ test('pgDb: тегін квиз — сақтау, сұрақтарды жаңа�
     await pool.end();
   }
 });
+
+test('pgDb: еске салу кандидаттары, бір реттік белгі, сыйлық кредит (total өзгермейді)', { skip }, async () => {
+  delete require.cache[require.resolve('../storage/pgDb')];
+  const db = require('../storage/pgDb');
+  const pool = new Pool({ connectionString: URL });
+  db._setPool(pool);
+  try {
+    await db.initDB();
+    const base = 'n' + Date.now();
+    const T = Date.now(); const H = 3600e3;
+    const id = (k) => base + k;
+    for (const k of ['a', 'b', 'c', 'd', 'e']) await db.registerUser(id(k), null);
+    await db.logEvent(id('a'), 'app', null, T - 2 * H);                 // → еске салынады
+    await db.logEvent(id('b'), 'app', null, T - 2 * H); await db.logEvent(id('b'), 'gen', null, T - H);   // жасады
+    await db.logEvent(id('c'), 'app', null, T - 2 * H); await db.setBlocked(id('c'), true);              // бұғаттады
+    await db.logEvent(id('d'), 'app', null, T - 2 * H); await db.logEvent(id('d'), 'nudge', null, T - 24 * H); // кеше еске салынған
+    await db.logEvent(id('e'), 'app', null, T - 10 * 60e3);             // жаңа ғана ашты
+    const got = (await db.listAbandoned({ from: T - 6 * H, to: T - H, nudgedSince: T - 7 * 24 * H, limit: 100 })).filter((x) => x.startsWith(base));
+    // кеше белгіленген 'nudge' бүгінгі күн емес болса да 7 күн ішінде — d шығарылады
+    assert.deepStrictEqual(got, [id('a')]);
+    assert.strictEqual(await db.eventSince(id('a'), 'refgift', 0), false);
+    await db.logEvent(id('a'), 'refgift');
+    assert.strictEqual(await db.eventSince(id('a'), 'refgift', 0), true);
+    const u0 = await db.getUser(id('a'));
+    await db.addBonusCredits(id('a'), 1);
+    const u1 = await db.getUser(id('a'));
+    assert.deepStrictEqual([u1.credits - u0.credits, u1.total - u0.total], [1, 0], 'bonus credit does not count as a purchase');
+  } finally {
+    await pool.end();
+  }
+});

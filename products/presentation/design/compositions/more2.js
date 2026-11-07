@@ -9,7 +9,8 @@
 module.exports = function register(def, K) {
   const { P, H, I, esc, t, tb, fs, disp, wrap, wrapB, MX, MT, MB, W, HH } = K;
   const col = (x, y, w, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px;width:' + Math.round(w) + 'px">' + inner + '</div>';
-  const vBox = (x, y, w, h, inner) => '<div style="position:absolute;left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px;width:' + Math.round(w) + 'px;height:' + Math.round(h) + 'px;display:flex;flex-direction:column;justify-content:center">' + inner + '</div>';
+  // cx-fill: тігінен ортадағы топ — мәтін аз болса QA оны биіктіктің ~80%-ына дейін өсіреді (qa.js fitBlocks)
+  const vBox = (x, y, w, h, inner) => '<div class="cx-fill" style="position:absolute;left:' + Math.round(x) + 'px;top:' + Math.round(y) + 'px;width:' + Math.round(w) + 'px;height:' + Math.round(h) + 'px;display:flex;flex-direction:column;justify-content:center">' + inner + '</div>';
   const item = (m, ls, ds, ink, ink2) => '<div style="' + disp + ';' + fs(ls) + ';line-height:1.08;color:' + (ink || 'var(--text)') + '">' + esc(m.label) + '</div>' +
     (m.detail ? '<div style="margin-top:10px;' + fs(ds) + ';line-height:1.42;color:' + (ink2 || 'var(--text2)') + '">' + esc(m.detail) + '</div>' : '');
 
@@ -185,7 +186,8 @@ module.exports = function register(def, K) {
       const val = String(s.value); const size = val.length <= 2 ? 460 : val.length <= 4 ? 340 : 250;
       const bg = '<div class="plate"></div>' + P.panel(0, 0, 900, HH, P.mix(p.bg, p.accent, 0.12)) + P.grain(P.mix(p.bg, p.text, 0.06)) +
         (v ? P.visualImg(v, 120, 160, 660, 660, { opacity: 0.35 }) : P.div(P.pos(150, 190, 600, 600) + ';border-radius:50%;border:2px solid ' + P.mix(p.bg, p.accent, 0.5)));
-      const fg = vBox(MX, MT, 780, HH - MT - MB, t('number', 0, 0, 780, esc(val), 'position:static;text-align:center;' + disp + ';' + fs(size) + ';line-height:1;letter-spacing:-.04em;color:' + p.accent)) +
+      // сан ешқашан екі жолға бөлінбейді («1 / млн»): бір жолда — өскенде ені шекті, QA сыйғанша ғана үлкейтеді
+      const fg = vBox(MX, MT, 780, HH - MT - MB, t('number', 0, 0, 780, esc(val), 'position:static;text-align:center;white-space:nowrap;' + disp + ';' + fs(size) + ';line-height:1;letter-spacing:-.04em;color:' + p.accent)) +
         vBox(1010, MT, W - 1010 - MX, HH - MT - MB, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: W - 1010 - MX, maxLines: 3, scale: [64, 56, 50, 44], hl: true }) +
           '<div style="width:80px;height:4px;background:' + p.accent + ';margin:28px 0"></div>' +
           t('lead', 0, 0, W - 1010 - MX, esc(s.label || a.subtitle || ''), 'position:static;' + fs(32) + ';line-height:1.45;color:var(--text2)') +
@@ -198,7 +200,10 @@ module.exports = function register(def, K) {
     fits: (a, sh) => sh.stats.length >= 2 && sh.stats.length <= 4 && sh.stats.every((s) => String(s.value).length <= 8 && String(s.label || '').length <= 70),
     render(ctx, sh) {
       const a = ctx.a; const p = ctx.palette; const n = sh.stats.length;
-      const gap = 28; const span = W - 2 * MX; const w = (span - gap * (n - 1)) / n; const y = 500; const h = 420;
+      // тақталар тақырыпқа жақындайды: бір жолды тақырып + сипаттамасыз — жоғарырақ (бұрын әрқашан y=500, арасы бос жолақ)
+      const titleLines = String(a.title || '').length * 76 * 0.52 > 1300 ? 2 : 1;
+      const head = MT + 60 + titleLines * 84 + (a.subtitle ? Math.ceil(String(a.subtitle).length * 28 * 0.5 / 1200) * 40 + 24 : 0);
+      const gap = 28; const span = W - 2 * MX; const w = (span - gap * (n - 1)) / n; const y = Math.max(360, Math.min(500, head + 70)); const h = HH - MB - y;
       let bg = '<div class="plate"></div>' + P.grain(P.mix(p.bg, p.text, 0.05));
       let fg = wrap(MX, MT, 1400, H.kicker(ctx, H.sectionLabel(ctx)) + H.titleH1(ctx, a.title, { width: 1300, maxLines: 2, scale: [76, 66, 58, 50], hl: true }) + H.lead(ctx, a.subtitle, 28, { maxw: 1200 }));
       sh.stats.forEach((s, i) => {

@@ -147,6 +147,8 @@
   }
   if (window.DeadlineQuiz) window.DeadlineQuiz.init({ api, esc, showToast, haptic, tg, initDataHeader });
   $('#quizPromo').addEventListener('click', () => { haptic('light'); selectMode('quiz'); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  // Кешкі дедлайн жолағы: Алматы (UTC+5) 21:00–02:00
+  { const h = (new Date().getUTCHours() + 5) % 24; $('#nightStrip').classList.toggle('hidden', !(h >= 21 || h < 2)); }
   // Сілтеме арқылы бірден шаблон / квиз режимі: .../webapp/#template, #quiz немесе startapp=template|quiz
   try {
     const sp = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.start_param) || '';
@@ -284,8 +286,16 @@
       if (me.plus) {
         $('#plusCredits').textContent = me.plus.credits;
         $('#plusPrice').textContent = me.plus.amount;
-        $('#plusEach').textContent = `(≈ ${Math.round(me.plus.amount / me.plus.credits)}₸ / дана)`;
+        $('#plusEach').textContent = `≈ ${Math.round(me.plus.amount / me.plus.credits)}₸ / дана`;
       }
+      if (me.pack) {
+        $('#packCredits').textContent = me.pack.credits;
+        $('#packPrice').textContent = me.pack.amount;
+        $('#packWord').textContent = me.pack.credits;
+        const save = me.price ? Math.round((1 - me.pack.amount / (me.pack.credits * me.price)) * 100) : 0;
+        $('#packEach').textContent = `≈ ${Math.round(me.pack.amount / me.pack.credits)}₸ / дана${save > 0 ? ` · −${save}%` : ''}`;
+      }
+      $('#firstPriceNote').textContent = me.firstPrice ? `бірінші сатып алу — ${me.firstPrice}₸` : '';
       renderTester(me.tester);
       renderPrice();
       $('#kaspiPhone').textContent = me.kaspi?.phone || '';

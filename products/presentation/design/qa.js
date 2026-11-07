@@ -12,6 +12,7 @@ const { GRID } = require('./tokens');
 const QA_SCRIPT = `
 (function(){'use strict';
 var MX=${GRID.marginX},MT=${GRID.marginTop},MB=${GRID.marginBottom},W=${GRID.W},H=${GRID.H},TOL=6,MIN_FONT=20;
+var FIT=window.__dlFit!==false;
 var stage=document.getElementById('stage');
 function k(){return parseFloat(getComputedStyle(stage).getPropertyValue('--fit'))||1;}
 function rect(el,sr,kk){var r=el.getBoundingClientRect();return{x:(r.left-sr.left)/kk,y:(r.top-sr.top)/kk,w:r.width/kk,h:r.height/kk};}
@@ -40,6 +41,7 @@ function measure(slide){
     if(!bleed&&role!=='photo')area+=r.w*r.h;
   });
   [].forEach.call(slide.querySelectorAll('.title,.qtext,.row-l,.concept-l,.st-l,.hn-l,[style*="--wfit"]'),function(e){if(e.offsetWidth>0&&e.scrollWidth>e.clientWidth+2)issues.push({type:'word-overflow',hard:true,detail:e.className+' '+(e.textContent||'').slice(0,24)});});
+  if(FIT)[].forEach.call(slide.querySelectorAll('.cx-t,.cx-fill'),function(e){var b=boxOf(e);if(!b||!e.offsetWidth)return;var c=contentH(e);if(c>b+3)issues.push({type:'clip',hard:true,detail:(e.getAttribute('data-role')||'')+' '+Math.round(c)+'>'+Math.round(b)});});
   [].forEach.call(slide.querySelectorAll('.stat-v,.mega,.tl-date,.numeral-xl,.st-n'),function(e){var box=e.parentElement;if(e.scrollWidth>e.clientWidth+3||(box&&e.offsetWidth>box.clientWidth+3))issues.push({type:'h-overflow',hard:true,detail:e.className});});
   for(var i=0;i<els.length;i++)for(var j=i+1;j<els.length;j++){
     if(contains(els[i],els[j]))continue;
@@ -87,10 +89,86 @@ function fitWords(slide){
     while(e.scrollWidth>e.clientWidth+1&&f>0.62){f=Math.round((f-0.04)*100)/100;e.style.setProperty('--wfit',String(f));}
   });
 }
+/**
+ * Блок өз қорабына (DESIGN_FIT): биіктігі берілген мәтін блогы (height / max-height) — карточка, сан қорабы, оқиға ұяшығы.
+ * Сыймаса — кішірейеді (кесілген мәтін болмайды); қорабының 72%-ынан азын алса — ~86%-ын толтырғанша өседі (≤ ×1.6).
+ * Шектеулер: ұзын сөз блоктан шықпайды; блоктың бірінші жолы (белгі/сан) басқасынан үлкен болса — солай қалады (иерархия).
+ */
+function boxOf(e){
+  var st=e.getAttribute('style')||'';
+  if(/(^|;)\\s*height:/.test(st))return e.clientHeight;
+  var m=st.match(/max-height:\\s*([\\d.]+)px/);return m?parseFloat(m[1]):0;
+}
+/** Мазмұнның табиғи биіктігі: қорап биіктігін уақытша босатып өлшейміз (flex space-between/center таратуы да,
+ *  ірі санның глиф шығыңқысы да «сыймады» деп есептелмейді) */
+function contentH(e){
+  var h=e.style.height,mh=e.style.maxHeight,jc=e.style.justifyContent;
+  e.style.height='auto';e.style.maxHeight='none';e.style.justifyContent='flex-start';
+  var v=e.offsetHeight;
+  e.style.height=h;e.style.maxHeight=mh;e.style.justifyContent=jc;
+  return v;
+}
+function textEls(e){return [].filter.call(e.querySelectorAll('*'),function(x){return x.offsetWidth>0&&[].some.call(x.childNodes,function(c){return c.nodeType===3&&c.nodeValue.trim();});});}
+function wideOver(e){if(e.scrollWidth>e.clientWidth+2)return true;return [].some.call(e.querySelectorAll('*'),function(d){return d.clientWidth>0&&d.scrollWidth>d.clientWidth+2;});}
+function fitBlocks(slide,shrinkOnly){
+  var kk=k(),out={grown:0,shrunk:0};
+  [].forEach.call(slide.querySelectorAll('.cx-t,.cx-fill'),function(e){
+    var box=boxOf(e);if(!box||!e.offsetWidth||e.closest('[data-dropped]'))return;
+    var role=e.getAttribute('data-role');if(role==='title'||role==='display')return;
+    // ішкі блок өз қорабына бейімделген болса, сыртқы топ оны қайта өсірмейді (екі рет үлкеймесін)
+    var group=e.classList.contains('cx-fill');
+    var els=textEls(e);if(!els.length)return;
+    function fs(x){return parseFloat(getComputedStyle(x).fontSize);}
+    var tEl=e.querySelector('.title,[data-role="title"],[data-role="display"]');
+    var body=els.filter(function(x){return !tEl||!tEl.contains(x);});
+    var lead=body[0],rest=body.slice(1);
+    // иерархия: (1) тақырып негізгі мәтіннен ≥1.3 есе үлкен болып қалады; (2) белгі/сан (бірінші жол) оның түсіндірмесінен үлкен болса — солай қалады
+    function hier(){
+      if(tEl&&body.length){var T=fs(tEl),B=Math.max.apply(null,body.map(fs));if(T0>=B0*1.3&&B>T/1.3)return false;}
+      if(!lead||!rest.length)return true;var L=fs(lead),O=Math.max.apply(null,rest.map(fs));return !(L0>O0*1.1)||O<=L/1.08;
+    }
+    // shrinkOnly: слайдтың --fs-і өзгерген соң — тек сыймай қалғаны кішірейеді, өсірілгені сол күйі қалады
+    var cur=parseFloat(e.style.getPropertyValue('--bfit'))||1;
+    if(!shrinkOnly){e.style.setProperty('--bfit','1');cur=1;}
+    var T0=tEl?fs(tEl):0,B0=body.length?Math.max.apply(null,body.map(fs)):0;
+    var L0=lead?fs(lead):0,O0=rest.length?Math.max.apply(null,rest.map(fs)):0;
+    if(cur!==1){T0/=cur;B0/=cur;L0/=cur;O0/=cur;}
+    function ok(b,limit){e.style.setProperty('--bfit',String(b));return contentH(e)<=limit&&!wideOver(e)&&hier();}
+    var h=contentH(e);
+    if(h>box+1){ // сыймайды → кішірейту (0.6-ға дейін)
+      var lo=.6,hi=cur;if(!ok(lo,box)){e.style.setProperty('--bfit',String(lo));out.shrunk++;return;}
+      for(var i=0;i<7;i++){var m=(lo+hi)/2;if(ok(m,box))lo=m;else hi=m;}
+      e.style.setProperty('--bfit',String(Math.floor(lo*100)/100));out.shrunk++;return;
+    }
+    if(shrinkOnly)return;
+    // топ (cx-fill) бос жерде тұрады — ауа керек: биіктіктің ~80%-ы, ең көбі ×1.35; қорап (карточка) — ~86%, ×1.6
+    var low=group?.62:.72,target=group?.8:.86,cap=group?1.35:1.6;
+    // композиция өсу шегін өзі бере алады (--fit-max): абзац/тізім тым ірі болмасын
+    var cm=parseFloat(getComputedStyle(e).getPropertyValue('--fit-max'));if(cm>0)cap=Math.min(cap,cm);
+    if(h>=box*low){e.style.setProperty('--bfit','1');return;}
+    var lo2=1,hi2=cap;
+    if(ok(hi2,box*target)){lo2=hi2;}else{for(var j=0;j<7;j++){var m2=(lo2+hi2)/2;if(ok(m2,box*target))lo2=m2;else hi2=m2;}}
+    var b=Math.floor(lo2*100)/100;e.style.setProperty('--bfit',String(b));if(b>1.02)out.grown++;
+  });
+  // бір қатардағы бірдей карточкалар (рөлі мен ені бірдей) — бір өлшемде: ең кіші ортақ масштаб (кішірейту ғана — сыймай қалмайды)
+  var groups={};
+  [].forEach.call(slide.querySelectorAll('.cx-t'),function(e){
+    if(!boxOf(e)||!e.offsetWidth||e.closest('[data-dropped]'))return;
+    var b=parseFloat(e.style.getPropertyValue('--bfit'));if(!b)return;
+    var key=(e.getAttribute('data-role')||'')+'|'+Math.round(e.offsetWidth/24);
+    (groups[key]=groups[key]||[]).push({e:e,b:b});
+  });
+  Object.keys(groups).forEach(function(key){
+    var g=groups[key];if(g.length<2)return;
+    var m=Math.min.apply(null,g.map(function(x){return x.b;}));
+    g.forEach(function(x){if(x.b!==m)x.e.style.setProperty('--bfit',String(m));});
+  });
+  return out;
+}
 function revise(slide){
   var steps=[1,.95,.9],drops=0,fs=1,res,idx=0,report={fs:1,dropped:0,iterations:0};
   function set(v){fs=v;slide.style.setProperty('--fs',String(v));}
-  set(1);fitWords(slide);res=measure(slide);
+  set(1);fitWords(slide);if(FIT)report.blocks=fitBlocks(slide);res=measure(slide);
   function hard(r){return r.issues.filter(function(i){return i.hard;});}
   report.initial=hard(res).map(function(i){return i.type+'('+i.detail+')';});
   // мазмұнды тастаудан бұрын — кішірейту (0.74-ке дейін ≈ 22–24px мәтін, әлі оқылады), сосын қосымша фото, сосын ғана пункт
@@ -114,7 +192,9 @@ function revise(slide){
   // Құрастырылған композиция (cx-grow): мәтіні бос жолақты толтыра алатындары ғана — басқасында мәтін қағаз/билет
   // пішінінің ішінде, ол өспейді. Өлшем: мәтін алмайтын тік үлес (блоктар арасы + асты) 40%-дан көп болса.
   var cxg=slide.classList.contains('cx-grow');
-  if(!hard(res).length&&!drops&&fs===1&&(GROW[slide.getAttribute('data-layout')]||cxg)){
+  // мәтінді ортаға жинайтын топ (cx-fill) өзі өсті — бүкіл слайдты қосымша үлкейтпейміз (екі рет өспесін)
+  var grouped=FIT&&!!slide.querySelector('.cx-fill');
+  if(!hard(res).length&&!drops&&fs===1&&!grouped&&(GROW[slide.getAttribute('data-layout')]||cxg)){
     var grow=[1.08,1.16,1.24,1.32],prev=1;
     var want=function(){return (!cxg&&fill(slide)<0.66)||(res.minFont!=null&&res.minFont<28)||emptyV(slide)>0.4;};
     for(var g=0;g<grow.length&&want();g++){
@@ -123,6 +203,7 @@ function revise(slide){
       prev=grow[g];
     }
   }
+  if(FIT&&fs!==1){fitBlocks(slide,true);res=measure(slide);}
   report.fill=+fill(slide).toFixed(2);report.empty=+emptyV(slide).toFixed(2);report.fs=fs;report.dropped=drops;report.issues=res.issues;report.density=+res.density.toFixed(3);report.minFont=res.minFont?Math.round(res.minFont):null;
   report.hard=hard(res).length>0;
   return report;

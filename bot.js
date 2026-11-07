@@ -30,8 +30,10 @@ function escapeMarkdown(text) {
 
 const KASPI_PHONE = '+77713436592';
 const KASPI_NAME  = 'Мурзабек Н';
-const { PRICE, FIRST_PRICE, PLUS } = require('./core/pricing');
-const plusLine = `⭐ *Plus:* ${PLUS.credits} презентация — *${PLUS.amount}₸* (жазыңыз: plus)`;
+const { PRICE, FIRST_PRICE, PLUS, PACK, BUNDLES, paidFor } = require('./core/pricing');
+const packEach = Math.round(PACK.amount / PACK.credits);
+const packLine = `🎒 *Сессия пакеті:* ${PACK.credits} презентация — *${PACK.amount}₸* (≈${packEach}₸/дана, жазыңыз: ${PACK.credits})`;
+const plusLine = `${packLine}\n⭐ *Plus:* ${PLUS.credits} презентация — *${PLUS.amount}₸* (жазыңыз: plus)`;
 const ADMIN_ID    = process.env.ADMIN_CHAT_ID;
 const AUTO_CONFIRM   = process.env.AUTO_CONFIRM !== '0';          // '0' қойса — толық қолмен режим
 const RECEIPT_MAX_AGE_MIN = parseInt(process.env.RECEIPT_MAX_AGE_MIN || '60', 10);
@@ -150,7 +152,8 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
     }
   }).then(() => {
     // квиз ойнаған адам «өз квизіңді жаса» батырмасын басып келді → бірден квиз жасау батырмасы
-    if (source === 'quiz_make') return sendQuizOffer(chatId);
+    // мұғалімдер арнасы (постер/WhatsApp хабары: ?start=teacher) — да бірден квиз жасау
+    if (source === 'quiz_make' || source === 'teacher') return sendQuizOffer(chatId);
   }).catch((e) => console.warn('[Bot] /start:', e.message));
 });
 
@@ -419,7 +422,7 @@ async function tryAutoConfirm(chatId, file) {
       const user = await getUser(chatId);
       const checks = V.reviewSeen(seen, {
         expectedName: KASPI_NAME, maxAgeMin: RECEIPT_MAX_AGE_MIN,
-        pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: [PLUS],
+        pricePerCredit: PRICE, firstPrice: FIRST_PRICE, isFirstPurchase: user.total === 0, bundles: BUNDLES,
       });
       if (prof) checks.unshift(prof.ok ? { ok: true, text: 'PDF құрылымы Kaspi чегіне сай' } : { ok: false, text: `PDF: ${prof.reasons.join('; ')}` });
       if (seen.receiptNo) {
@@ -449,7 +452,7 @@ async function tryAutoConfirm(chatId, file) {
     pricePerCredit: PRICE,
     firstPrice: FIRST_PRICE,
     isFirstPurchase: user.total === 0,
-    bundles: [PLUS],
+    bundles: BUNDLES,
     maxAgeMin: RECEIPT_MAX_AGE_MIN,
   });
 
@@ -519,8 +522,7 @@ async function confirmPendingReceipt(chatId, credits, source, receiptNo = null) 
 
   const before = await getUser(chatId);
   // Қолмен растауда сома белгісіз — кредит санынан бағамен есептейміз (Plus / бірінші баға / әдепкі)
-  const paid = credits === PLUS.credits ? PLUS.amount
-    : (before.total === 0 && credits === 1 ? FIRST_PRICE : credits * PRICE);
+  const paid = paidFor(credits, before.total === 0);
   let user;
   if (receiptNo) {
     const applied = await applyReceipt(chatId, receiptNo, paid, credits);
@@ -837,6 +839,7 @@ bot.on('message', async (msg) => {
   const text   = msg.text;
 
   if (text && text.startsWith('/')) return;
+  if (msg.successful_payment) return; // Stars төлемі — төмендегі бөлек өңдеуші (onStarsPaid)
 
   // Тестер пікір күтіп тұрса — мәтін соған жазылады (мәзір батырмалары өтеді)
   try {
@@ -909,14 +912,14 @@ bot.on('message', async (msg) => {
         `🎁 Бірінші презентация — *${FIRST_PRICE}₸* (әдепкі баға ${PRICE}₸)!\n${plusLine}\n\n` +
         `💳 Kaspi арқылы төлеңіз:\n📱 *${KASPI_PHONE}*\n👤 ${KASPI_NAME}\n\n` +
         `Сомасы: *${FIRST_PRICE}₸*\n\nТөлегеннен кейін *чекті (PDF)* осы ботқа жіберіңіз ✅`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', ...starsButton() }
       );
     }
     waitingForCount.add(chatId);
     return bot.sendMessage(
       chatId,
       `💰 *Кредит сатып алу*\n\n💵 Баға: *${PRICE}₸* — 1 презентация\n${plusLine}\n\nНеше презентация керек? Санын жазыңыз (немесе plus):`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', ...starsButton() }
     );
   }
 
@@ -1011,6 +1014,7 @@ bot.on('message', async (msg) => {
               { text: '✅ 3', callback_data: `rc:${chatId}:3:${pendingId}` },
             ],
             [
+              { text: `✅ ${PACK.credits} · ${PACK.name}`, callback_data: `rc:${chatId}:${PACK.credits}:${pendingId}` },
               { text: '❌ Растамау', callback_data: `rj:${chatId}:${pendingId}` },
             ],
           ],
@@ -1052,14 +1056,11 @@ bot.on('message', async (msg) => {
 
   if (/^\s*(plus|плюс|\+)\s*$/i.test(text)) {
     waitingForCount.delete(chatId);
-    return bot.sendMessage(
-      chatId,
-      `⭐ *Plus — ${PLUS.credits} презентация, ${PLUS.amount}₸*\n` +
-      `(бір презентация ≈ ${Math.round(PLUS.amount / PLUS.credits)}₸ — әдеттегі ${PRICE}₸-ден әлдеқайда арзан)\n\n` +
-      `💳 Kaspi арқылы төлеңіз:\n📱 *${KASPI_PHONE}*\n👤 ${KASPI_NAME}\n\n` +
-      `Сомасы дәл: *${PLUS.amount}₸*\n\nТөлегеннен кейін *чекті (PDF)* осы ботқа жіберіңіз ✅`,
-      { parse_mode: 'Markdown' }
-    );
+    return sendBundleOffer(chatId, PLUS);
+  }
+  if (/^\s*(сессия|session|пакет)\s*$/i.test(text)) {
+    waitingForCount.delete(chatId);
+    return sendBundleOffer(chatId, PACK);
   }
 
   if (waitingForCount.has(chatId)) {
@@ -1068,10 +1069,18 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(chatId, '❗ 1-ден 50-ге дейін сан жазыңыз.');
     }
     waitingForCount.delete(chatId);
+    if (count === PACK.credits) return sendBundleOffer(chatId, PACK);
+    if (count === PLUS.credits) return sendBundleOffer(chatId, PLUS);
     const total = count * PRICE;
+    // көп сұраса — пакет арзанырақ екенін айтамыз (студент артық төлемесін)
+    const hint = count > PACK.credits && total > PLUS.amount
+      ? `\n\n💡 ${count} презентация ${total}₸ тұрады — ал *Plus* (${PLUS.credits} презентация) небәрі *${PLUS.amount}₸*. Plus алу үшін «plus» деп жазыңыз.`
+      : count > PACK.credits - 2 && count < PACK.credits
+        ? `\n\n💡 *Сессия пакеті:* ${PACK.credits} презентация небәрі *${PACK.amount}₸* — алу үшін «${PACK.credits}» деп жазыңыз.`
+        : '';
     return bot.sendMessage(
       chatId,
-      `🧾 *${count} презентация — ${total}₸*\n\n` +
+      `🧾 *${count} презентация — ${total}₸*${hint}\n\n` +
       `💳 Kaspi арқылы төлеңіз:\n📱 *${KASPI_PHONE}*\n👤 ${KASPI_NAME}\n\n` +
       `Сомасы: *${total}₸*\n\nТөлегеннен кейін *чекті (PDF)* осы ботқа жіберіңіз ✅`,
       { parse_mode: 'Markdown' }
@@ -1081,6 +1090,77 @@ bot.on('message', async (msg) => {
   // Чатта презентация жасалмайды: кез келген басқа мәтінге — Mini App батырмасы
   return sendMiniAppHint(chatId);
 });
+
+// ─── Telegram Stars (халықаралық төлем; әдепкіде өшік — STARS_ENABLED=1) ─────────────
+const Stars = require('./core/stars');
+/** Сатып алу хабарының астына «⭐ Stars» батырмасы (тек қосулы болса) */
+function starsButton() {
+  if (!Stars.enabled()) return {};
+  return { reply_markup: { inline_keyboard: [[{ text: '⭐ Telegram Stars (шетелден / картамен)', callback_data: 'st:menu' }]] } };
+}
+bot.on('callback_query', async (cq) => {
+  const data = cq.data || '';
+  if (!data.startsWith('st:')) return;
+  const chatId = cq.message && cq.message.chat && cq.message.chat.id;
+  if (!chatId) return;
+  try {
+    if (!Stars.enabled()) return bot.answerCallbackQuery(cq.id, { text: 'Stars қазір өшік — Kaspi арқылы төлеңіз', show_alert: true });
+    await bot.answerCallbackQuery(cq.id).catch(() => {});
+    if (data === 'st:menu') {
+      return bot.sendMessage(chatId, '⭐ *Telegram Stars арқылы төлеу*\nКез келген елден: карта, Apple Pay, Google Pay. Кредит төлемнен кейін бірден қосылады.', {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: Stars.offers().map((o) => [{ text: `${o.title} — ${o.stars} ⭐`, callback_data: 'st:' + o.id }]) },
+      });
+    }
+    const offer = Stars.offerById(data.slice(3));
+    if (!offer) return;
+    const inv = Stars.invoiceFor(offer, cq.from.id);
+    await bot.sendInvoice(chatId, inv.title, inv.description, inv.payload, '', inv.currency, inv.prices);
+  } catch (e) {
+    console.warn('[Stars] invoice failed:', e.message);
+    bot.sendMessage(chatId, '⚠️ Шот ашылмады. Кейінірек қайталаңыз не Kaspi арқылы төлеңіз.').catch(() => {});
+  }
+});
+// Telegram төлемді бастамас бұрын сұрайды (10 с ішінде жауап керек): шот осы адамдікі әрі сомасы сай ма
+bot.on('pre_checkout_query', (q) => {
+  const v = Stars.checkPreCheckout(q);
+  if (!v.ok) console.warn(`[Stars] pre-checkout refused for ${q.from && q.from.id}: ${q.invoice_payload} ${q.total_amount}`);
+  bot.answerPreCheckoutQuery(q.id, v.ok, v.ok ? {} : { error_message: v.error }).catch((e) => console.warn('[Stars] pre-checkout answer failed:', e.message));
+});
+/** Төлем өтті → кредит (charge id — чек нөмірі: екі рет есептелмейді) */
+async function onStarsPaid(msg) {
+  const chatId = msg.chat.id;
+  const sp = msg.successful_payment;
+  const c = Stars.creditFor(sp);
+  if (!c) {
+    console.warn(`[Stars] unknown payment from ${chatId}: ${sp && sp.invoice_payload}`);
+    if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⚠️ Stars: түсінбеген төлем ${chatId} · ${sp && sp.total_amount}⭐ · ${sp && sp.invoice_payload} · ${sp && sp.telegram_payment_charge_id}`).catch(() => {});
+    return bot.sendMessage(chatId, '⚠️ Төлем түсті, бірақ пакет танылмады — админ қолмен қосады. Кешірім сұраймыз.').catch(() => {});
+  }
+  const applied = await applyReceipt(chatId, c.receiptNo, c.kzt, c.credits);
+  if (!applied.applied) return; // бұл төлем бұрын есептелген
+  logEvent(chatId, 'paid').catch(() => {});
+  logPayment(chatId, c.kzt, c.credits, c.receiptNo).catch((e) => console.warn('[Pay] log failed', e.message));
+  console.log(`[Stars] ${chatId} paid ${c.stars}⭐ → +${c.credits} credits (${c.receiptNo})${c.priceChanged ? ' (price changed since invoice)' : ''}`);
+  await bot.sendMessage(chatId,
+    `✅ Төлем өтті!\n\n💳 *${c.credits}* презентация кредиті қосылды.\n📦 Жалпы кредитіңіз: *${applied.user.credits}*\n\n«📱 Mini App ашу» батырмасы арқылы бастаңыз! 🚀`,
+    { parse_mode: 'Markdown', ...MAIN_KEYBOARD }).catch(() => {});
+  if (ADMIN_ID) bot.sendMessage(ADMIN_ID, `⭐ Stars: ${chatId} → +${c.credits} кредит (${c.stars}⭐, ≈${c.kzt}₸)`).catch(() => {});
+}
+bot.on('message', (msg) => { if (msg.successful_payment) onStarsPaid(msg).catch((e) => console.error('[Stars] credit failed:', e.message)); });
+
+/** Пакетті сатып алу нұсқауы: дәл сома маңызды — чек сомасы бойынша пакет танылады */
+function sendBundleOffer(chatId, b) {
+  const icon = b === PLUS ? '⭐' : '🎒';
+  return bot.sendMessage(
+    chatId,
+    `${icon} *${b.name} — ${b.credits} презентация, ${b.amount}₸*\n` +
+    `(бір презентация ≈ ${Math.round(b.amount / b.credits)}₸ — әдеттегі ${PRICE}₸-ден арзан)\n\n` +
+    `💳 Kaspi арқылы төлеңіз:\n📱 *${KASPI_PHONE}*\n👤 ${KASPI_NAME}\n\n` +
+    `Сомасы дәл: *${b.amount}₸*\n\nТөлегеннен кейін *чекті (PDF)* осы ботқа жіберіңіз ✅`,
+    { parse_mode: 'Markdown' }
+  );
+}
 
 function sendMiniAppHint(chatId) {
   const kb = webAppKeyboard();
@@ -1107,13 +1187,14 @@ async function startBot(opts = {}) {
   // басқа сервер) тек ['message'] деп қойса, inline батырма басқанда
   // callback_query боттың өзіне келмейді (Telegram-да тек жалтырап тұрады).
   // Сондықтан нақты көрсетіп, бір рет қолмен қайта орнатамыз.
-  const ALLOWED = JSON.stringify(['message', 'callback_query']);
+  // pre_checkout_query — Telegram Stars төлемі (онсыз төлем 10 с-тан соң «бот жауап бермеді» деп құлайды)
+  const ALLOWED = JSON.stringify(['message', 'callback_query', 'pre_checkout_query']);
   await bot.deleteWebHook().catch(() => {});
   await bot.getUpdates({ timeout: 0, limit: 1, allowed_updates: ALLOWED })
     .catch(err => console.error('[Bot] allowed_updates reset error:', err.message));
   bot.options.polling = { params: { allowed_updates: ALLOWED } };
   bot.startPolling({ restart: true });
-  console.log('[Bot] Іске қосылды (allowed_updates: message, callback_query)');
+  console.log('[Bot] Іске қосылды (allowed_updates: message, callback_query, pre_checkout_query)');
   return bot;
 }
 
